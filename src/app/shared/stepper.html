@@ -1,0 +1,33 @@
+@let steps = vals().steps;
+@let compact = vals().compact;
+@let full = vals().full;
+@let cur = vals().cur;
+@let curLabel = vals().curLabel;
+@let curSub = vals().curSub;
+@if (full) {
+<ol aria-label="Başvuru adımları" style="list-style:none;margin:0;background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:14px;padding:14px 20px;display:flex;align-items:center;font-family:'IBM Plex Sans',system-ui,sans-serif">
+  @for (s of steps; track $index) {
+    <li [attr.aria-current]="s.aria" [attr.style]="`display:flex;align-items:center;gap:10px;flex:${s.flex};min-width:0`">
+      @if (s.done) {<span style="width:28px;height:28px;border-radius:50%;background:var(--bg-15803D);color:var(--fg-FFFFFF);display:grid;place-items:center;flex:none"><app-icon name="check" size="15px" [stroke]="2.6" /></span>}
+      @if (s.current) {<span style="width:28px;height:28px;border-radius:50%;background:var(--bg-061262);color:var(--fg-FFFFFF);display:grid;place-items:center;flex:none;font:600 13px/1 'IBM Plex Sans',sans-serif;box-shadow:0 0 0 4px var(--bd-DCE6FF)">{{ s.n }}</span>}
+      @if (s.upcoming) {<span style="width:28px;height:28px;border-radius:50%;background:var(--bg-FFFFFF);border:1.5px solid var(--bd-C9D2E3);color:var(--fg-5B6478);display:grid;place-items:center;flex:none;box-sizing:border-box;font:600 13px/1 'IBM Plex Sans',sans-serif">{{ s.n }}</span>}
+      <span style="display:flex;flex-direction:column;min-width:0">
+        <span style="font:600 10.5px/14px 'IBM Plex Sans',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-5B6478)">{{ s.state }}</span>
+        <span [attr.style]="`font:600 14px/20px 'IBM Plex Sans',sans-serif;color:${s.labelColor};white-space:nowrap`">{{ s.label }}<span style="color:var(--fg-061262);font-weight:500"> {{ s.sub }}</span></span>
+      </span>
+      @if (s.line) {<span aria-hidden="true" [attr.style]="`flex:1;height:2px;min-width:16px;margin:0 14px 0 6px;border-radius:2px;background:${s.lineColor}`"></span>}
+    </li>
+  }
+</ol>
+}
+@if (compact) {
+<div style="padding:12px 16px 14px;background:var(--bg-FFFFFF);border-bottom:1px solid var(--bd-E5E7EB);font-family:'IBM Plex Sans',system-ui,sans-serif">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+    <span style="font:600 15px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">{{ curLabel }}<span style="color:var(--fg-061262);font-weight:500"> {{ curSub }}</span></span>
+    <span style="font:500 12px/16px 'IBM Plex Mono',monospace;color:var(--fg-5B6478)">Adım {{ cur }}/5</span>
+  </div>
+  <div aria-hidden="true" style="display:flex;gap:4px;margin-top:8px">
+    @for (s of steps; track $index) {<span [attr.style]="`flex:1;height:4px;border-radius:2px;background:${s.segColor}`"></span>}
+  </div>
+</div>
+}

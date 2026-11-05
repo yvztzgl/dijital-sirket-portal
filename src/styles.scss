@@ -1,1 +1,130 @@
-/* You can add global styles to this file, and also import other style files */
+@use 'tokens';
+
+/* Global foundations — ported from the Claude Design screen canvases (helmet styles). */
+body {
+  margin: 0;
+  background: var(--bg-F4F6FB);
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  color: var(--fg-2A3550);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--fg-061262);
+  text-decoration: none;
+}
+
+a:not(.ui-btn):hover {
+  color: var(--fg-0C217E);
+  text-decoration: underline;
+}
+
+/* Links styled as buttons: no underline, a hover that suits their surface. Inline styles set the
+   resting look, so hover values need !important. */
+.ui-btn {
+  text-decoration: none !important;
+  transition: background-color .15s ease, border-color .15s ease, box-shadow .2s ease, transform .2s ease;
+}
+.ui-btn--outline { color: var(--fg-061262); }
+.ui-btn--outline:hover { background: var(--bg-F7F9FE) !important; border-color: var(--bd-C7D5F7) !important; color: var(--fg-061262); }
+.ui-btn--primary:hover { background: var(--bg-0C217E) !important; color: var(--fg-FFFFFF) !important; }
+.ui-btn--ghost-dark:hover { background: rgba(255, 255, 255, .1) !important; border-color: rgba(255, 255, 255, .6) !important; color: rgb(255 255 255) !important; }
+.ui-btn--white:hover { transform: translateY(-1px); box-shadow: 0 14px 34px -12px rgba(0, 0, 0, .55) !important; color: var(--fg-061262) !important; }
+.ui-btn:active { transform: none; }
+.ui-btn:focus-visible { box-shadow: 0 0 0 3px rgba(157, 182, 255, .55) !important; }
+@media (prefers-reduced-motion: reduce) { .ui-btn--white:hover { transform: none; } }
+
+input::placeholder {
+  color: var(--fg-8A93A6);
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(6,18,98, 0.18);
+}
+
+@keyframes scan { 0% { top: 2px; } 100% { top: calc(100% - 4px); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes ring {
+  0% { box-shadow: 0 0 0 0 rgba(6,18,98, 0.45); }
+  80%, 100% { box-shadow: 0 0 0 7px rgba(6,18,98, 0); }
+}
+@keyframes shimmer { 0% { background-position: -200px 0; } 100% { background-position: 200px 0; } }
+@keyframes breathe { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+@keyframes caret { 50% { opacity: 0; } }
+@keyframes seg { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@keyframes spPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Welcome hero headline ------------------------------------------------------------------ */
+.hero-title .hero-line { display: block; }
+
+.hero-line {
+  animation: heroRise 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.hero-title .hero-line:nth-child(1) { animation-delay: 0.12s; }
+.hero-title .hero-line:nth-child(2) { animation-delay: 0.24s; }
+.hero-title .hero-line:nth-child(3) { animation-delay: 0.36s; }
+
+/* Serif-italic accent with a slow light sweep, echoing the page's serif section headings. */
+.hero-accent {
+  display: inline-block;
+  padding: 0 0.06em 0.08em 0; /* room for the italic overhang so clipping doesn't cut glyphs */
+  font: italic 400 1.18em/1 'IBM Plex Serif', Georgia, serif;
+  letter-spacing: -0.015em;
+  background: linear-gradient(100deg, var(--bg-9DB6FF) 0%, var(--bg-FFFFFF) 35%, var(--bg-C9D4F0) 50%, var(--bg-FFFFFF) 65%, var(--bg-9DB6FF) 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: heroSheen 9s ease-in-out infinite alternate;
+}
+
+/* Small "live" dot: the same breathing as the stippled engravings. */
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bg-9DB6FF);
+  box-shadow: 0 0 0 0 rgba(157, 182, 255, 0.5);
+  animation: liveDot 2.4s ease-in-out infinite;
+}
+
+@keyframes heroRise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes heroSheen {
+  from { background-position: 100% 0; }
+  to { background-position: 0% 0; }
+}
+@keyframes liveDot {
+  0%, 100% { opacity: 0.55; box-shadow: 0 0 0 0 rgba(157, 182, 255, 0.45); }
+  50% { opacity: 1; box-shadow: 0 0 0 6px rgba(157, 182, 255, 0); }
+}
+
+
+/* Smooth the switch between light and dark themes (skipped for reduced motion). */
+html.theme-switching, html.theme-switching * {
+  transition: background-color .25s ease, border-color .25s ease, color .25s ease !important;
+}
+
+/* Keep browser autofill from painting its own field colour over the theme. */
+input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {
+  transition: background-color 600000s 0s, color 600000s 0s;
+}
+
+/* Fields without their own background would get the browser's grey dark-mode field. */
+html.theme-dark :is(input, textarea, select):not([type='checkbox'], [type='radio'], [type='range']) {
+  background-color: var(--bg-FFFFFF);
+}
+
+/* Show/hide toggle inside password fields. */
+.pw-eye:hover { background: var(--bg-EFF4FF) !important; color: var(--fg-061262) !important; }

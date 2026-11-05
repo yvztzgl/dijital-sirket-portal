@@ -1,0 +1,44 @@
+<div data-screen-label="D-5b Kuruldu" style="width:100%;min-height:100vh;background:var(--bg-F4F6FB);overflow:clip">
+      <app-top-bar ></app-top-bar>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 384px;gap:24px;padding:24px 32px 40px;align-items:start">
+        <main style="display:flex;flex-direction:column;gap:16px;min-width:0">
+          <app-stepper [allDone]="true"></app-stepper>
+          <section style="position:relative;overflow:hidden;background:var(--bg-FFFFFF);border:1px solid var(--bd-BBE5C8);border-radius:16px;padding:36px 32px;display:flex;align-items:center;gap:28px">
+            <span aria-hidden="true" style="position:absolute;right:-80px;top:-120px;width:380px;height:380px;border-radius:50%;background:radial-gradient(circle,var(--bg-ECFDF3) 0%,rgba(236,253,243,0) 70%)"></span>
+            <div aria-hidden="true" style="position:relative;width:96px;height:96px;flex:none">
+              <span style="position:absolute;inset:0;border-radius:50%;border:1.5px dashed var(--bd-86CFA0)"></span>
+              <span style="position:absolute;inset:10px;border-radius:50%;background:var(--bg-15803D);color:var(--fg-FFFFFF);display:grid;place-items:center;font:700 34px/1 'IBM Plex Sans',sans-serif;box-shadow:0 8px 20px -6px rgba(21,128,61,.5)"><app-icon name="check" /></span>
+            </div>
+            <div style="position:relative;flex:1;display:flex;flex-direction:column;gap:6px">
+              <span style="font:600 11px/14px 'IBM Plex Mono',monospace;letter-spacing:.1em;color:var(--fg-15803D)">{{ doneLine() }}</span>
+              <h2 style="margin:0;font:600 34px/42px 'IBM Plex Sans',sans-serif;letter-spacing:-.01em;color:var(--fg-061262)">Şirketiniz kuruldu</h2>
+              <span style="font:500 18px/26px 'IBM Plex Sans',sans-serif;color:var(--fg-1F2A44)">{{ store.fullTitle() }}</span>
+              <span style="font:400 13.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">{{ registered() }}</span>
+            </div>
+          </section>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+            @for (r of results(); track $index) {
+              <div style="background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:12px">
+                <span style="flex:1;display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font:500 12.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">{{ r.k }}</span><span [attr.style]="`font:${r.font};color:var(--fg-061262);white-space:nowrap;overflow:hidden;text-overflow:ellipsis`">{{ r.v }}</span><span style="font:400 12px/16px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">{{ r.s }}</span></span>
+                <button type="button" (click)="resultAction(r)" style="border:1px solid var(--bd-D6DEEE);background:var(--bg-FFFFFF);color:var(--fg-061262);border-radius:7px;padding:6px 10px;font:600 12px/16px 'IBM Plex Sans',sans-serif;cursor:pointer"><app-itext [text]="copied() === r.k ? '✓ Kopyalandı' : r.a" /></button>
+              </div>
+            }
+          </div>
+          <section style="background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:14px;padding:22px 24px;display:flex;flex-direction:column;gap:12px">
+            <span style="font:600 16px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">Sonraki adımlar</span>
+            @for (x of nexts(); track $index) {
+              <div style="display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--bd-F1F4FA)">
+                <span style="font:600 12px/18px 'IBM Plex Mono',monospace;color:var(--fg-061262)">{{ x.n }}</span>
+                <span style="display:flex;flex-direction:column"><span style="font:600 14px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-1F2A44)">{{ x.t }}</span><span style="font:400 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">{{ x.d }}</span></span>
+                <span style="font:500 12px/16px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">{{ x.w }}</span>
+              </div>
+            }
+          </section>
+          <div style="display:flex;gap:12px;align-items:center">
+            <button type="button" (click)="downloadAll()" style="border:0;background:var(--bg-061262);color:var(--fg-FFFFFF);border-radius:10px;padding:14px 22px;font:600 15px/20px 'IBM Plex Sans',sans-serif;cursor:pointer">Tüm belgeleri indir · ZIP ({{ store.docs().length }})</button>
+            <button type="button" (click)="openPanel()" style="border:1px solid var(--bd-D6DEEE);background:var(--bg-FFFFFF);color:var(--fg-061262);border-radius:10px;padding:13px 20px;font:600 15px/20px 'IBM Plex Sans',sans-serif;cursor:pointer">Şirket panelime git</button>
+          </div>
+        </main>
+        <app-side-panel tab="docs" ctx="done"></app-side-panel>
+      </div>
+    </div>

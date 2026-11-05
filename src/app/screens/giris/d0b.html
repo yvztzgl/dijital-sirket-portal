@@ -1,0 +1,77 @@
+@let pwType = vals().pwType;
+@let togglePw = vals().togglePw;
+@let showPw = vals().showPw;
+@let steps = vals().steps;
+@let paths = vals().paths;
+@let foreign = vals().foreign;
+@let resident = vals().resident;
+@let consents = vals().consents;
+@let cantSubmit = vals().cantSubmit;
+@let ctaBg = vals().ctaBg;
+@let cta = vals().cta;
+<div data-screen-label="D-0b Kayıt" style="width:100%;min-height:100vh;background:var(--bg-FFFFFF);overflow:clip">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);min-height:100vh;min-height:100dvh;align-items:stretch">
+        <div class="keep-light" style="position:relative;background:linear-gradient(160deg,var(--bg-040850) 0%,var(--bg-08156B) 55%,var(--bg-10318F) 100%);padding:112px 64px 112px;display:flex;flex-direction:column;justify-content:center;gap:20px;color:var(--fg-FFFFFF);overflow:hidden;isolation:isolate">
+          <div style="position:absolute;top:40px;left:64px;right:64px;display:flex;align-items:center;gap:12px"><div aria-hidden="true" style="width:34px;height:34px;flex:none;border-radius:8px;background:var(--bg-FFFFFF);color:var(--fg-061262);display:grid;place-items:center;font:700 13px/1 'IBM Plex Sans',sans-serif;letter-spacing:.02em">DŞ</div><span style="font:600 15px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-FFFFFF)">Dijital Şirket Platformu</span><span style="font:600 10px/14px 'IBM Plex Sans',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-C9D4F0);padding:1px 6px;border-radius:4px;background:rgba(255,255,255,.1)">Terminal İstanbul</span></div>
+          <span style="font:600 11.5px/16px 'IBM Plex Sans',sans-serif;letter-spacing:.1em;color:var(--fg-9DB6FF)">HESAP OLUŞTURUN</span>
+          <h2 style="margin:0;font:600 40px/48px 'IBM Plex Sans',sans-serif;letter-spacing:-.015em;text-wrap:balance">Bir hesap, tek başvuru, 5 adım.</h2>
+          <p style="margin:0;max-width:480px;font:400 17px/26px 'IBM Plex Sans',sans-serif;color:var(--fg-C9D4F0);text-wrap:pretty">Hesabınız başvuru dosyanızı, belgelerinizi ve kuruluş sonrası şirket panelinizi bir arada tutar.</p>
+          <div style="position:relative;z-index:1;display:flex;flex-direction:column;margin-top:4px">
+            @for (s of steps; track $index) {
+              <div style="display:grid;grid-template-columns:28px minmax(0,1fr);gap:14px;align-items:center;padding:8px 0">
+                <span style="width:26px;height:26px;box-sizing:border-box;border-radius:50%;border:1.5px solid rgba(255,255,255,.35);display:grid;place-items:center;font:600 12px/1 'IBM Plex Mono',monospace;color:var(--fg-FFFFFF)">{{ s.n }}</span>
+                <span style="font:400 14px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-C9D4F0)"><b style="font-weight:600;color:var(--fg-FFFFFF)">{{ s.t }}</b> · {{ s.d }}</span>
+              </div>
+            }
+          </div>
+          <div style="position:absolute;left:0;right:0;bottom:0;height:55%;z-index:-1;pointer-events:none">
+            <app-dot-engraving src="/assets/engravings/register-map.png" align="bottom" style="position:absolute;inset:0;opacity:.55;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 45%),linear-gradient(to right,transparent 0,#000 18%,#000 82%,transparent 100%);-webkit-mask-composite:source-in;mask-image:linear-gradient(to bottom,transparent 0,#000 45%),linear-gradient(to right,transparent 0,#000 18%,#000 82%,transparent 100%);mask-composite:intersect"></app-dot-engraving>
+          </div>
+        </div>
+        <div style="position:relative;background:var(--bg-FFFFFF);padding:112px max(80px, calc((100% - 480px) / 2)) 112px;display:flex;flex-direction:column;justify-content:center;gap:20px">
+          <div style="position:absolute;top:32px;left:40px;right:40px;display:flex;align-items:center;justify-content:flex-end;gap:12px"><app-header-tools compact /><span style="display:flex;align-items:center;gap:10px;white-space:nowrap;padding-left:16px;border-left:1px solid var(--bd-E5E7EB)"><span style="font:500 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">Zaten hesabınız var mı?</span><a class="ui-btn ui-btn--outline" routerLink="/login" style="font:600 13px/18px 'IBM Plex Sans',sans-serif;padding:7px 12px;border:1px solid var(--bd-D6DEEE);border-radius:8px">Giriş yapın</a></span></div>
+          <div style="display:flex;flex-direction:column;gap:4px"><h3 style="margin:0;font:600 30px/38px 'IBM Plex Sans',sans-serif;letter-spacing:-.01em;color:var(--fg-061262)">Hesap oluşturun</h3><span style="font:400 14px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">Yaklaşık 1 dakika sürer.</span></div>
+          <div role="radiogroup" aria-label="Kurucu türü" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            @for (p of paths; track $index) {
+              <button type="button" role="radio" [attr.aria-checked]="p.on" (click)="p.pick()" [attr.style]="`text-align:left;cursor:pointer;padding:${p.pad};border-radius:12px;border:${p.border};background:${p.bg};display:flex;flex-direction:column;gap:4px`">
+                <span style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="font:600 14px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">{{ p.t }}</span><span aria-hidden="true" [attr.style]="`width:16px;height:16px;flex:none;box-sizing:border-box;border-radius:50%;border:${p.dot};background:var(--bg-FFFFFF)`"></span></span>
+                <span style="font:400 12.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">{{ p.d }}</span>
+              </button>
+            }
+          </div>
+          @if (foreign) {
+            <div style="display:flex;flex-direction:column;gap:16px">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div style="display:flex;flex-direction:column;gap:8px"><label style="font:500 13.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-1F2A44)">Ad</label><input [value]="form().firstName" (input)="setField('firstName', $event)" autocomplete="given-name" placeholder="Pasaporttaki adınız" style="height:46px;box-sizing:border-box;border:1px solid var(--bd-D6DEEE);border-radius:9px;padding:0 14px;font:500 15.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262);outline:0"></div>
+                <div style="display:flex;flex-direction:column;gap:8px"><label style="font:500 13.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-1F2A44)">Soyad</label><input [value]="form().lastName" (input)="setField('lastName', $event)" autocomplete="family-name" placeholder="Soyadınız" style="height:46px;box-sizing:border-box;border:1px solid var(--bd-D6DEEE);border-radius:9px;padding:0 14px;font:500 15.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262);outline:0"></div>
+              </div>
+              <span style="margin-top:-8px;font:400 12.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">Pasaportunuzdaki gibi yazın.</span>
+              <div style="display:flex;flex-direction:column;gap:8px"><label style="font:500 13.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-1F2A44)">E-posta</label><input type="email" [value]="form().email" (input)="setField('email', $event)" autocomplete="email" placeholder="ornek@sirket.com" style="height:46px;box-sizing:border-box;border:1px solid var(--bd-D6DEEE);border-radius:9px;padding:0 14px;font:500 15.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262);outline:0"></div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <label style="font:500 13.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-1F2A44)">Şifre</label>
+                <div style="display:flex;height:46px;box-sizing:border-box;border:1px solid var(--bd-061262);box-shadow:0 0 0 3px rgba(6,18,98,.18);border-radius:9px;overflow:hidden">
+                  <input [type]="pwType" [value]="form().password" (input)="setField('password', $event)" autocomplete="new-password" placeholder="En az 10 karakter" style="flex:1;min-width:0;border:0;outline:0;padding:0 14px;font:500 15.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262);background:transparent">
+                  <button type="button" (click)="togglePw()" [attr.aria-pressed]="showPw" [attr.aria-label]="showPw ? 'Şifreyi gizle' : 'Şifreyi göster'" [title]="showPw ? 'Şifreyi gizle' : 'Şifreyi göster'" class="pw-eye" style="flex:none;width:36px;height:36px;margin-right:4px;align-self:center;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:var(--fg-5B6478);cursor:pointer">@if (showPw) {<app-icon name="eye-off" size="18px" [stroke]="1.8" />} @else {<app-icon name="eye" size="18px" [stroke]="1.8" />}</button>
+                </div>
+                <div aria-hidden="true" style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:2px">@for (c of vals().strengthBars; track $index) {<span [attr.style]="`height:4px;border-radius:2px;background:${c}`"></span>}</div>
+                <span aria-live="polite" [attr.style]="`font:400 12.5px/18px 'IBM Plex Sans',sans-serif;color:${vals().strengthColor}`"><app-itext [text]="vals().strengthText" /></span>
+              </div>
+            </div>
+          }
+          @if (resident) {
+            <div style="padding:20px;border-radius:12px;background:var(--bg-F7F9FE);border:1px dashed var(--bd-C7D5F7);display:flex;flex-direction:column;gap:10px">
+              <span style="display:flex;align-items:center;gap:10px;font:600 15px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)"><img src="/assets/brand/e-devlet.svg" alt="" width="24" height="24" style="display:block;flex:none;border-radius:5px">Bilgileriniz e-Devlet'ten gelir</span>
+              <span style="font:400 13.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660);text-wrap:pretty">Ad, T.C. kimlik numarası ve yerleşim adresiniz e-Devlet Kapısı'ndan alınır; ayrıca şifre oluşturmanız gerekmez. Kimlik doğrulama adımı da bu sayede kısalır.</span>
+            </div>
+          }
+          <div style="display:flex;flex-direction:column;gap:10px;padding-top:4px;border-top:1px solid var(--bd-EEF1F6)">
+            @for (c of consents; track $index) {
+              <label style="display:flex;align-items:flex-start;gap:10px;padding-top:6px;font:400 13px/19px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660);cursor:pointer"><input type="checkbox" [checked]="c.on" (change)="c.toggle()" style="width:16px;height:16px;margin:2px 0 0;flex:none;accent-color:var(--bg-061262)"><span><a href="#" (click)="$event.preventDefault()">{{ c.link }}</a>{{ c.rest }}</span></label>
+            }
+          </div>
+          <app-form-error [message]="formError()" />
+          <button type="button" (click)="register()" [disabled]="cantSubmit" [attr.style]="`display:flex;align-items:center;justify-content:center;gap:10px;border:0;background:${ctaBg};color:var(--fg-FFFFFF);border-radius:10px;padding:14px 22px;font:600 15px/20px 'IBM Plex Sans',sans-serif;cursor:pointer;box-shadow:0 1px 2px rgba(6,18,98,.2)`"><app-itext [text]="cta" /></button>
+        </div>
+      </div>
+    </div>
+@if (edevlet()) {<app-edevlet-dialog [mode]="edevlet()!" (done)="edevletDone()" (closed)="edevlet.set(null)" />}

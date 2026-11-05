@@ -1,0 +1,40 @@
+<div data-screen-label="D-4c e-İmza hazır" style="width:100%;min-height:100vh;background:var(--bg-F4F6FB);overflow:clip">
+      <app-top-bar ></app-top-bar>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 384px;gap:24px;padding:24px 32px 40px;align-items:start">
+        <main style="display:flex;flex-direction:column;gap:16px;min-width:0">
+          <app-stepper [current]="4"></app-stepper>
+          <app-ai-card cardTitle="Kuruluşu şimdi başlatın — imzanız 24 saat geçerli" reason="Tüm belgeler bu süre içinde otomatik imzalanır; ortalama süre 40 dakikadır."></app-ai-card>
+          <section style="background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:14px;padding:28px;display:flex;flex-direction:column;gap:20px">
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border:1px solid var(--bd-DCEFE2);background:var(--bg-F7FCF8);border-radius:12px">
+              <span style="width:26px;height:26px;border-radius:50%;background:var(--bg-15803D);color:var(--fg-FFFFFF);display:grid;place-items:center;font:700 12px/1 'IBM Plex Sans',sans-serif"><app-icon name="check" /></span>
+              <span style="font:600 15px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">{{ sig()?.method === 'eshs' ? 'ESHS görüşmesi tamamlandı' : 'e-İmza doğrulandı' }}</span>
+              <span style="flex:1;font:400 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660)">{{ callSummary() }}</span>
+            </div>
+            <div class="keep-light" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:28px;align-items:center;padding:26px 28px;border-radius:16px;background:linear-gradient(135deg,var(--bg-040850),var(--bg-0C217E));color:var(--fg-FFFFFF);position:relative;overflow:hidden">
+              <span aria-hidden="true" style="position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;border:1px solid rgba(255,255,255,.08)"></span>
+              <div style="display:flex;flex-direction:column;gap:14px;position:relative">
+                <span style="display:inline-flex;align-items:center;gap:8px;font:600 11px/14px 'IBM Plex Sans',sans-serif;letter-spacing:.1em;color:var(--fg-9FB4E8)">NİTELİKLİ ELEKTRONİK SERTİFİKA · ESHS</span>
+                <span style="font:600 26px/32px 'IBM Plex Sans',sans-serif">Günlük e-imza hazır</span>
+                <div style="display:grid;grid-template-columns:auto 1fr;column-gap:20px;row-gap:6px;font:400 13.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-C9D4F0)">
+                  <span>Sahibi</span><span style="color:var(--fg-FFFFFF);font-weight:500">{{ holderLine() }}</span>
+                  <span>Seri no</span><span style="color:var(--fg-FFFFFF);font-family:'IBM Plex Mono',monospace">{{ sig()?.serial }}</span>
+                  <span>Kapsam</span><span style="color:var(--fg-FFFFFF)">Yalnızca {{ store.title() }} A.Ş. kuruluş belgeleri</span>
+                  <span>Geçerlilik</span><span style="color:var(--fg-FFFFFF);font-weight:600">{{ validity() }}</span>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:center;gap:8px;position:relative">
+                <div style="position:relative;width:128px;height:128px">
+                  <svg width="128" height="128" viewBox="0 0 128 128" aria-hidden="true"><circle cx="64" cy="64" r="56" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="8"></circle><circle cx="64" cy="64" r="56" fill="none" style="stroke:var(--ic-7EE2A8)" stroke-width="8" stroke-linecap="round" [attr.stroke-dasharray]="ringDash()" transform="rotate(-90 64 64)"></circle></svg>
+                  <span style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center"><span style="font:600 22px/26px 'IBM Plex Mono',monospace">{{ leftLabel() }}</span><span style="font:500 11px/14px 'IBM Plex Sans',sans-serif;color:var(--fg-9FB4E8)">saat kaldı</span></span>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:16px">
+              <button type="button" (click)="startSetup()" [disabled]="store.busy()" style="border:0;background:var(--bg-061262);color:var(--fg-FFFFFF);border-radius:10px;padding:14px 26px;font:600 15px/20px 'IBM Plex Sans',sans-serif;cursor:pointer"><app-itext [text]="store.busy() ? 'Başlatılıyor…' : 'Kuruluşu başlat →'" /></button>
+              <span style="font:400 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">Başlattıktan sonra sizden başka işlem beklenmez.</span>
+            </div>
+          </section>
+        </main>
+        <app-side-panel tab="docs" ctx="sign"></app-side-panel>
+      </div>
+    </div>

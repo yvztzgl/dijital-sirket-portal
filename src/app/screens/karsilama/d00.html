@@ -1,0 +1,71 @@
+<div data-screen-label="D-00 Karşılama" style="width:100%;min-height:100vh;background:var(--bg-FFFFFF);overflow:clip">
+      <section class="keep-light" style="position:relative;isolation:isolate;overflow:hidden;background:linear-gradient(160deg,var(--bg-040850) 0%,var(--bg-08156B) 55%,var(--bg-10318F) 100%);color:var(--fg-FFFFFF);padding:32px 80px 0;height:100vh;height:100dvh;box-sizing:border-box;display:flex;flex-direction:column">
+        <div aria-hidden="true" style="position:absolute;left:0;right:0;bottom:0;aspect-ratio:1916/821;z-index:-1;overflow:hidden;-webkit-mask-image:linear-gradient(to right,transparent 0,rgba(0,0,0,.18) 28%,#000 52%,#000 100%),linear-gradient(to bottom,transparent 0,#000 22%,#000 90%,transparent 100%);-webkit-mask-composite:source-in;mask-image:linear-gradient(to right,transparent 0,rgba(0,0,0,.18) 28%,#000 52%,#000 100%),linear-gradient(to bottom,transparent 0,#000 22%,#000 90%,transparent 100%);mask-composite:intersect">
+          <app-dot-engraving src="/assets/engravings/hero-map.png" align="center" style="position:absolute;inset:0;opacity:.6"></app-dot-engraving>
+        </div>
+        <nav style="display:flex;align-items:center;gap:24px">
+          <div style="display:flex;align-items:center;gap:12px"><div aria-hidden="true" style="width:34px;height:34px;flex:none;border-radius:8px;background:var(--bg-FFFFFF);color:var(--fg-061262);display:grid;place-items:center;font:700 13px/1 'IBM Plex Sans',sans-serif;letter-spacing:.02em">DŞ</div><span style="font:600 15px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-FFFFFF)">Dijital Şirket Platformu</span><span style="font:600 10px/14px 'IBM Plex Sans',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-C9D4F0);padding:1px 6px;border-radius:4px;background:rgba(255,255,255,.1)">Terminal İstanbul</span></div>
+          <span style="flex:1"></span>
+          <a routerLink="/" fragment="d00-adimlar" style="font:500 14px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-E6EBF7)">Nasıl çalışır</a>
+          <app-header-tools [dark]="true" />
+          <a class="ui-btn ui-btn--ghost-dark" [routerLink]="store.signedIn() ? store.resumeRoute() : '/login'" style="font:600 14px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-FFFFFF);padding:8px 14px;border:1px solid rgba(255,255,255,.3);border-radius:8px">{{ store.signedIn() ? 'Başvuruma dön' : 'Giriş yap' }}</a>
+        </nav>
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:28px;max-width:640px;padding:72px 0 120px">
+          <span class="hero-line" style="display:inline-flex;align-items:center;gap:10px;font:600 12px/16px 'IBM Plex Sans',sans-serif;letter-spacing:.12em;color:var(--fg-9DB6FF)"><span class="live-dot" aria-hidden="true"></span>DÜNYANIN HER YERİNDEN - ZAHMETSİZ KURULUM</span>
+          <h1 class="hero-title" style="margin:0;font:600 64px/70px 'IBM Plex Sans',sans-serif;letter-spacing:-.025em;color:var(--fg-FFFFFF)"><span class="hero-line">Türkiye'de</span><span class="hero-line"><em class="hero-accent">Dijital Şirketinizi</em></span><span class="hero-line">Kurun</span></h1>
+          <p style="margin:0;max-width:540px;font:400 19px/30px 'IBM Plex Sans',sans-serif;color:var(--fg-C9D4F0);text-wrap:pretty">Proje sunumunuzu yükleyin; AI Reviewer şirket ve kurucu bilgilerinizi okusun. Siz yalnızca kontrol edin — Türkiye'ye gelmeniz gerekmez.</p>
+          <div style="display:flex;align-items:center;gap:20px;margin-top:8px">
+            <a class="ui-btn ui-btn--white" href="/register" (click)="$event.preventDefault(); start()" style="display:inline-flex;align-items:center;gap:10px;background:var(--bg-FFFFFF);color:var(--fg-061262);border-radius:10px;padding:16px 26px;font:600 16px/20px 'IBM Plex Sans',sans-serif;box-shadow:0 10px 30px -10px rgba(0,0,0,.5);text-decoration:none"><app-itext [text]="store.signedIn() ? 'Başvuruma devam et →' : 'Başvuruya başla →'" /></a>
+            <a routerLink="/" fragment="d00-adimlar" style="font:600 15px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-FFFFFF);text-decoration:underline;text-underline-offset:4px;text-decoration-color:rgba(255,255,255,.4)">Nasıl çalışır</a>
+          </div>
+        </div>
+      </section>
+      <section id="d00-adimlar" style="padding:128px 80px 136px;display:flex;flex-direction:column;align-items:center;gap:72px;background:linear-gradient(var(--bg-FFFFFF),var(--bg-F7F9FE))">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:24px;text-align:center">
+          <div aria-hidden="true" style="display:flex;align-items:center;justify-content:center;gap:12px"><span style="width:56px;height:1px;background:var(--bg-C9D2E3)"></span><span style="width:5px;height:5px;transform:rotate(45deg);border:1px solid var(--bd-061262)"></span><span style="width:56px;height:1px;background:var(--bg-C9D2E3)"></span></div>
+          <h2 style="margin:0;font:400 46px/54px 'IBM Plex Serif',Georgia,serif;letter-spacing:-.01em;color:var(--fg-061262)">Beş adımda, <span style="font-style:italic;color:var(--fg-061262)">tek başvuru.</span></h2>
+          <p style="margin:0;max-width:520px;font:400 16px/25px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478);text-wrap:pretty">Siz beş adımı tamamlarsınız; tescilden banka hesabına kadar kalan her şey otomatik ilerler.</p>
+        </div>
+        <ol style="position:relative;list-style:none;margin:0;padding:0;width:100%;max-width:1120px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr))">
+            <span aria-hidden="true" style="position:absolute;left:10%;right:10%;top:22px;height:1px;background:var(--bg-D6DEEE)"></span>
+            <li style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;padding:0 12px">
+              <span style="position:relative;z-index:1;width:44px;height:44px;box-sizing:border-box;border-radius:50%;border:1px solid var(--bd-C9D2E3);background:var(--bg-FFFFFF);display:grid;place-items:center;font:400 15px/1 'IBM Plex Serif',Georgia,serif;color:var(--fg-061262)">I</span>
+              <span style="font:400 22px/28px 'IBM Plex Serif',Georgia,serif;color:var(--fg-061262)">Sunum</span>
+              <span style="max-width:200px;font:400 14px/21px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478);text-wrap:pretty">Sunumunuzu yükleyin, bilgileri onaylayın.</span>
+            </li>
+            <li style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;padding:0 12px">
+              <span style="position:relative;z-index:1;width:44px;height:44px;box-sizing:border-box;border-radius:50%;border:1px solid var(--bd-C9D2E3);background:var(--bg-FFFFFF);display:grid;place-items:center;font:400 15px/1 'IBM Plex Serif',Georgia,serif;color:var(--fg-061262)">II</span>
+              <span style="font:400 22px/28px 'IBM Plex Serif',Georgia,serif;color:var(--fg-061262)">Uygunluk</span>
+              <span style="max-width:200px;font:400 14px/21px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478);text-wrap:pretty">Pasaport ve kısa bir canlılık kontrolü.</span>
+            </li>
+            <li style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;padding:0 12px">
+              <span style="position:relative;z-index:1;width:44px;height:44px;box-sizing:border-box;border-radius:50%;border:1px solid var(--bd-C9D2E3);background:var(--bg-FFFFFF);display:grid;place-items:center;font:400 15px/1 'IBM Plex Serif',Georgia,serif;color:var(--fg-061262)">III</span>
+              <span style="font:400 22px/28px 'IBM Plex Serif',Georgia,serif;color:var(--fg-061262)">Ödeme</span>
+              <span style="max-width:200px;font:400 14px/21px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478);text-wrap:pretty">Kurum harçları tek seferde.</span>
+            </li>
+            <li style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;padding:0 12px">
+              <span style="position:relative;z-index:1;width:44px;height:44px;box-sizing:border-box;border-radius:50%;border:1px solid var(--bd-C9D2E3);background:var(--bg-FFFFFF);display:grid;place-items:center;font:400 15px/1 'IBM Plex Serif',Georgia,serif;color:var(--fg-061262)">IV</span>
+              <span style="font:400 22px/28px 'IBM Plex Serif',Georgia,serif;color:var(--fg-061262)">e-İmza</span>
+              <span style="max-width:200px;font:400 14px/21px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478);text-wrap:pretty">Birkaç dakikalık görüntülü görüşme.</span>
+            </li>
+            <li style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;padding:0 12px">
+              <span style="position:relative;z-index:1;width:44px;height:44px;box-sizing:border-box;border-radius:50%;border:1px solid var(--bd-C9D2E3);background:var(--bg-FFFFFF);display:grid;place-items:center;font:400 15px/1 'IBM Plex Serif',Georgia,serif;color:var(--fg-061262)">V</span>
+              <span style="font:400 22px/28px 'IBM Plex Serif',Georgia,serif;color:var(--fg-061262)">Kuruluş</span>
+              <span style="max-width:200px;font:400 14px/21px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478);text-wrap:pretty">Gerisini biz yürütürüz.</span>
+            </li>
+        </ol>
+      </section>
+      <footer class="keep-light" style="background:linear-gradient(160deg,var(--bg-040850) 0%,var(--bg-08156B) 55%,var(--bg-10318F) 100%);color:var(--fg-FFFFFF)">
+        <div style="position:relative;isolation:isolate;overflow:hidden;padding:104px 80px 120px;display:flex;flex-direction:column;align-items:flex-start;gap:32px">
+          <div aria-hidden="true" style="position:absolute;inset:0;z-index:-1;overflow:hidden;-webkit-mask-image:linear-gradient(to right,transparent 0,#000 12%,#000 88%,transparent 100%),linear-gradient(to bottom,transparent 0,#000 35%,#000 100%);-webkit-mask-composite:source-in;mask-image:linear-gradient(to right,transparent 0,#000 12%,#000 88%,transparent 100%),linear-gradient(to bottom,transparent 0,#000 35%,#000 100%);mask-composite:intersect">
+          <app-dot-engraving src="/assets/engravings/yali-map.png" align="center" style="position:absolute;inset:0;transform:scaleX(-1);opacity:.5"></app-dot-engraving>
+        </div>
+          <h2 style="margin:0;max-width:720px;font:400 44px/54px 'IBM Plex Serif',Georgia,serif;letter-spacing:-.01em;color:var(--fg-FFFFFF);text-wrap:balance">Başvurunuz her adımda kaydedilir. <span style="font-style:italic;color:var(--fg-C9D4F0)">Kaldığınız yerden devam edersiniz.</span></h2>
+          <a class="ui-btn ui-btn--white" href="/register" (click)="$event.preventDefault(); start()" style="flex:none;display:inline-flex;background:var(--bg-FFFFFF);color:var(--fg-061262);border-radius:10px;padding:16px 26px;font:600 16px/20px 'IBM Plex Sans',sans-serif;text-decoration:none"><app-itext [text]="store.signedIn() ? 'Başvuruma devam et →' : 'Başvuruya başla →'" /></a>
+        </div>
+        <div style="padding:22px 80px;border-top:1px solid rgba(255,255,255,.14);display:flex;align-items:center;gap:24px;font:400 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-9AA6C4);background:rgba(11,20,48,.55)">
+          <span>© 2026 Dijital Şirket Platformu · Terminal İstanbul</span><span style="flex:1"></span>
+          <a href="#" style="color:var(--fg-C9D4F0)" (click)="$event.preventDefault()">KVKK Aydınlatma Metni</a><a href="#" style="color:var(--fg-C9D4F0)" (click)="$event.preventDefault()">Kullanım Koşulları</a><a href="#" style="color:var(--fg-C9D4F0)" (click)="$event.preventDefault()">Çerez Politikası</a>
+        </div>
+      </footer>
+    </div>

@@ -1,0 +1,44 @@
+<div data-screen-label="D-2b Uygun" style="width:100%;min-height:100vh;background:var(--bg-F4F6FB);overflow:clip">
+      <app-top-bar ></app-top-bar>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 384px;gap:24px;padding:24px 32px 40px;align-items:start">
+        <main style="display:flex;flex-direction:column;gap:16px;min-width:0">
+          <app-stepper [current]="2"></app-stepper>
+          <app-ai-card cardTitle="Uygunsunuz — ödemeye geçebilirsiniz" reason="AML tarama raporu belgelerinize eklendi; kurumlara bu raporla başvurulacak."></app-ai-card>
+          <section style="background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:14px;padding:28px;display:flex;flex-direction:column;gap:12px">
+            <h3 style="margin:0 0 6px;font:600 22px/30px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">Uygunluk (AML) kontrolü</h3>
+            @for (s of doneStages(); track $index) {
+              <div style="border:1px solid var(--bd-DCEFE2);background:var(--bg-F7FCF8);border-radius:12px"><div style="display:flex;align-items:center;gap:12px;padding:12px 18px">
+                <span style="width:26px;height:26px;border-radius:50%;background:var(--bg-15803D);color:var(--fg-FFFFFF);display:grid;place-items:center;font:700 12px/1 'IBM Plex Sans',sans-serif"><app-icon name="check" /></span>
+                <span style="font:600 15px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">{{ s.t }}</span>
+                <span style="flex:1;font:400 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660)">· {{ s.s }}</span>
+                <button type="button" (click)="openStage.set(openStage() === $index ? null : $index)" [attr.aria-expanded]="openStage() === $index" style="border:0;background:transparent;color:var(--fg-061262);font:600 13px/18px 'IBM Plex Sans',sans-serif;cursor:pointer"><app-itext [text]="openStage() === $index ? 'Detayları gizle ▴' : 'Detayları göster ▾'" /></button>
+              </div>
+              @if (openStage() === $index) {<div style="margin:0 18px 14px 56px;font:400 13px/19px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660)">{{ s.d }}</div>}</div>
+            }
+            <div style="border:1px solid var(--bd-DCEFE2);background:var(--bg-F7FCF8);border-radius:12px">
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 18px">
+                <span style="width:26px;height:26px;border-radius:50%;background:var(--bg-15803D);color:var(--fg-FFFFFF);display:grid;place-items:center;font:700 12px/1 'IBM Plex Sans',sans-serif"><app-icon name="check" /></span>
+                <span style="font:600 15px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">Yaptırım ve PEP taraması</span>
+                <span style="flex:1;font:400 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660)">· 5/5 liste tarandı · eşleşme bulunmadı</span>
+                <button type="button" (click)="listsOpen.set(!listsOpen())" [attr.aria-expanded]="listsOpen()" style="border:0;background:transparent;color:var(--fg-061262);font:600 13px/18px 'IBM Plex Sans',sans-serif;cursor:pointer"><app-itext [text]="listsOpen() ? 'Detayları gizle ▴' : 'Detayları göster ▾'" /></button>
+              </div>
+              @if (listsOpen()) {<div style="margin:0 18px 14px 56px;background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:10px">
+                @for (l of lists(); track $index) {
+                  <div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:16px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--bd-F1F4FA)">
+                    <span style="font:500 13.5px/19px 'IBM Plex Sans',sans-serif;color:var(--fg-1F2A44)">{{ l.n }}</span>
+                    <span style="font:400 12px/16px 'IBM Plex Mono',monospace;color:var(--fg-5B6478)">{{ l.t }}</span>
+                    <span style="font:600 12.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-15803D)"><app-icon name="check" /> Eşleşme bulunmadı</span>
+                  </div>
+                }
+              </div>}
+            </div>
+            <div style="margin-top:8px;padding:22px 24px;border-radius:14px;background:var(--bg-F0FDF4);border:1px solid var(--bd-BBE5C8);display:flex;align-items:center;gap:18px">
+              <span aria-hidden="true" style="width:48px;height:48px;flex:none;border-radius:50%;background:var(--bg-15803D);color:var(--fg-FFFFFF);display:grid;place-items:center;font:700 22px/1 'IBM Plex Sans',sans-serif;box-shadow:0 0 0 6px var(--bd-DCF3E3)"><app-icon name="check" /></span>
+              <span style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font:600 19px/26px 'IBM Plex Sans',sans-serif;color:var(--fg-14532D)">Dijital kuruluşa uygun</span><span style="font:400 13.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-166534)">Tüm kontroller {{ finishedAt() }}’de tamamlandı · AML tarama raporu belgelerinize eklendi.</span></span>
+              <button type="button" (click)="toPayment()" [disabled]="store.busy()" style="border:0;background:var(--bg-061262);color:var(--fg-FFFFFF);border-radius:10px;padding:13px 22px;font:600 15px/20px 'IBM Plex Sans',sans-serif;cursor:pointer">Ödemeye geç <app-icon name="arrow-right" /></button>
+            </div>
+          </section>
+        </main>
+        <app-side-panel tab="log" ctx="aml"></app-side-panel>
+      </div>
+    </div>

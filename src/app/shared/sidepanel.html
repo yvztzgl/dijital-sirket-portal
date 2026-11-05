@@ -1,0 +1,105 @@
+@let height = vals().height;
+@let radius = vals().radius;
+@let tabs = vals().tabs;
+@let isAi = vals().isAi;
+@let isDocs = vals().isDocs;
+@let isLog = vals().isLog;
+@let ctxLabel = vals().ctxLabel;
+@let bubbles = vals().bubbles;
+@let chips = vals().chips;
+@let groups = vals().groups;
+@let noDocs = vals().noDocs;
+@let logs = vals().logs;
+@let thinking = vals().thinking;
+@let status = vals().status;
+<aside aria-label="Başvuru Dosyanız" [attr.style]="`display:flex;flex-direction:column;height:${height};background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:${radius};box-shadow:0 1px 2px rgba(6,18,98,.05);overflow:hidden;font-family:'IBM Plex Sans',system-ui,sans-serif`">
+  <div style="padding:16px 18px 12px;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--bd-EEF1F6)">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+      <span style="font:600 15px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">Başvuru Dosyanız</span>
+      <span style="font:500 11.5px/16px 'IBM Plex Mono',monospace;color:var(--fg-5B6478)">{{ store.appId() }}</span>
+    </div>
+    <div role="tablist" style="display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:2px;padding:3px;background:var(--bg-F1F4FA);border-radius:9px">
+      @for (t of tabs; track $index) {
+        <button role="tab" type="button" (click)="activeTab.set(t.id)" [attr.aria-selected]="t.active" [attr.style]="`display:flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:7px;padding:7px 6px;cursor:pointer;background:${t.bg};color:${t.color};box-shadow:${t.shadow};font:600 12.5px/16px 'IBM Plex Sans',sans-serif`">{{ t.label }}@if (t.hasCount) {<span [attr.style]="`min-width:18px;padding:1px 5px;border-radius:999px;background:${t.countBg};color:${t.countColor};font:600 10.5px/14px 'IBM Plex Mono',monospace;box-sizing:border-box`">{{ t.count }}</span>}</button>
+      }
+    </div>
+  </div>
+
+  @if (isAi) {
+    <div style="flex:1;min-height:0;display:flex;flex-direction:column">
+      <div #chat style="flex:1;min-height:0;overflow:auto;padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <svg width="24" height="24" viewBox="0 0 40 40" aria-hidden="true"><path d="M9 8h22a7 7 0 0 1 7 7v10a7 7 0 0 1-7 7H19l-7 6v-6H9a7 7 0 0 1-7-7V15a7 7 0 0 1 7-7z" style="fill:var(--ic-DCE6FF)"></path><rect x="8" y="13" width="24" height="14" rx="7" style="fill:var(--ic-061262)"></rect><circle cx="15" cy="20" r="2.2" style="fill:var(--ic-FFFFFF)"></circle><circle cx="25" cy="20" r="2.2" style="fill:var(--ic-FFFFFF)"></circle></svg>
+          <span style="font:600 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">Terminal AI</span>
+          <span style="font:400 12px/16px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">· {{ ctxLabel }}</span>
+        </div>
+        @for (b of bubbles; track $index) {
+          @if (b.bot) {<div class="bot-msg" [class.live]="b.streaming" [attr.aria-busy]="b.streaming" style="align-self:flex-start;max-width:92%;padding:10px 12px;background:var(--bg-F1F5FF);border-radius:4px 12px 12px 12px;font:400 13.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-1F2A44);text-wrap:pretty">{{ b.text }}@if (b.streaming) {<span class="caret" aria-hidden="true"></span>}</div>}
+          @if (b.me) {<div style="align-self:flex-end;max-width:85%;padding:10px 12px;background:var(--bg-061262);color:var(--fg-FFFFFF);border-radius:12px 4px 12px 12px;font:400 13.5px/20px 'IBM Plex Sans',sans-serif">{{ b.text }}</div>}
+        }
+        @if (status) {
+          <div class="thinking" role="status" aria-live="polite">
+            <svg class="bot" width="24" height="24" viewBox="0 0 40 40" aria-hidden="true"><path d="M9 8h22a7 7 0 0 1 7 7v10a7 7 0 0 1-7 7H19l-7 6v-6H9a7 7 0 0 1-7-7V15a7 7 0 0 1 7-7z" style="fill:var(--ic-DCE6FF)"></path><rect x="8" y="13" width="24" height="14" rx="7" style="fill:var(--ic-061262)"></rect><g class="eyes"><circle cx="15" cy="20" r="2.2" style="fill:var(--ic-FFFFFF)"></circle><circle cx="25" cy="20" r="2.2" style="fill:var(--ic-FFFFFF)"></circle></g></svg>
+            <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            @for (s of [status]; track s) {<span class="status">{{ s }}…</span>}
+          </div>
+        }
+      </div>
+      <div style="padding:12px 18px 16px;border-top:1px solid var(--bd-EEF1F6);display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          @for (c of chips; track $index) {<button type="button" (click)="send(c)" style="border:1px solid var(--bd-D6DEEE);background:var(--bg-FFFFFF);color:var(--fg-061262);border-radius:999px;padding:5px 10px;font:500 12px/16px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ c }}</button>}
+        </div>
+        <form (submit)="$event.preventDefault(); send()" style="display:flex;align-items:center;gap:8px;border:1px solid var(--bd-D6DEEE);border-radius:10px;padding:4px 4px 4px 12px;background:var(--bg-FFFFFF)">
+          <input aria-label="Terminal AI'ye mesaj" [value]="draft()" (input)="draft.set($any($event.target).value)" placeholder="Terminal AI'ye bir soru sorun…" style="flex:1;min-width:0;border:0;outline:0;font:400 13.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-1F2A44);background:transparent">
+          <button type="submit" aria-label="Gönder" [disabled]="thinking" style="width:32px;height:32px;border:0;border-radius:8px;background:var(--bg-061262);color:var(--fg-FFFFFF);display:grid;place-items:center;cursor:pointer"><app-icon name="send" size="15px" [stroke]="2" /></button>
+        </form>
+      </div>
+    </div>
+  }
+
+  @if (isDocs) {
+    <div style="flex:1;min-height:0;overflow:auto;padding:6px 10px 14px;display:flex;flex-direction:column">
+      @if (noDocs) {<div style="padding:28px 12px;text-align:center;font:400 13px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">Belgeleriniz oluştukça burada gruplanır.</div>}
+      @for (g of groups; track $index) {
+        <div style="padding:10px 8px 4px;display:flex;align-items:center;justify-content:space-between">
+          <span style="font:600 10.5px/14px 'IBM Plex Sans',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-5B6478)">{{ g.title }}</span>
+          <span style="font:500 11px/14px 'IBM Plex Mono',monospace;color:var(--fg-5B6478)">{{ g.n }}</span>
+        </div>
+        @for (d of g.docs; track $index) {
+          <div [attr.style]="`display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;background:${d.bg}`">
+            <svg width="30" height="36" viewBox="0 0 30 36" aria-hidden="true" style="flex:none">
+              <path d="M5 1.5h13.5L27.5 10.5V32a2.5 2.5 0 0 1-2.5 2.5H5A2.5 2.5 0 0 1 2.5 32V4A2.5 2.5 0 0 1 5 1.5z" style="fill:var(--bg-FFFFFF);stroke:var(--bd-D6DEEE)" stroke-width="1.2"></path>
+              <path d="M18.5 1.5V8a2.5 2.5 0 0 0 2.5 2.5h6.5" fill="none" style="stroke:var(--bd-D6DEEE)" stroke-width="1.2" stroke-linejoin="round"></path>
+              <path d="M8 15h12M8 18.5h9" style="stroke:var(--bd-E5E7EB)" stroke-width="1.4" stroke-linecap="round"></path>
+              <rect x="0" y="22" width="21" height="10" rx="2" style="fill:var(--bg-D92D20)"></rect>
+              <text x="10.5" y="29.4" text-anchor="middle" style="fill:var(--bg-FFFFFF);font:700 6.6px 'IBM Plex Sans',sans-serif;letter-spacing:.04em">PDF</text>
+            </svg>
+            <span style="flex:1;min-width:0;display:flex;flex-direction:column">
+              <span style="font:500 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-1F2A44);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.name }}</span>
+              <span [attr.style]="`font:400 11.5px/16px 'IBM Plex Sans',sans-serif;color:${d.metaColor}`">{{ d.meta }}</span>
+            </span>
+            <span class="doc-actions">
+              <button type="button" class="doc-btn" (click)="preview(d.doc)" [attr.aria-label]="d.name + ' önizle'" title="Önizle"><app-icon name="eye" size="16px" [stroke]="1.9" /></button>
+              <button type="button" class="doc-btn" (click)="download(d.doc)" [attr.aria-label]="d.name + ' indir'" title="İndir"><app-icon name="download" size="16px" [stroke]="1.9" /></button>
+            </span>
+          </div>
+        }
+      }
+    </div>
+  }
+
+  @if (isLog) {
+    <ol class="timeline">
+      @if (!logs.length) {<li class="empty">Başvurunuzdaki her işlem burada zaman damgasıyla listelenir.</li>}
+      @for (l of logs; track $index) {
+        <li class="event" [class.last]="l.last">
+          <span class="badge" aria-hidden="true" [attr.style]="`background:${l.tint};color:${l.ink}`"><app-icon [name]="l.icon" size="14px" [stroke]="2" /></span>
+          <span class="body">
+            <span class="text">{{ l.text }}</span>
+            <span class="meta"><span class="who">{{ l.who }}</span><time [attr.datetime]="l.iso">{{ l.t }}</time></span>
+          </span>
+        </li>
+      }
+    </ol>
+  }
+</aside>
