@@ -1,0 +1,16 @@
+<div data-screen-label="D-0c E-posta doğrulama" style="width:100%;min-height:100vh;background:var(--bg-F4F6FB);overflow:clip">
+      <app-top-bar [guest]="true" guestMode="register"></app-top-bar>
+      <div style="padding:80px 80px 96px;display:flex;justify-content:center">
+        <div style="width:520px;background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:16px;box-shadow:0 12px 32px -16px rgba(6,18,98,.22);padding:40px;display:flex;flex-direction:column;gap:22px">
+          <span aria-hidden="true" style="width:52px;height:52px;border-radius:14px;background:var(--bg-EFF4FF);display:grid;place-items:center"><app-icon name="mail" size="26px" [stroke]="1.8" style="color:var(--fg-061262)" /></span>
+          <div style="display:flex;flex-direction:column;gap:6px"><h3 style="margin:0;font:600 24px/32px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">E-postanızı doğrulayın</h3><span style="font:400 15px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660);text-wrap:pretty"><b style="font-weight:600;color:var(--fg-061262)">{{ vals().verifyEmail }}</b> adresine 6 haneli bir kod gönderdik. Kod 10 dakika geçerlidir.</span></div>
+          <div role="group" aria-label="Doğrulama kodu" style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px">
+            <app-otp-input [(value)]="otp" (complete)="verify($event)" />
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;font:400 13.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">@if (resendIn() > 0) {<span>Kod gelmedi mi? <span style="font-family:'IBM Plex Mono',monospace">{{ resendLabel() }}</span> sonra tekrar gönderebilirsiniz</span>} @else {<button type="button" (click)="resend()" style="border:0;background:none;padding:0;font:600 13.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-061262);cursor:pointer">Kodu tekrar gönder</button>}<a href="/register" (click)="$event.preventDefault(); changeEmail()" style="font-weight:600">E-postayı değiştir</a></div>
+          <app-form-error />
+          <button type="button" (click)="verify()" [disabled]="store.busy()" style="border:0;background:var(--bg-061262);color:var(--fg-FFFFFF);border-radius:10px;padding:14px 22px;font:600 15px/20px 'IBM Plex Sans',sans-serif;cursor:pointer;box-shadow:0 1px 2px rgba(6,18,98,.2)"><app-itext [text]="store.busy() ? 'Doğrulanıyor…' : 'Doğrula ve başvuruya geç →'" /></button>
+          <span style="font:400 12px/17px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">Spam / gereksiz klasörünü de kontrol edin. Gönderen: no-reply&#64;dijitalsirket.gov.tr</span>
+        </div>
+      </div>
+    </div>

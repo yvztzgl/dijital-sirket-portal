@@ -1,0 +1,36 @@
+<div data-screen-label="D-1a Yükleme" style="width:100%;min-height:100vh;background:var(--bg-F4F6FB);overflow:clip">
+      <app-top-bar ></app-top-bar>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 384px;gap:24px;padding:24px 32px 40px;align-items:start">
+        <main style="display:flex;flex-direction:column;gap:16px;min-width:0">
+          <app-stepper [current]="1"></app-stepper>
+          <app-ai-card cardTitle="Yatırımcı sunumunuz başvuru için yeterli" reason="Şirket adı, faaliyet, kurucu ve iletişim bilgilerini sunumdan okurum; eksik kalanları birlikte tamamlarız."></app-ai-card>
+          <section style="background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:14px;padding:28px;display:flex;flex-direction:column;gap:22px">
+            <div style="display:flex;flex-direction:column;gap:4px"><h3 style="margin:0;font:600 22px/30px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">Proje sunumu</h3><p style="margin:0;font:400 14.5px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">Sunumunuzu yükleyin; şirket ve kurucu bilgilerini AI Reviewer okusun.</p></div>
+            <input #deck type="file" accept=".pdf,.pptx,.key,application/pdf" (change)="onFileInput($event)" hidden>
+            <div role="button" tabindex="0" (click)="deck.click()" (keydown.enter)="deck.click()" (keydown.space)="$event.preventDefault(); deck.click()" (dragover)="onDragOver($event)" (dragleave)="dragging.set(false)" (drop)="onDrop($event)" [attr.style]="`border:2px dashed ${dragging() ? 'var(--bd-061262)' : 'var(--bd-B9C7E8)'};background:${dragging() ? 'var(--bg-EFF4FF)' : 'var(--bg-F7F9FE)'};border-radius:14px;padding:52px 24px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;cursor:pointer;transition:background .15s,border-color .15s`">
+              <span aria-hidden="true" style="width:56px;height:56px;border-radius:14px;background:var(--bg-FFFFFF);border:1px solid var(--bd-D6DEEE);display:grid;place-items:center;color:var(--fg-061262)"><app-icon name="upload" size="26px" [stroke]="1.8" /></span>
+              <span style="font:600 18px/26px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">{{ store.busy() ? 'Yükleniyor…' : dragging() ? 'Bırakın, okumaya başlayayım' : 'Proje sunumunuzu sürükleyin veya seçin' }}</span>
+              <span style="font:400 13.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">PDF, PowerPoint (.pptx) veya Keynote (.key) · en fazla 50 MB</span>
+              <button type="button" tabindex="-1" style="margin-top:6px;border:0;background:var(--bg-061262);color:var(--fg-FFFFFF);border-radius:8px;padding:10px 18px;font:600 14px/20px 'IBM Plex Sans',sans-serif;cursor:pointer">Dosya seç</button>
+            </div>
+            <app-form-error [message]="fileError()" />
+            <div style="display:flex;align-items:center;gap:14px"><span style="flex:1;height:1px;background:var(--bg-E5E7EB)"></span><span style="font:500 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">Sunumunuzda bulunması önerilenler</span><span style="flex:1;height:1px;background:var(--bg-E5E7EB)"></span></div>
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">
+              @for (s of samples; track $index) {
+                <div style="border:1px solid var(--bd-E5E7EB);background:var(--bg-FFFFFF);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:6px">
+                  <span style="font:500 12px/16px 'IBM Plex Mono',monospace;color:var(--fg-061262)">{{ s.k }}</span>
+                  <span style="font:600 14.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">{{ s.t }}</span>
+                  <span style="font:400 13px/19px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478);text-wrap:pretty">{{ s.d }}</span>
+                </div>
+              }
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+              <span style="font:400 13px/19px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">Eksik bilgiler sorun değil — bir sonraki adımda tamamlayabilirsiniz.</span>
+              <a class="ui-btn ui-btn--outline" href="/assets/samples/lumora-analytics-pitch.pptx" download="ornek-sunum-lumora-analytics.pptx" style="display:inline-flex;align-items:center;gap:8px;border:1px solid var(--bd-D6DEEE);border-radius:8px;padding:8px 12px;background:var(--bg-FFFFFF);font:600 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-061262);text-decoration:none"><app-icon name="download" size="15px" [stroke]="2" />Örnek sunumu indir <span style="font-weight:400;color:var(--fg-5B6478)">· PPTX, 9 sayfa</span></a>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font:400 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)"><app-icon name="lock" size="15px" [stroke]="1.8" style="color:var(--fg-5B6478)" />Dosyanız şifreli aktarılır, yalnızca bu başvuru için işlenir ve KVKK kapsamında saklanır.</div>
+          </section>
+        </main>
+        <app-side-panel tab="ai" ctx="upload"></app-side-panel>
+      </div>
+    </div>

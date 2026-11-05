@@ -1,0 +1,11 @@
+@let title = vals().title;
+@let reason = vals().reason;
+<aside aria-label="Terminal AI önerisi" style="display:flex;align-items:center;flex-wrap:wrap;gap:12px 16px;padding:14px 16px 14px 14px;background:var(--bg-F7F9FE);border:1px solid var(--bd-D6DEEE);border-radius:14px;font-family:'IBM Plex Sans',system-ui,sans-serif">
+  <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true" style="flex:none"><circle cx="20" cy="3" r="2" style="fill:var(--ic-061262)"></circle><path d="M20 5v3" style="stroke:var(--ic-061262)" stroke-width="2" stroke-linecap="round"></path><path d="M9 8h22a7 7 0 0 1 7 7v10a7 7 0 0 1-7 7H19l-7 6v-6H9a7 7 0 0 1-7-7V15a7 7 0 0 1 7-7z" style="fill:var(--ic-DCE6FF)"></path><rect x="8" y="13" width="24" height="14" rx="7" style="fill:var(--ic-061262)"></rect><circle cx="15" cy="20" r="2.2" style="fill:var(--ic-FFFFFF)"></circle><circle cx="25" cy="20" r="2.2" style="fill:var(--ic-FFFFFF)"></circle></svg>
+  <div style="flex:1 1 240px;min-width:0;display:flex;flex-direction:column;gap:1px">
+    <span style="font:600 10.5px/14px 'IBM Plex Sans',sans-serif;letter-spacing:.1em;color:var(--fg-061262)">TERMİNAL AI ÖNERİSİ</span>
+    <span style="font:600 15px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-061262);text-wrap:pretty">{{ title }}</span>
+    <span style="font:400 13px/19px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478);text-wrap:pretty">{{ reason }}</span>
+  </div>
+  <button type="button" (click)="ask()" style="flex:none;border:1px solid var(--bd-D6DEEE);background:var(--bg-FFFFFF);color:var(--fg-061262);border-radius:8px;padding:8px 12px;font:600 13px/18px 'IBM Plex Sans',sans-serif;cursor:pointer;white-space:nowrap">Terminal AI'ye sor <app-icon name="chevron-right" /></button>
+</aside>

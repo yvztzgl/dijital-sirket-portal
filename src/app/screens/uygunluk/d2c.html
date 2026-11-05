@@ -1,0 +1,33 @@
+<div data-screen-label="D-2c Manuel inceleme" style="width:100%;min-height:100vh;background:var(--bg-F4F6FB);overflow:clip">
+      <app-top-bar ></app-top-bar>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 384px;gap:24px;padding:24px 32px 40px;align-items:start">
+        <main style="display:flex;flex-direction:column;gap:16px;min-width:0">
+          <app-stepper [current]="2"></app-stepper>
+          <app-ai-card [cardTitle]="manualHint().title" [reason]="manualHint().reason"></app-ai-card>
+          <section style="background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:14px;padding:28px;display:flex;flex-direction:column;gap:12px">
+            <h3 style="margin:0 0 6px;font:600 22px/30px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">Uygunluk (AML) kontrolü</h3>
+            @for (s of manualStages(); track $index) {
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border:1px solid var(--bd-DCEFE2);background:var(--bg-F7FCF8);border-radius:12px">
+                <span style="width:26px;height:26px;border-radius:50%;background:var(--bg-15803D);color:var(--fg-FFFFFF);display:grid;place-items:center;font:700 12px/1 'IBM Plex Sans',sans-serif"><app-icon name="check" /></span>
+                <span style="font:600 15px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">{{ s.t }}</span>
+                <span style="flex:1;font:400 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660)">· {{ s.s }}</span>
+              </div>
+            }
+            <div role="status" style="margin-top:8px;padding:22px 24px;border-radius:14px;background:var(--bg-FFFBEB);border:1px solid var(--bd-F5D9A8);display:flex;flex-direction:column;gap:16px">
+              <div style="display:flex;gap:16px;align-items:flex-start">
+                <span aria-hidden="true" style="width:44px;height:44px;flex:none;border-radius:50%;background:var(--bg-B45309);color:var(--fg-FFFFFF);display:grid;place-items:center;font:700 20px/1 'IBM Plex Sans',sans-serif">!</span>
+                <span style="display:flex;flex-direction:column;gap:4px"><span style="font:600 19px/26px 'IBM Plex Sans',sans-serif;color:var(--fg-78350F)">Manuel inceleme gerekli</span><span style="font:400 14px/21px 'IBM Plex Sans',sans-serif;color:var(--fg-78350F);max-width:640px;text-wrap:pretty">Başvurunuz reddedilmedi. Uyum ekibi dosyanızı en geç 2 iş günü içinde inceler; bu sürede ödeme ve e-imza adımlarına devam edebilirsiniz. Kuruluş, inceleme olumlu sonuçlanınca kurumlara gönderilir.</span></span>
+              </div>
+              <div style="margin-left:60px;background:var(--bg-FFFFFF);border:1px solid var(--bd-F1E2C3);border-radius:10px;padding:4px 14px">
+                @for (r of manualReasons(); track r.n) {<div [attr.style]="`display:flex;gap:12px;padding:10px 0;border-bottom:${$last ? '0' : '1px solid var(--bd-FAF1DE)'}`"><span style="font:600 12px/18px 'IBM Plex Mono',monospace;color:var(--fg-B45309)">{{ r.n }}</span><span style="flex:1;font:400 13.5px/19px 'IBM Plex Sans',sans-serif;color:var(--fg-1F2A44)">{{ r.t }}</span><span style="font:500 11px/16px 'IBM Plex Mono',monospace;color:var(--fg-5B6478);padding:0 5px;border-radius:4px;background:var(--bg-F1F4FA);align-self:center">{{ r.p }}</span></div>}
+              </div>
+              <div style="margin-left:60px;display:flex;gap:10px">
+                <button type="button" (click)="continueManual()" [disabled]="store.busy()" style="border:0;background:var(--bg-061262);color:var(--fg-FFFFFF);border-radius:10px;padding:13px 20px;font:600 15px/20px 'IBM Plex Sans',sans-serif;cursor:pointer">Manuel inceleme kaydıyla devam et</button>
+                <button type="button" (click)="fixDeck()" [disabled]="store.busy()" style="border:1px solid var(--bd-D6DEEE);background:var(--bg-FFFFFF);color:var(--fg-061262);border-radius:10px;padding:12px 18px;font:600 15px/20px 'IBM Plex Sans',sans-serif;cursor:pointer"><app-icon name="arrow-left" /> Sunum bilgilerini düzelt</button>
+              </div>
+            </div>
+          </section>
+        </main>
+        <app-side-panel tab="ai" ctx="manual"></app-side-panel>
+      </div>
+    </div>

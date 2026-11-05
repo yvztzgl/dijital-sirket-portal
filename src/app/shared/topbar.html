@@ -1,0 +1,54 @@
+@let v = vals();
+<header class="bar">
+  <a class="brand" [routerLink]="v.signedIn ? store.resumeRoute() : '/'" aria-label="Dijital Şirket Platformu — ana sayfa">
+    <span class="mono" aria-hidden="true">DŞ</span>
+    <span class="names">
+      <span class="name">Dijital Şirket Platformu <span class="tag">Terminal İstanbul</span></span>
+      <span class="sub">Girişimciler için uçtan uca dijital şirket kuruluşu</span>
+    </span>
+  </a>
+
+  <div class="right">
+    <app-header-tools />
+    <span class="divider" aria-hidden="true"></span>
+
+    @if (v.guest) {
+      <span class="note">{{ v.guestNote }}</span>
+      <a class="cta" [routerLink]="v.guestHref">{{ v.guestAction }}</a>
+    }
+
+    @if (v.signedIn) {
+      <div class="account">
+        <button type="button" class="who" (click)="menu.set(!menu())" [attr.aria-expanded]="menu()" aria-haspopup="menu">
+          <span class="avatar" aria-hidden="true">{{ store.initials() }}</span>
+          <span class="who-text">
+            <span class="who-name">{{ store.fullName() }}</span>
+            <span class="who-id">{{ store.appId() }}</span>
+          </span>
+          <app-icon name="chevron-down" size="15px" />
+        </button>
+        @if (menu()) {
+          <div class="menu" role="menu">
+            <div class="menu-head">
+              <span class="avatar lg" aria-hidden="true">{{ store.initials() }}</span>
+              <span class="who-text">
+                <span class="who-name">{{ store.fullName() }}</span>
+                <span class="email">{{ store.account()?.email }}</span>
+              </span>
+            </div>
+            <a role="menuitem" class="item" [routerLink]="store.resumeRoute()" (click)="menu.set(false)">
+              <app-icon name="file" size="16px" />Başvuruma git<span class="step">Adım {{ store.step() }}/5</span>
+            </a>
+            <button type="button" role="menuitem" class="item" (click)="copyId()">
+              <app-icon [name]="copied() ? 'check' : 'copy'" size="16px" />{{ copied() ? 'Kopyalandı' : 'Başvuru no’yu kopyala' }}<span class="step mono-txt">{{ store.appId() }}</span>
+            </button>
+            <div class="sep"></div>
+            <button type="button" role="menuitem" class="item danger" (click)="logout()">
+              <app-icon name="log-out" size="16px" />Çıkış yap
+            </button>
+          </div>
+        }
+      </div>
+    }
+  </div>
+</header>

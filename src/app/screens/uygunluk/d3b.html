@@ -1,0 +1,31 @@
+<div data-screen-label="D-3b 3D Secure" style="position:relative;width:100%;min-height:100vh;height:900px;background:var(--bg-F4F6FB);overflow:clip">
+      <app-top-bar ></app-top-bar>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 384px;gap:24px;padding:24px 32px 40px;align-items:start">
+        <main style="display:flex;flex-direction:column;gap:16px;min-width:0">
+          <app-stepper [current]="3"></app-stepper>
+          <div style="height:520px;background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:14px"></div>
+        </main>
+        <div style="height:700px;background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:14px"></div>
+      </div>
+      <div style="position:absolute;inset:0;background:rgba(6,18,98,.48);backdrop-filter:blur(2px);display:grid;place-items:center">
+        <div role="dialog" aria-label="3D Secure doğrulama" style="width:440px;background:var(--bg-FFFFFF);border-radius:12px;box-shadow:0 32px 64px -16px rgba(0,0,0,.4);overflow:hidden">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--bg-F3F4F6);border-bottom:1px solid var(--bd-E5E7EB)"><span style="font:700 14px/20px Georgia,serif;color:var(--fg-111827);letter-spacing:.02em">KART BANKANIZ</span><span style="font:600 11px/16px 'IBM Plex Mono',monospace;color:var(--fg-374151);padding:2px 8px;border:1px solid var(--bd-D1D5DB);border-radius:4px">3D SECURE</span></div>
+          <div style="padding:22px 24px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:grid;grid-template-columns:110px 1fr;row-gap:6px;font:400 13.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-374151)"><span>İşyeri</span><span style="color:var(--fg-111827);font-weight:500">Dijital Şirket Platformu</span><span>Tutar</span><span style="color:var(--fg-111827);font-weight:600;font-family:'IBM Plex Mono',monospace">{{ total() }}</span><span>Kart</span><span style="color:var(--fg-111827);font-family:'IBM Plex Mono',monospace">{{ maskedCard() }}</span><span>Tarih</span><span style="color:var(--fg-111827);font-family:'IBM Plex Mono',monospace">{{ txTime() }}</span></div>
+            <div style="height:1px;background:var(--bg-E5E7EB)"></div>
+            <div style="display:flex;flex-direction:column;gap:10px"><label style="font:500 14px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-111827)">{{ maskedPhone() }} numarasına gönderilen 6 haneli kodu girin</label>
+              <div style="display:flex;gap:8px">
+                <app-otp-input variant="bank" [(value)]="otp" (complete)="confirm($event)" />
+              </div>
+              <div style="display:flex;justify-content:space-between;font:400 12.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-4B5563)"><span>Kalan süre <b style="font-family:'IBM Plex Mono',monospace;color:var(--fg-111827)">{{ otpLeftLabel() }}</b></span><a href="#" style="color:var(--fg-4B5563);text-decoration:underline" (click)="$event.preventDefault(); resendOtp()">Kodu tekrar gönder</a></div>
+            </div>
+            <app-form-error />
+            <div style="display:flex;gap:10px"><button type="button" (click)="confirm()" [disabled]="store.busy()" style="flex:1;border:0;background:var(--bg-111827);color:var(--fg-FFFFFF);border-radius:8px;padding:12px;font:600 14.5px/20px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ store.busy() ? 'Doğrulanıyor…' : 'Onayla' }}</button><button type="button" (click)="cancel3ds()" [disabled]="store.busy()" style="border:1px solid var(--bd-D1D5DB);background:var(--bg-FFFFFF);color:var(--fg-111827);border-radius:8px;padding:12px 18px;font:600 14.5px/20px 'IBM Plex Sans',sans-serif;cursor:pointer">İptal</button></div>
+          </div>
+        </div>
+      </div>
+      @if (sms()) {<div style="position:absolute;top:20px;right:24px;width:340px;display:flex;gap:12px;padding:12px 14px;border-radius:16px;background:rgba(250,250,252,.97);box-shadow:0 12px 32px -8px rgba(0,0,0,.35)">
+        <span aria-hidden="true" style="width:34px;height:34px;flex:none;border-radius:9px;background:var(--bg-15803D);color:var(--fg-FFFFFF);display:grid;place-items:center;font:700 11px/1 'IBM Plex Sans',sans-serif">SMS</span>
+        <span style="display:flex;flex-direction:column;gap:2px"><span style="display:flex;justify-content:space-between;font:600 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-111827)">KARTBANK<span style="font-weight:400;color:var(--fg-6B7280)">şimdi</span></span><span style="font:400 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-1F2937)">{{ total() }} tutarlı işleminiz için doğrulama kodunuz: <b style="font-family:'IBM Plex Mono',monospace">{{ sms()?.code }}</b>. Kodu kimseyle paylaşmayın.</span></span>
+      </div>}
+    </div>

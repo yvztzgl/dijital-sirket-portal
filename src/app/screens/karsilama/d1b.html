@@ -1,0 +1,45 @@
+<div data-screen-label="D-1b Tarama" style="width:100%;min-height:100vh;background:var(--bg-F4F6FB);overflow:clip">
+      <app-top-bar ></app-top-bar>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 384px;gap:24px;padding:24px 32px 40px;align-items:start">
+        <main style="display:flex;flex-direction:column;gap:16px;min-width:0">
+          <app-stepper [current]="1" sub="Okuma"></app-stepper>
+          <app-ai-card cardTitle="Okuma bitince yalnızca emin olmadığım alanları işaretleyeceğim" reason="Her değer, bulunduğu sayfa numarasıyla kaydedilir."></app-ai-card>
+          <section aria-live="polite" style="background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:14px;padding:28px;display:flex;flex-direction:column;gap:22px">
+            <div style="display:flex;align-items:flex-start;gap:16px">
+              <span aria-hidden="true" style="width:44px;height:44px;flex:none;border-radius:12px;background:var(--bg-EFF4FF);display:grid;place-items:center"><span style="width:20px;height:20px;border-radius:50%;border:2.5px solid var(--bd-C7D5F7);border-top-color:var(--bd-061262);animation:spin .9s linear infinite"></span></span>
+              <div style="flex:1;display:flex;flex-direction:column;gap:2px">
+                <h3 style="margin:0;font:600 20px/28px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">AI Reviewer sunumu okuyor…</h3>
+                <span style="font:400 14px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)"><span style="font-family:'IBM Plex Mono',monospace;color:var(--fg-1F2A44)">{{ scanFile() }}</span> · {{ store.scan()?.pages }} sayfa · sayfa {{ store.scan()?.page }} okunuyor</span>
+              </div>
+              <span style="font:600 36px/40px 'IBM Plex Mono',monospace;color:var(--fg-061262);letter-spacing:-.02em">{{ store.scan()?.percent ?? 0 }}<span style="font-size:20px;color:var(--fg-5B6478)">%</span></span>
+            </div>
+            <div aria-hidden="true" style="height:4px;background:var(--bg-EEF1F6);border-radius:2px;overflow:hidden"><div [attr.style]="`width:${store.scan()?.percent ?? 0}%;height:100%;background:var(--bg-061262);border-radius:2px;transition:width .2s linear`"></div></div>
+            <div aria-hidden="true" style="display:flex;gap:8px">
+              @for (t of thumbs(); track $index) {
+                <div [attr.style]="`position:relative;flex:1;aspect-ratio:16/11;border-radius:6px;border:1.5px solid ${t.border};background:${t.bg};overflow:hidden;padding:5px;box-sizing:border-box;display:flex;flex-direction:column;gap:3px;opacity:${t.op}`">
+                  <span [attr.style]="`width:55%;height:3px;border-radius:2px;background:${t.ink}`"></span><span [attr.style]="`width:80%;height:2px;border-radius:2px;background:${t.ink2}`"></span><span [attr.style]="`width:70%;height:2px;border-radius:2px;background:${t.ink2}`"></span>
+                  <span [attr.style]="`position:absolute;right:4px;bottom:3px;font:600 9px/1 'IBM Plex Mono',monospace;color:${t.num}`">{{ t.label }}</span>
+                  @if (t.cur) {<span style="position:absolute;left:0;right:0;height:2px;background:var(--bg-061262);box-shadow:0 0 10px 2px rgba(6,18,98,.5);animation:scan 1.2s ease-in-out infinite alternate"></span>}
+                </div>
+              }
+            </div>
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <span style="font:600 10.5px/14px 'IBM Plex Sans',sans-serif;letter-spacing:.1em;color:var(--fg-5B6478);padding-bottom:8px">BULUNAN ALANLAR · {{ store.scan()?.shown ?? 0 }} / {{ store.scan()?.total ?? 0 }}</span>
+              <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:28px">
+                @for (f of scanFields(); track $index) {
+                  <div [attr.style]="`display:grid;grid-template-columns:20px 130px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--bd-F1F4FA);opacity:${f.op}`">
+                    @if (f.done) {<span style="width:18px;height:18px;border-radius:50%;background:var(--bg-F0FDF4);border:1px solid var(--bd-BBE5C8);color:var(--fg-15803D);display:grid;place-items:center;font:700 10px/1 'IBM Plex Sans',sans-serif"><app-icon name="check" /></span>}
+                    @if (f.pending) {<span style="width:18px;height:18px;border-radius:50%;border:1.5px dashed var(--bd-C9D2E3);box-sizing:border-box"></span>}
+                    <span style="font:400 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">{{ f.k }}</span>
+                    @if (f.done) {<span style="font:600 14px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.v }}</span>}
+                    @if (f.pending) {<span style="height:10px;border-radius:5px;width:70%;background:linear-gradient(90deg,var(--bg-EEF1F6) 0,var(--bg-F7F9FE) 50%,var(--bg-EEF1F6) 100%);background-size:400px 10px;animation:shimmer 1.4s linear infinite"></span>}
+                    <span style="font:500 11px/16px 'IBM Plex Mono',monospace;color:var(--fg-5B6478);padding:0 5px;border-radius:4px;background:var(--bg-F1F4FA)">{{ f.p }}</span>
+                  </div>
+                }
+              </div>
+            </div>
+          </section>
+        </main>
+        <app-side-panel tab="ai" ctx="scan"></app-side-panel>
+      </div>
+    </div>

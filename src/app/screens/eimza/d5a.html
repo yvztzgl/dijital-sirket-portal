@@ -1,0 +1,46 @@
+<div data-screen-label="D-5a Kuruluyor" style="width:100%;min-height:100vh;background:var(--bg-F4F6FB);overflow:clip">
+      <app-top-bar ></app-top-bar>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 384px;gap:24px;padding:24px 32px 40px;align-items:start">
+        <main style="display:flex;flex-direction:column;gap:16px;min-width:0">
+          <app-stepper [current]="5"></app-stepper>
+          <section aria-live="polite" style="background:var(--bg-FFFFFF);border:1px solid var(--bd-C7D5F7);border-radius:16px;padding:26px 28px;display:flex;flex-direction:column;gap:18px;box-shadow:0 12px 32px -16px rgba(6,18,98,.25)">
+            <div style="display:flex;align-items:flex-start;gap:16px">
+              <span aria-hidden="true" style="width:44px;height:44px;flex:none;border-radius:12px;background:var(--bg-EFF4FF);display:grid;place-items:center"><span style="width:20px;height:20px;border-radius:50%;border:2.5px solid var(--bd-C7D5F7);border-top-color:var(--bd-061262);animation:spin .9s linear infinite"></span></span>
+              <div style="flex:1;display:flex;flex-direction:column;gap:3px">
+                <span style="font:600 11px/14px 'IBM Plex Mono',monospace;letter-spacing:.1em;color:var(--fg-061262)">ŞU AN · ADIM {{ current()?.idx }}/{{ current()?.total }}</span>
+                <span style="font:600 22px/30px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">{{ current()?.t }}</span>
+                <span style="font:400 14px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660)">{{ current()?.sub }} <span style="color:var(--fg-5B6478)">· {{ current()?.ag }}</span></span>
+              </div>
+              <span style="font:600 44px/48px 'IBM Plex Mono',monospace;letter-spacing:-.03em;color:var(--fg-061262)">{{ current()?.percent }}<span style="font-size:22px;color:var(--fg-5B6478)">%</span></span>
+            </div>
+            <div aria-hidden="true" style="display:grid;grid-template-columns:repeat(9,1fr);gap:4px">
+              @for (s of segs(); track $index) {<span [attr.style]="`height:8px;border-radius:3px;background:${s.bg};animation:${s.anim}`"></span>}
+            </div>
+            <p style="margin:0;font:400 14px/21px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660)"><b style="font-weight:600;color:var(--fg-061262)">Sizden başka bir işlem beklenmiyor.</b> Belgeler günlük e-imzanızla otomatik imzalanıyor ve kurumlara gönderiliyor. Sayfayı kapatabilirsiniz; her adımda e-posta alırsınız.</p>
+          </section>
+          <section style="background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:14px;padding:8px 0">
+            @for (a of agency(); track $index) {
+              <div [attr.style]="`display:grid;grid-template-columns:28px 30px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 22px;background:${a.bg}`">
+                @if (a.done) {<span style="width:22px;height:22px;border-radius:50%;background:var(--bg-15803D);color:var(--fg-FFFFFF);display:grid;place-items:center;font:700 11px/1 'IBM Plex Sans',sans-serif"><app-icon name="check" /></span>}
+                @if (a.cur) {<span style="width:22px;height:22px;border-radius:50%;background:var(--bg-061262);animation:ring 1.6s ease-out infinite;display:grid;place-items:center"><span style="width:8px;height:8px;border-radius:50%;background:var(--bg-FFFFFF)"></span></span>}
+                @if (a.up) {<span style="width:22px;height:22px;border-radius:50%;border:1.5px dashed var(--bd-C9D2E3);box-sizing:border-box"></span>}
+                <span style="font:500 12px/18px 'IBM Plex Mono',monospace;color:var(--fg-5B6478)">{{ a.n }}</span>
+                <span [attr.style]="`font:${a.weight} 14.5px/20px 'IBM Plex Sans',sans-serif;color:${a.color}`">{{ a.t }}</span>
+                <span style="font:400 12.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">{{ a.ag }}</span>
+              </div>
+            }
+            <div style="border-top:1px solid var(--bd-EEF1F6);margin-top:6px;padding:12px 22px 6px"><button type="button" (click)="detailsOpen.set(!detailsOpen())" [attr.aria-expanded]="detailsOpen()" style="border:0;background:transparent;padding:0;color:var(--fg-061262);font:600 13px/18px 'IBM Plex Sans',sans-serif;cursor:pointer"><app-itext [text]="detailsOpen() ? 'Detayları gizle ▴' : 'Detayları göster ▾'" /> <span style="color:var(--fg-5B6478);font-weight:400">· {{ store.setup()?.done }}/{{ totalSubs }} alt adım</span></button>
+              @if (detailsOpen()) {<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;padding:14px 0 8px">
+                @for (d of details(); track d.n) {
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <span style="font:600 12px/16px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)"><span style="font-family:'IBM Plex Mono',monospace;color:var(--fg-5B6478)">{{ d.n }}</span> {{ d.t }}</span>
+                    @for (x of d.subs; track $index) {<span [attr.style]="`display:flex;gap:8px;font:400 12.5px/18px 'IBM Plex Sans',sans-serif;color:${x.color};text-decoration:${x.deco}`"><span [attr.style]="`width:12px;font:600 12px/18px 'IBM Plex Mono',monospace;color:${x.ic}`"><app-itext [text]="x.i" /></span>{{ x.t }}@if (x.exempt) {<span style="text-decoration:none;color:var(--fg-8A93A6)"> · muaf</span>}</span>}
+                  </div>
+                }
+              </div>}
+            </div>
+          </section>
+        </main>
+        <app-side-panel tab="docs" ctx="setup"></app-side-panel>
+      </div>
+    </div>

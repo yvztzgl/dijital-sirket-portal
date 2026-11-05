@@ -1,0 +1,46 @@
+<div data-screen-label="D-1d MERSİS ret" style="width:100%;min-height:100vh;background:var(--bg-F4F6FB);overflow:clip">
+      <app-top-bar ></app-top-bar>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 384px;gap:24px;padding:24px 32px 40px;align-items:start">
+        <main style="display:flex;flex-direction:column;gap:16px;min-width:0">
+          <app-stepper [current]="1" sub="İnceleme"></app-stepper>
+          <app-ai-card [cardTitle]="'“' + (titleCheck()?.candidate ?? '') + '” yerine “' + (alternatives()[0]?.full ?? '') + '” öneriyorum'" [reason]="'Kayıtlı benzer unvandan ayrışır ve faaliyet kodunuz ' + (store.app()?.company?.nace?.[0] ?? '') + ' ile uyumludur.'"></app-ai-card>
+          <section style="background:var(--bg-FFFFFF);border:1px solid var(--bd-F5D9A8);border-radius:14px">
+            <div style="display:flex;align-items:center;gap:12px;padding:16px 20px">
+              <div style="flex:1;display:flex;flex-direction:column;gap:3px"><div style="display:flex;align-items:center;gap:10px"><span style="font:600 16px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">Şirket</span><span style="display:inline-flex;align-items:center;gap:5px;padding:1px 8px;border-radius:999px;background:var(--bg-FFFBEB);border:1px solid var(--bd-F5D9A8);color:var(--fg-B45309);font:600 11.5px/16px 'IBM Plex Sans',sans-serif">! Unvan değiştirilmeli</span></div><span style="font:400 13.5px/19px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">{{ store.fullTitle() }} · {{ store.app()?.company?.nace?.join(', ') }}</span></div>
+              <button type="button" (click)="editAgain()" [disabled]="store.busy()" style="border:1px solid var(--bd-D6DEEE);background:var(--bg-FFFFFF);color:var(--fg-061262);border-radius:8px;padding:7px 14px;font:600 13px/18px 'IBM Plex Sans',sans-serif;cursor:pointer">Düzenle</button>
+            </div>
+          </section>
+          @for (c of collapsedOk(); track $index) {
+            <section style="background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:14px;display:flex;align-items:center;gap:12px;padding:16px 20px">
+              <div style="flex:1;display:flex;flex-direction:column;gap:3px"><div style="display:flex;align-items:center;gap:10px"><span style="font:600 16px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">{{ c.t }}</span><span style="font:600 12px/16px 'IBM Plex Sans',sans-serif;color:var(--fg-15803D)"><app-icon name="check" /> Onaylandı</span></div><span style="font:400 13.5px/19px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">{{ c.s }}</span></div>
+              <button type="button" (click)="editAgain()" [disabled]="store.busy()" style="border:1px solid var(--bd-D6DEEE);background:var(--bg-FFFFFF);color:var(--fg-061262);border-radius:8px;padding:7px 14px;font:600 13px/18px 'IBM Plex Sans',sans-serif;cursor:pointer">Düzenle</button>
+            </section>
+          }
+          <div role="alert" style="padding:20px;background:var(--bg-FFFBEB);border:1px solid var(--bd-F5D9A8);border-radius:14px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <span aria-hidden="true" style="width:28px;height:28px;flex:none;border-radius:50%;background:var(--bg-B45309);color:var(--fg-FFFFFF);display:grid;place-items:center;font:700 14px/1 'IBM Plex Sans',sans-serif">!</span>
+              <div style="display:flex;flex-direction:column;gap:3px">
+                <span style="font:600 16px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-78350F)">“{{ titleCheck()?.candidate }} Anonim Şirketi” MERSİS'te rezerve edilemedi</span>
+                <span style="font:400 13.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-78350F)">Benzer bir unvan kayıtlı: <b style="font-weight:600">{{ titleCheck()?.conflictWith }}</b> Aşağıdaki alternatiflerden birini seçin; seçtiğiniz unvan hemen yeniden sorgulanır.</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;padding-left:40px">
+              @for (a of alternatives(); track a.full) {<button type="button" (click)="chooseTitle(a.full)" [disabled]="store.busy()" [attr.style]="a.first ? 'border:1.5px solid var(--bd-061262);background:var(--bg-FFFFFF);border-radius:9px;padding:9px 14px;font:400 14px/20px \'IBM Plex Sans\',sans-serif;cursor:pointer;box-shadow:0 0 0 3px rgba(6,18,98,.15)' : 'border:1px solid var(--bd-E3C892);background:var(--bg-FFFFFF);border-radius:9px;padding:9px 14px;font:400 14px/20px \'IBM Plex Sans\',sans-serif;cursor:pointer'"><span style="font-weight:600;color:var(--fg-061262)">{{ a.head }}</span>&nbsp;<span style="color:var(--fg-061262);font-style:italic">{{ a.tail }}</span>&nbsp;<span style="color:var(--fg-5B6478)">A.Ş.</span></button>}
+              <button type="button" (click)="customOpen.set(!customOpen())" style="border:0;background:transparent;color:var(--fg-78350F);font:600 13.5px/20px 'IBM Plex Sans',sans-serif;text-decoration:underline;cursor:pointer">Kendim yazacağım</button>
+            </div>
+            @if (customOpen()) {
+              <form (submit)="$event.preventDefault(); chooseTitle(customTitle())" style="display:flex;gap:10px;align-items:center">
+                <div style="flex:1;display:flex;height:44px;border:1px solid var(--bd-D6DEEE);border-radius:9px;overflow:hidden;background:var(--bg-FFFFFF)">
+                  <input aria-label="Yeni unvan" [value]="customTitle()" (input)="customTitle.set($any($event.target).value)" placeholder="Örn. Acme Veri Teknolojileri" style="flex:1;min-width:0;border:0;outline:0;padding:0 12px;font:500 15px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">
+                  <span style="display:flex;align-items:center;padding:0 12px;background:var(--bg-F1F4FA);border-left:1px solid var(--bd-D6DEEE);font:500 13.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">A.Ş.</span>
+                </div>
+                <button type="submit" [disabled]="store.busy() || !customTitle().trim()" style="border:0;background:var(--bg-061262);color:var(--fg-FFFFFF);border-radius:9px;padding:11px 16px;font:600 14px/18px 'IBM Plex Sans',sans-serif;cursor:pointer">Sorgula</button>
+              </form>
+            }
+            @if (store.busy()) {<span aria-live="polite" style="font:500 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-78350F)">MERSİS’te yeniden sorgulanıyor…</span>}
+            <app-form-error />
+          </div>
+        </main>
+        <app-side-panel tab="log" ctx="review"></app-side-panel>
+      </div>
+    </div>

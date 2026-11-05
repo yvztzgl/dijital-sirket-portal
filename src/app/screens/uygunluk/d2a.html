@@ -1,0 +1,58 @@
+<div data-screen-label="D-2a Uygunluk" style="width:100%;min-height:100vh;background:var(--bg-F4F6FB);overflow:clip">
+      <app-top-bar ></app-top-bar>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 384px;gap:24px;padding:24px 32px 40px;align-items:start">
+        <main style="display:flex;flex-direction:column;gap:16px;min-width:0">
+          <app-stepper [current]="2"></app-stepper>
+          <app-ai-card cardTitle="Yüzünüzü oval çerçevenin içinde tutun" reason="Canlılık kontrolü pasaport fotoğrafınızla eşleştirilir; ışığı arkanıza değil önünüze alın."></app-ai-card>
+          <section style="background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:14px;padding:28px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px"><h3 style="margin:0;font:600 22px/30px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">Uygunluk (AML) kontrolü</h3><p style="margin:0;font:400 14.5px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">Kimliğinizi doğruluyor, beyanınızı alıyor ve yaptırım listelerini tarıyoruz. Bu ekranı kapatmayın; birkaç saniye sürer.</p></div>
+
+            <div style="border:1px solid var(--bd-C7D5F7);border-radius:12px;box-shadow:0 8px 24px -14px rgba(6,18,98,.22)">
+              <div style="display:flex;align-items:center;gap:12px;padding:14px 18px">
+                <span [attr.style]="live()?.c1?.style"><app-itext [text]="live()?.c1?.n" /></span>
+                <span style="flex:1;font:600 16px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">Kimlik doğrulama</span>
+                <span aria-live="polite" [attr.style]="live()?.b1?.style"><app-itext [text]="live()?.b1?.text" /></span>
+              </div>
+              <div style="padding:0 18px 18px 58px;display:flex;flex-direction:column;gap:14px">
+                <div style="display:flex;align-items:center;gap:14px;padding:12px 14px;border:1px solid var(--bd-DCEFE2);background:var(--bg-F7FCF8);border-radius:10px">
+                  <span aria-hidden="true" style="width:52px;height:36px;flex:none;border-radius:4px;background:var(--bg-061262);position:relative;overflow:hidden"><span style="position:absolute;left:6px;top:6px;width:14px;height:18px;border-radius:2px;background:var(--bg-5E74A8)"></span><span style="position:absolute;left:24px;top:8px;width:20px;height:2px;background:var(--bg-8DA0CC)"></span><span style="position:absolute;left:24px;top:13px;width:16px;height:2px;background:var(--bg-8DA0CC)"></span><span style="position:absolute;left:4px;right:4px;bottom:4px;height:4px;background:repeating-linear-gradient(90deg,var(--bg-B7C4E2) 0 2px,transparent 2px 4px)"></span></span>
+                  <span style="flex:1;display:flex;flex-direction:column"><span style="font:600 14px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-14532D)"><app-itext [text]="live()?.passport" /></span>@if (passportOpen()) {<span style="font:400 12.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660)">{{ passportLine() }}</span>}</span>
+                  <button type="button" (click)="passportOpen.set(!passportOpen())" [attr.aria-expanded]="passportOpen()" style="border:0;background:transparent;color:var(--fg-061262);font:600 13px/18px 'IBM Plex Sans',sans-serif;cursor:pointer"><app-itext [text]="passportOpen() ? 'Detayları gizle ▴' : 'Detayları göster ▾'" /></button>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <div style="display:flex;align-items:baseline;justify-content:space-between"><span style="font:600 14px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">Canlılık kontrolü</span><span style="font:400 12.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">Kayıt yapılmaz; yalnızca eşleşme skoru saklanır.</span></div>
+                  <div style="position:relative;height:360px;border-radius:14px;background:radial-gradient(ellipse at 50% 40%,var(--bg-1B2A55) 0%,var(--bg-0B1430) 70%);overflow:hidden">
+                    <span style="position:absolute;left:16px;top:16px;width:22px;height:22px;border-left:2px solid rgba(255,255,255,.7);border-top:2px solid rgba(255,255,255,.7);border-radius:4px 0 0 0"></span><span style="position:absolute;right:16px;top:16px;width:22px;height:22px;border-right:2px solid rgba(255,255,255,.7);border-top:2px solid rgba(255,255,255,.7);border-radius:0 4px 0 0"></span><span style="position:absolute;left:16px;bottom:16px;width:22px;height:22px;border-left:2px solid rgba(255,255,255,.7);border-bottom:2px solid rgba(255,255,255,.7);border-radius:0 0 0 4px"></span><span style="position:absolute;right:16px;bottom:16px;width:22px;height:22px;border-right:2px solid rgba(255,255,255,.7);border-bottom:2px solid rgba(255,255,255,.7);border-radius:0 0 4px 0"></span>
+                    <span aria-hidden="true" style="position:absolute;left:50%;top:58px;transform:translateX(-50%);width:120px;height:150px;border-radius:50%;background:radial-gradient(ellipse at 45% 40%,var(--bg-6F84B8),var(--bg-3A4E82))"></span>
+                    <span aria-hidden="true" style="position:absolute;left:50%;top:200px;transform:translateX(-50%);width:260px;height:200px;border-radius:50% 50% 0 0;background:linear-gradient(var(--bg-3A4E82),var(--bg-26386A))"></span>
+                    <span aria-hidden="true" style="position:absolute;left:50%;top:36px;transform:translateX(-50%);width:200px;height:250px;border-radius:50%;border:2.5px solid var(--bd-7EE2A8);box-shadow:0 0 0 2000px rgba(11,20,48,.45)"></span>
+                    <div style="position:absolute;left:50%;top:18px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:7px 8px 7px 14px;border-radius:999px;background:rgba(255,255,255,.95)">
+                      <span aria-live="polite" style="font:600 14px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)"><app-itext [text]="live()?.prompt" /></span>
+                      <span style="display:flex;gap:4px">@for (c of live()?.chips ?? []; track $index) {<span [attr.style]="c.style"><app-itext [text]="c.t" /></span>}</span>
+                    </div>
+                    <div style="position:absolute;left:24px;right:24px;bottom:22px;display:flex;align-items:center;gap:12px">
+                      <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(0,0,0,.4);color:var(--fg-FFFFFF);font:600 11.5px/16px 'IBM Plex Mono',monospace"><span style="width:7px;height:7px;border-radius:50%;background:var(--bg-F04438);animation:breathe 1.4s infinite"></span>CANLI</span>
+                      <span style="font:400 12.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-C9D4F0)">{{ live()?.score }}</span>
+                      <span style="flex:1"></span>
+                      <a href="#" style="font:500 12px/16px 'IBM Plex Sans',sans-serif;color:var(--fg-C9D4F0);text-decoration:underline" (click)="$event.preventDefault()">Kamera çalışmıyor mu?</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border:1px solid var(--bd-E5E7EB);border-radius:12px;background:var(--bg-FAFBFD)">
+              <span [attr.style]="live()?.c2?.style"><app-itext [text]="live()?.c2?.n" /></span>
+              <span style="flex:1;display:flex;flex-direction:column"><span style="font:600 15px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660)">Beyan onayı</span><span style="font:400 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">Adres belgesi ve bilgilerinizin doğruluk beyanı</span></span>
+              <span [attr.style]="live()?.b2?.style"><app-itext [text]="live()?.b2?.text" /></span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border:1px solid var(--bd-E5E7EB);border-radius:12px;background:var(--bg-FAFBFD)">
+              <span [attr.style]="live()?.c3?.style"><app-itext [text]="live()?.c3?.n" /></span>
+              <span style="flex:1;display:flex;flex-direction:column"><span style="font:600 15px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660)">Yaptırım ve PEP taraması</span><span style="font:400 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">BM, AB, OFAC, ulusal varlık dondurma listesi ve PEP</span></span>
+              <span [attr.style]="live()?.b3?.style"><app-itext [text]="live()?.b3?.text" /></span>
+            </div>
+          </section>
+        </main>
+        <app-side-panel tab="ai" ctx="aml"></app-side-panel>
+      </div>
+    </div>
