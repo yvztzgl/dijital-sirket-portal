@@ -81,7 +81,8 @@ anything a later reader needs in a temporary directory or only in chat.
   D-2c. Do not make the mock record a document, a consent or a declaration the founder did not
   actually give on screen.
 - The identity step (D-2a) starts only on the founder's action, after a consent tick, and can be
-  handed to a phone by QR code (`/eligibility/phone/<token>`, screen D-2a-m). In the mock that
+  handed to a phone by QR code (`/eligibility/phone#<token>`, screen D-2a-m; the token is in the
+  fragment so it never reaches a server). In the mock that
   phone page works only in the browser that made the code. The QR generator is our own
   (`src/app/core/qr.ts`); do not add a package for it. What a real API must do for the link is
   written on `MockApi.createPhoneLink`.

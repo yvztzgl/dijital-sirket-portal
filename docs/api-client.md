@@ -21,8 +21,8 @@ screens ─► ApplicationStore ─► Api (abstract class, used as the injectio
 | `src/app/core/api-types.ts` | The API's JSON as it arrives (`MeWire`, `ApplicationWire`, …), written from the API's `Models/` records. |
 | `src/app/core/api-mapper.ts` | `toAccount(me)`, `toApplication(view, account)`, `toStage`: wire → portal model. Pure functions. |
 | `src/app/core/testing/api-fixtures.ts` | Literal API answers the specs use: hand-written ones, and `CAPTURED` (below). |
-| `src/app/core/testing/captured/*.json` | `GET /api/application` as the running API answered it at each stage of step 1, plus the status read and the reference data (2026-11-25). Made-up founder, e-mail addresses replaced. |
-| `tools/api-capture/capture.sh` | Re-captures those files against a running stack (needs `../dijital-sirket-api/dev/staff.sh` for the title steps). |
+| `src/app/core/testing/captured/*.json` | `GET /api/application` as the running API answered it at each stage of steps 1 and 2, plus the status read, the reference data, the phone routes and the closed application's 404 (2026-11-25). Made-up founders, e-mail addresses and the phone token replaced. |
+| `tools/api-capture/capture.sh` | Re-captures those files against a running stack (`capture.sh [step1\|step2\|all]`; needs `../dijital-sirket-api/dev/staff.sh` for the title and review steps). |
 | `src/app/core/status-poller.ts` | `StatusPoller` and `pollDelay`: the pacing of the status poll in HTTP mode. |
 | `src/app/core/rules.ts` | Pure checks the screens use (card, T.C. kimlik no, password strength, address document size, deck size and type, funding options, title suffix and title suggestions). Not part of either implementation. |
 | `src/environments/environment.ts` | Default (mock) mode: names `MockApi`, no extra providers. |
@@ -95,8 +95,8 @@ Inbox toasts belong to the mock, and nothing in HTTP mode sends to the Inbox).
 **Connected:** `submitProfile`, `uploadDeck`, `resolveCrossCheck`, `updateReview`, `submitReview`,
 `chooseTitle`, `reference`, and the background-work capability `work` (polling). Every write answers
 with an empty body (204/202); `HttpApi` then reads the application again (`fresh()`: the status read,
-then `GET /api/application`, mapped). Everything after the title is reserved (step 2 on) still
-rejects with `not_connected`.
+then `GET /api/application`, mapped). Step 2 came in piece 6 (below); step 3 on still rejects with
+`not_connected`.
 
 ### Requests of step 1
 
@@ -178,7 +178,7 @@ Polling           GET  /api/application/status  → {stage, changedAt}
 | D-1d | "Diğer bilgilere dön" | **navigates to D-1c** (both modes), no API call | the API takes review edits and a new submit after a refusal, but has no call that changes the stage; D-1c accepts `titleConflict` |
 | D-1f | (nothing to do) | polled | |
 
-`Api.backToReview` itself is still `not_connected`: only step 2's manual-review screen calls it now.
+`Api.backToReview` stays `not_connected` in HTTP mode, and its only entry point (D-2c) is hidden there (piece 6).
 
 ### Errors at fields
 
@@ -306,14 +306,178 @@ Left neutral, not invented:
 | `deck.fields[].key` | the portal's keys; `given_name` and `family_name` are both `name` | The mock reads one "Ad / Soyad" field. |
 | `titleCheck.conflictWith` | absent | The API sends a `reason`, not the clashing title. |
 | `company.root` / `activity` | first word / the rest of the title | The API keeps one string; joined again nothing is lost. |
-| `eligibility` | absent | Its shape differs (`running`, `identityDone`, … vs the mock's timestamps and score). |
+| `eligibility` | mapped since piece 6 (see "Step 2 over HTTP") | no score; times from the timeline |
 | `payment.holder` | `''` | Not in the view. |
 | `signature.method` | `existing` / `edevlet` kept, anything else `eshs` | The API's certificate kinds were not seen yet. |
-| `setup`, `results`, `phoneLink`, `call` | absent | Different shapes; the next pieces. |
-| `docs[].group`, `docs[].name` | `''`, the API's `type` | The view gives a type code, not a group and title. |
+| `setup`, `results`, `call` | absent | Different shapes; the next pieces. |
+| `phoneLink` | only in `HttpApi`'s memory while the QR code is shown | the API gives the token once, in the answer to `POST /phone-link` |
+| `docs[].group`, `docs[].name` | `deck` → "Sunum", `address_proof` → "Adres belgesi", both in "1 · Başvuru & Uygunluk"; any other type: `''` and the type | The view gives a type code, not a group and title. |
 
 To refresh the captured JSON: run the stack, then `tools/api-capture/capture.sh` (it registers a new
 made-up founder each time and uses `dev/staff.sh -a <reference> title reject|reserve`).
+
+## Step 2 over HTTP (since 2026-11-25, piece 6)
+
+**Connected:** `startEligibility`, `completeIdentity`, `createPhoneLink`, `submitDeclaration`,
+`phoneLinkStatus`, `startEligibilityByPhone`, `completeIdentityByPhone`, and polling of step 2's
+waiting points. `proceedToPayment` is client-side only; `backToReview` stays `not_connected`.
+
+### Requests of step 2
+
+```
+Start (D-2a)       POST /api/application/identity/start {consent}       204, then fresh()
+                   consent exactly as ticked; idempotent while a check is open; revokes an unused phone link
+                   409 already_verified, 409 identity_review (after too many failures)
+Camera ended       POST /api/application/identity/complete               202, then fresh()   (computer)
+QR code            POST /api/application/phone-link                      200 {token, expiresInSeconds:600}
+                   409 identity_started while a check is open
+Declaration (D-2d) POST /api/application/declaration  multipart: file, declared        202, then fresh()
+                   the File itself; PDF, JPG or PNG, 10 MB (the API checks the bytes)
+Phone page         GET  /api/phone/status          header X-DSP-Phone-Token   {state, expiresAt, startedAt}
+                   POST /api/phone/start {consent} same header (+ X-DSP-Request)  204, then the status
+                   POST /api/phone/complete        same header (+ X-DSP-Request)  202, then the status
+```
+
+`markApiWrites` adds `X-DSP-Request: 1` to the phone writes as to every `/api/` write (tested).
+The phone routes have no session; the token is sent in the header only.
+
+### The phone handoff
+
+```
+computer (signed in)                         phone (no session)                       API / Worker
+D-2a "Telefonla devam et"
+  POST /phone-link ─────────────────────────────────────────────────────────────────► token (once)
+  token kept in HttpApi memory, QR code shows
+  <origin>/eligibility/phone#<token>
+  polls /application/status (QR shown)
+                                             opens the link; d2m reads the fragment once,
+                                             replaces the URL with /eligibility/phone
+                                             GET /phone/status (header) ──────────────► ready
+                                             consent tick, "Doğrulamayı başlat"
+                                             POST /phone/start {consent} ─────────────► check waiting,
+                                                                                         timeline "…telefondan başlatıldı"
+  changedAt moved → full read: running, via phone
+  token dropped; "Doğrulama telefonunuzda sürüyor"
+                                             camera animation (the portal's own)
+                                             POST /phone/complete ────────────────────► Worker decides
+                                             GET /phone/status every 6 s until done
+  stage declaration → D-2d                   "Doğrulama tamamlandı" (polling stops)
+```
+
+- **Token in the fragment.** `/eligibility/phone#<token>` in both modes (the route has no token
+  parameter any more; the old `/eligibility/phone/<token>` no longer exists). Browsers do not send the
+  fragment, so the token is in no request line and no server log (checked: none of the API logs
+  contained it; no request URL of the walk contained it). d2m reads it once from
+  `ActivatedRoute.snapshot.fragment`, then `Location.replaceState('/eligibility/phone')`, so it leaves
+  the address bar and the history entry. It lives in `ApplicationStore.phoneToken` (memory) only.
+- **On the computer** the token is kept in `HttpApi.phoneLink` (memory) and put on the mapped
+  application as `phoneLink` while the QR code is shown. It is dropped when the founder presses
+  "Bu bilgisayarla devam et" (`Api.forgetPhoneLink`, new; the mock's is a no-op because its link lives
+  in its data), when the check starts on either device, when the stage moves on, and on sign-out.
+  The "Demo: telefon sayfasını aç" link is shown in mock mode only.
+- **Rate limit.** The phone routes share the API's sign-in limit (20 requests a minute per address).
+  The phone page polls `phone/status` every 6 s (`PHONE_POLL_MS`) while the state can still change
+  (looking up, `ready`, `running`), not while the tab is hidden, and stops at `invalid`, `expired` and
+  `done`. Walked: 8 phone requests in 18 s for a whole check (status, start, status, complete,
+  status and polls), none after `done`.
+- **The camera is still simulated** in both modes: there is no identity vendor yet. When the portal's
+  animation ends, HTTP mode reports it (`identity/complete` on the computer, once per check, keyed by
+  its start time; `phone/complete` on the phone, once per token) and shows "Doğrulama sonucu
+  bekleniyor" until the Worker decides (the mock still says "Kimliğiniz doğrulandı", as before). The
+  development identity provider always passes.
+- `phone/status` answers `done` also after a failed check (the API does not tell the phone the
+  result); the phone page therefore says "sonuç … bilgisayarınızdaki sayfada gösterilir".
+
+### Stage table for step 2
+
+| API stage (+ view) | Portal stage | Screen | Polled? | What ends it |
+| --- | --- | --- | --- | --- |
+| `eligibility`, nothing running | `eligibility` | D-2a pre-information | no | the founder starts (computer or phone) |
+| `eligibility`, QR code shown on this computer | `eligibility` | D-2a QR view | **yes** | the phone starts the check (computer sees `running`, via phone) |
+| `eligibility`, `running` | `eligibility` | D-2a camera (or "telefonunuzda sürüyor") | **yes** | the Worker: `declaration`, or `eligibility` + `identityError`, or `manual` (second failure) |
+| `eligibility`, `identityError: "identity_failed"` | `eligibility` | D-2a pre-information with "Kimliğiniz doğrulanamadı." | no | the founder starts again (`identity/start`) |
+| `declaration` | `declaration` | D-2d | no | the founder uploads the document and declares |
+| `screening` | `screening` | D-2e (every list "Taranıyor…", bar never reaches the end by itself) | **yes** | the Worker: `payment` (result `eligible`) or `manual` |
+| `payment`, result `eligible`, no payment, not seen, not after a review | **`eligible`** | D-2b (one-time) | no | "Ödemeye geç" (client-side) |
+| `manual` | `manual` | D-2c status page | **yes**, settles at every 15 s | staff: approve → `payment` (straight to D-3a); reject → 404 → `closed` |
+| (404 `no_application` while holding an application) | **`closed`** (new, HTTP only) | `/application-closed` | no | sign-out |
+
+`SERVER_WAITING_STAGES` is now `scanning`, `titleChecking`, `screening`, `manual`; `waitsForServer(app)`
+adds the identity step while a check is open or the QR code is shown. Pacing is unchanged
+(`pollDelay`: 2 s, then 5 s, then 15 s after 5 minutes), so manual review, which can take days, settles
+at one status read every 15 s, and none while the tab is hidden.
+
+### What the mapper does with `eligibility` (toEligibility)
+
+| Portal | From | Note |
+| --- | --- | --- |
+| `running`, `consentAt`, `declaredAt`, `result` | the view's fields | `result` stays empty until the list search ends |
+| `identityError` | `identityError === "identity_failed"` | other codes are ignored |
+| `startedAt`, `via: 'phone'` | the newest timeline line "Kimlik doğrulama başlatıldı" / "Kimlik doğrulama telefondan başlatıldı", only while `running` | the camera animation runs from it; `via` makes the computer follow instead of finishing |
+| `screeningStartedAt` | `declaredAt` | the API queues the list search in the same request |
+| `finishedAt` | the timeline line "Yaptırım ve PEP taraması tamamlandı" | D-2b's "Kontroller … itibarıyla tamamlandı" |
+| `score` | **left out** | the API has none; D-2b says "Kimliğiniz doğrulandı" instead of the mock's score and MRZ line |
+| `address` (file name) | left out | not in the view; D-2b says "Adres belgesi alındı" |
+
+The timeline texts are matched literally (`LOG_TEXTS` in api-mapper.ts); the captured fixtures check
+them, so a changed wording on the API fails `api-mapper.spec.ts`. A code in the view would be better
+(API gap below).
+
+What the screens leave out in HTTP mode (`ApplicationStore.serverDecides`): the mock's live log lines
+and documents (`liveEvents`), per-list results and times on D-2e and D-2b, the score and passport line,
+D-2c's review reasons (the API never tells the founder why: no tipping-off), and the demo address
+document.
+
+### The result screen (D-2b) as a one-time acknowledgement
+
+The API has no `eligible` stage. `toApplication` shows `eligible` while the API is at `payment`, the
+result is `eligible`, `payment.status` is null, the founder has not pressed "Ödemeye geç" yet, and the
+timeline has no "Başvurunuz incelendi; ödeme adımına geçebilirsiniz" (after staff approve, the portal
+goes straight to the payment). "Ödemeye geç" (`proceedToPayment`) sends nothing: `HttpApi` marks the
+application's id as seen and maps the last view again.
+
+**Where "seen" lives:** in `HttpApi`'s memory (a `Set` of application ids), cleared on sign-out. Not in
+`sessionStorage`, so HTTP mode still writes nothing about the founder to the browser's storage.
+**On reload** (or a new sign-in) the result screen shows once more; pressing "Ödemeye geç" again costs
+nothing and changes nothing on the server.
+
+### Manual review and the closed state
+
+- D-2c in HTTP mode is a status page (like D-1f): no reasons, no "İnceleme kaydıyla devam et" (the API
+  refuses payment under review), no "Sunum bilgilerini düzelt" (no route back; open decision 12). It
+  says people decide, it may take a few working days, and the founder may close the page.
+- Approve: the poll sees `payment` and the portal goes to D-3a by itself.
+- Reject: the API closes the application and every read answers 404 `no_application`. The store
+  (`applicationClosed`) then forgets the application and sets `closed`; the stage becomes `closed` and
+  `/application-closed` says "Başvurunuz kapatıldı" with only "Çıkış yap". Polling stops.
+- **No new application is created in that session:** `HttpApi` creates an application only right
+  after an explicit sign-in (login, code, e-Devlet). A reload (`restore`) that finds none answers
+  `{ account, app: null, closed: true }` and the closed screen opens again (walked: after a reload
+  only `/api/me` and `/api/application/status` were called; the database shows the founder with the
+  one closed application). Never while the store holds an application (polls and writes do not create).
+- **API gap (for the owner):** the API cannot tell "never had an application" from "closed", so the
+  next sign-in of a rejected founder creates a new application. If restore finds none for another
+  reason (the creation at sign-in failed), the closed screen is shown wrongly; signing in again fixes it.
+
+### Each screen action in HTTP mode (step 2)
+
+| Screen | Action | HTTP mode | Why |
+| --- | --- | --- | --- |
+| D-2a | Consent tick + "Doğrulamayı başlat" | connected (`identity/start`) | |
+| D-2a | Camera animation end | `identity/complete`, then waits | no vendor yet |
+| D-2a | "Kimliğiniz doğrulandı" at the end of the camera | changed to "Doğrulama sonucu bekleniyor" | the Worker decides after |
+| D-2a | "Telefonla devam et" / "Yeni kod oluştur" | connected (`phone-link`) | |
+| D-2a | "Bu bilgisayarla devam et" | forgets the token (no call) | |
+| D-2a | "Demo: telefon sayfasını aç" | hidden (mock only) | demo tool |
+| D-2a | Failure notice | new, from `identityError` | |
+| D-2a-m | start / end / states | connected (phone routes) | |
+| D-2d | Upload + "Beyanı onayla" | connected, the real file | |
+| D-2d | "Demo: örnek belge kullan" | hidden (mock only); in the mock it now makes a real one-page PDF | would upload a placeholder to the real API |
+| D-2e | (nothing to do) | polled; no per-list results | the API reports none |
+| D-2b | "Ödemeye geç" | client-side only | no API route |
+| D-2b | "Listeleri göster" | hidden | no per-list data |
+| D-2c | "İnceleme kaydıyla devam et", "Sunum bilgilerini düzelt" | hidden | API refuses both; open decision 12 |
+| closed | "Çıkış yap" | sign-out | |
 
 ## Flow: the mock walks the API's path up to the review (since 2026-11-25)
 
@@ -353,8 +517,13 @@ in piece 3.)
 
 ## Known gaps for later pieces
 
-- Step 2 onward: the identity check, list search, call and setup are still simulated in the mock and
-  `not_connected` in HTTP mode; when connected, their waiting stages join `SERVER_WAITING_STAGES`.
+- Step 3 onward: payment, call and setup are still `not_connected` in HTTP mode; when connected, their
+  waiting stages join `SERVER_WAITING_STAGES`.
+- Step 2: the camera is simulated in both modes (no identity vendor). A failed identity check and the
+  second failure were not walked (the development provider always passes); they are covered by mapper
+  and store tests on hand-built fixtures (`IDENTITY_FAILED`, `IDENTITY_FAILED_TWICE`).
+- Step 2: the view has no codes for its timeline lines; the mapper reads times from their Turkish text.
+- The rejected founder's next sign-in creates a new application (API gap above).
 - D-1b in HTTP mode lists no fields while the deck is read (the API sends them only once it is read),
   so "Okunan bilgiler" shows 0 / 0 until the next screen.
 - A deck that fails to be read was not walked end to end (the development reader does not fail);
