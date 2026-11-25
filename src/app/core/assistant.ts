@@ -1,5 +1,5 @@
 import { inject, Injectable, signal } from '@angular/core';
-import { MockApi } from './mock-api';
+import { Api } from './api';
 
 export interface ChatMessage {
   me: boolean;
@@ -14,7 +14,7 @@ const STAGES = ['Sorunuzu okuyorum', 'Başvurunuzu kontrol ediyorum', 'Yanıtı 
 /** Terminal AI conversation shared by the side panel and the AI suggestion cards. */
 @Injectable({ providedIn: 'root' })
 export class Assistant {
-  private readonly api = inject(MockApi);
+  private readonly api = inject(Api);
 
   readonly thread = signal<ChatMessage[]>([]);
   /** Busy from the question until the reply has finished writing out. */

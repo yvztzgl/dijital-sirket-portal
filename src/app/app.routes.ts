@@ -1,4 +1,6 @@
+import { inject } from '@angular/core';
 import { Routes } from '@angular/router';
+import { Api } from './core/api';
 import { screenRoutes } from './screens/screens';
 
 export const routes: Routes = [
@@ -6,6 +8,8 @@ export const routes: Routes = [
   {
     path: 'screens',
     title: 'Ekranlar · Terminal Şirket',
+    // The screen index is a demo tool: in HTTP mode the path does not match and falls through to '**'.
+    canMatch: [() => !!inject(Api).demo],
     loadComponent: () => import('./shell/screen-index').then((m) => m.ScreenIndex),
   },
   // The landing as it was before the 2026-11-16 rebuild (navy İstanbul hero; `?hero=globe` for the globe).

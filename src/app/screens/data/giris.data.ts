@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { ApplicationStore } from '../../core/application.store';
 import { Clock } from '../../core/clock';
 import { clock } from '../../core/format';
-import { passwordStrength } from '../../core/mock-api';
+import { passwordStrength } from '../../core/rules';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const LAST_EMAIL = 'dsp.lastEmail';

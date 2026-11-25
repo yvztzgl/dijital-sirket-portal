@@ -1,8 +1,10 @@
 # Dijital Şirket Platformu — portal
 
-This repository is the **product UI** (Angular 21). There is **no backend yet**: every screen
-runs on `src/app/core/mock-api.ts`, an in-browser stand-in that keeps its data in `localStorage`.
+This repository is the **product UI** (Angular 21). By default every screen runs on
+`src/app/core/mock-api.ts`, an in-browser stand-in that keeps its data in `localStorage`.
 See [README.md](README.md) for how the data works, the demo account and the forced scenarios.
+The `http` build configuration swaps the mock for the HTTP client of the real API (being connected
+piece by piece since 2026-11-25); see [docs/api-client.md](docs/api-client.md).
 
 ## Read this first
 
@@ -30,8 +32,11 @@ anything a later reader needs in a temporary directory or only in chat.
 
 - The project is headed for a government contract: **audit logging and security come first** in
   any backend or data work.
-- `MockApi` is the working API contract. The README says screens talk only to `ApplicationStore`
-  (`src/app/core/application.store.ts`) so that a real HTTP client can replace the mock.
+- `Api` (`src/app/core/api.ts`) is the API contract; `MockApi` and `HttpApi` implement it and the
+  build picks one (docs/api-client.md). Screens talk only to `ApplicationStore`
+  (`src/app/core/application.store.ts`) and never import an implementation; pure checks they need
+  live in `src/app/core/rules.ts`. Demo tools (seed, reset, speed, `/screens`, the screen pill and
+  demo panel) exist only in mock mode, through `Api.demo`.
 - Templates under `src/app/screens/**.html` and `src/app/shared/*.html` were generated from
   design files and then wired by hand. Re-running the import with `--force` overwrites that
   wiring; see `tools/design-import/README.md`.
@@ -46,9 +51,10 @@ anything a later reader needs in a temporary directory or only in chat.
   earlier look. The design import would overwrite the rebuilt templates.
 - Step 1 starts at the deck upload (D-1a, stage `verified`), then the scan (D-1b) and the check
   (D-1c). The profile form D-1e and its comparison with the deck were removed on 2026-11-20,
-  because the deck format now carries everything the form asked; do not add a form back in front
-  of the deck. Applications saved at the old `profile` stage continue at D-1a (`upgrade` in
-  mock-api.ts).
+  because the deck format now carries everything the form asked. On 2026-11-25 the owner reversed
+  this: the profile form comes back in front of the deck (the API requires a profile first); see
+  Decisions in PROJECT_LOG.md. Until that piece lands the screens still start at the deck.
+  Applications saved at the old `profile` stage continue at D-1a (`upgrade` in mock-api.ts).
 - The deck follows our own format, not a form: `src/app/core/deck-format.json` lists the 16
   required pages, their exact titles and what is read from each (it carries the integrator's
   evaluation fields from `1-basvuru.pdf`). The "Sunum formatı" dialog on D-1a

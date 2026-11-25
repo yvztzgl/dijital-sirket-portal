@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
 import { ApplicationStore } from '../core/application.store';
-import { validTckn } from '../core/mock-api';
+import { validTckn } from '../core/rules';
 import { FormError } from './form-error';
 
 /**

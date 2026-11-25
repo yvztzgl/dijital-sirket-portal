@@ -58,6 +58,14 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "http": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.http.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -70,6 +78,10 @@
             },
             "development": {
               "buildTarget": "dijital-sirket-portal:build:development"
+            },
+            "http": {
+              "buildTarget": "dijital-sirket-portal:build:development,http",
+              "proxyConfig": "proxy.conf.json"
             }
           },
           "defaultConfiguration": "development"

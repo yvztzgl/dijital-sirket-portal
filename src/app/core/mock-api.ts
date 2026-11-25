@@ -1,4 +1,6 @@
 import { inject, Injectable } from '@angular/core';
+import type { Api, DemoTools, ReviewPatch } from './api';
+import { ApiError } from './api-error';
 import { DemoSettings } from './demo-settings';
 import { titleCase, tl } from './format';
 import { Inbox } from './inbox';
@@ -16,22 +18,23 @@ import {
   PhoneLinkStatus,
   Stage,
 } from './models';
+import { ADDRESS_DOC_MAX, validateCard, validTckn } from './rules';
 import { DURATION, identityEvents, screeningEvents, setupEvents, signatureDocs, titleDocs } from './timeline';
 
 /**
  * In-browser stand-in for the platform backend. Every method is async and returns fresh copies,
  * so a real HTTP client can replace this class without changing screens or the store.
  * Data lives in localStorage under `dsp.db.v1`.
+ *
+ * It implements `Api` (api.ts) and is the one the default build injects. `implements` rather than
+ * `extends` keeps the import of api.ts type-only: api.ts imports the environment, which imports
+ * this file, and a runtime import back would be a cycle.
  */
 
-export class ApiError extends Error {}
-
-export interface ReviewPatch {
-  company?: Partial<Application['company']>;
-  contact?: Partial<Application['contact']>;
-  founder?: Partial<Application['founder']>;
-  funding?: FundingSource;
-}
+// Moved to their own files; re-exported so existing imports keep working.
+export { ApiError } from './api-error';
+export type { ReviewPatch } from './api';
+export { ADDRESS_DOC_MAX, FUNDING_OPTIONS, luhn, passwordStrength, validateCard, validTckn } from './rules';
 
 interface Db {
   users: Account[];
@@ -56,9 +59,6 @@ const nowIso = () => new Date().toISOString();
 /** How long the QR code of the identity step's phone link stays valid. */
 export const PHONE_LINK_TTL = 10 * 60_000;
 
-/** Largest address document the declaration screen takes. */
-export const ADDRESS_DOC_MAX = 10 * 1024 * 1024;
-
 /** 128 random bits, URL-safe. */
 function randomToken() {
   const b = crypto.getRandomValues(new Uint8Array(16));
@@ -66,9 +66,26 @@ function randomToken() {
 }
 
 @Injectable({ providedIn: 'root' })
-export class MockApi {
-  private readonly demo = inject(DemoSettings);
+export class MockApi implements Api {
+  private readonly settings = inject(DemoSettings);
   private readonly inbox = inject(Inbox);
+
+  /** The demo panel's tools; only the mock has them (see `Api.demo`). */
+  readonly demo: DemoTools = {
+    account: { email: DEMO_ACCOUNT.email, password: DEMO_ACCOUNT.password },
+    seed: (stage, founderType) => this.seed(stage, founderType),
+    reset: () => this.reset(),
+    speed: () => this.settings.speed(),
+    readSession: (email) => {
+      const db = JSON.parse(localStorage.getItem(DB_KEY) ?? '{}');
+      const account: Account | null = (db.users ?? []).find((u: Account) => u.email === email) ?? null;
+      return { account, app: account ? (db.apps?.[email] ?? null) : null };
+    },
+    onExternalChange: (callback) =>
+      addEventListener('storage', (e) => {
+        if (e.key === DB_KEY) callback();
+      }),
+  };
 
   // ------------------------------------------------------------------------------------- auth
 
@@ -234,7 +251,7 @@ export class MockApi {
     if (app.company.nace.length === 0) throw new ApiError('En az bir NACE faaliyet kodu seçin.');
     const firstCheck = !app.titleCheck;
     const hit = MERSIS_REGISTRY.find((t) => sameStem(t, candidate));
-    if (hit || (firstCheck && this.demo.state().forceConflict)) {
+    if (hit || (firstCheck && this.settings.state().forceConflict)) {
       app.titleCheck = {
         status: 'conflict',
         candidate,
@@ -272,7 +289,7 @@ export class MockApi {
 
   private begin(app: Application, consent: boolean, via?: 'phone') {
     if (!consent) throw new ApiError('Devam etmek için açık rıza metnini onaylayınız.');
-    const manual = app.funding === 'third-party' || this.demo.state().forceManual;
+    const manual = app.funding === 'third-party' || this.settings.state().forceManual;
     const at = nowIso();
     log(app, 'Açık rıza metni onaylandı (yüz görüntüsü ile kimlik doğrulama)', 'u');
     log(app, via === 'phone' ? 'Kimlik doğrulama telefondan başlatıldı' : 'Kimlik doğrulama başlatıldı', 'u');
@@ -591,12 +608,12 @@ export class MockApi {
     if (stage !== 'registered') db.apps[acc.email] = newApplication(acc);
     this.save(db);
     if (stage === 'registered') this.sendEmailCode(acc.email);
-    const settings = this.demo.state();
-    this.demo.set({ forceConflict: false, forceManual: false, speed: 1000 });
+    const settings = this.settings.state();
+    this.settings.set({ forceConflict: false, forceManual: false, speed: 1000 });
     try {
       await fastForward(this, acc.email, stage);
     } finally {
-      this.demo.set(settings);
+      this.settings.set(settings);
     }
     return { account: clone(acc), app: clone(this.db().apps[acc.email] ?? null) };
   }
@@ -622,11 +639,11 @@ export class MockApi {
   }
 
   private dur(base: number) {
-    return base / this.demo.speed();
+    return base / this.settings.speed();
   }
 
   private wait(ms: number) {
-    return new Promise((r) => setTimeout(r, ms / this.demo.speed()));
+    return new Promise((r) => setTimeout(r, ms / this.settings.speed()));
   }
 
   private db(): Db {
@@ -795,52 +812,6 @@ export function deckProfile(fileName: string, founderType: FounderType): DeckPro
     pages: { title: 1, nace: 7, founder: 11, contact: 12, funding: 10 },
   };
 }
-
-export function luhn(num: string) {
-  const d = num.replace(/\D/g, '');
-  let sum = 0;
-  for (let i = 0; i < d.length; i++) {
-    let n = Number(d[d.length - 1 - i]);
-    if (i % 2) {
-      n *= 2;
-      if (n > 9) n -= 9;
-    }
-    sum += n;
-  }
-  return d.length >= 13 && sum % 10 === 0;
-}
-
-export function validateCard(c: { holder: string; number: string; expiry: string; cvv: string }, now = new Date()): string | null {
-  if (c.holder.trim().length < 3) return 'Kart üzerindeki adı yazınız.';
-  if (!luhn(c.number)) return 'Kart numarası geçersizdir.';
-  const m = /^(\d{2})\s*\/\s*(\d{2})$/.exec(c.expiry.trim());
-  if (!m || +m[1] < 1 || +m[1] > 12) return 'Son kullanma tarihini AA/YY biçiminde yazınız.';
-  const end = new Date(2000 + +m[2], +m[1], 1);
-  if (end <= now) return 'Kartın son kullanma tarihi geçmiştir.';
-  if (!/^\d{3,4}$/.test(c.cvv.trim())) return 'Güvenlik kodu (CVV) 3 veya 4 haneli olmalıdır.';
-  return null;
-}
-
-export function validTckn(t: string) {
-  if (!/^[1-9]\d{10}$/.test(t)) return false;
-  const d = t.split('').map(Number);
-  const d10 = ((d[0] + d[2] + d[4] + d[6] + d[8]) * 7 - (d[1] + d[3] + d[5] + d[7])) % 10;
-  const d11 = d.slice(0, 10).reduce((a, b) => a + b, 0) % 10;
-  return ((d10 + 10) % 10) === d[9] && d11 === d[10];
-}
-
-export function passwordStrength(p: string): { score: 0 | 1 | 2 | 3 | 4; label: string; ok: boolean } {
-  let score = 0;
-  if (p.length >= 10) score++;
-  if (/[a-zçğıöşü]/.test(p) && /[A-ZÇĞİÖŞÜ]/.test(p)) score++;
-  if (/\d/.test(p)) score++;
-  if (/[^A-Za-z0-9ÇĞİÖŞÜçğıöşü]/.test(p)) score++;
-  const s = (p.length < 10 ? Math.min(score, 1) : score) as 0 | 1 | 2 | 3 | 4;
-  const label = ['Çok zayıf', 'Zayıf', 'Orta', 'Güçlü', 'Çok güçlü'][s];
-  return { score: s, label, ok: p.length >= 10 && s >= 3 };
-}
-
-export const FUNDING_OPTIONS: FundingSource[] = ['own-abroad', 'own-turkey', 'investor', 'third-party'];
 
 /** Drives the real API methods in order until the application reaches `want`. */
 async function fastForward(api: MockApi, email: string, want: Stage) {

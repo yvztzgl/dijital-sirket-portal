@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { ApplicationStore } from '../../core/application.store';
 import { followFlow } from '../../core/follow';
 import { tl0 } from '../../core/format';
-import { FUNDING_OPTIONS } from '../../core/mock-api';
+import { FUNDING_OPTIONS } from '../../core/rules';
 import { CAPITAL, FUNDING_LABELS, FundingSource } from '../../core/models';
 import { companyPurpose, naceName, searchNace } from '../../core/nace';
 

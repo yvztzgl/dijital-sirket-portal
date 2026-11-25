@@ -1,4 +1,5 @@
 import { booleanAttribute, ChangeDetectionStrategy, Component, computed, ElementRef, inject, input, signal } from '@angular/core';
+import { Api } from '../core/api';
 import { ApplicationStore } from '../core/application.store';
 import { Assistant } from '../core/assistant';
 import { Lang, Preferences } from '../core/preferences';
@@ -23,7 +24,9 @@ import { Icon } from './icon';
   },
   template: `
     <div class="wrap">
-      <app-screen-pill class="screens" [dark]="dark()" [compact]="compact()" />
+      @if (demoMode) {
+        <app-screen-pill class="screens" [dark]="dark()" [compact]="compact()" />
+      }
       <button type="button" class="btn help-btn" (click)="toggle('help')" [attr.aria-expanded]="open() === 'help'" aria-haspopup="menu" aria-label="Yardım">
         <app-icon name="help" size="17px" [stroke]="1.9" />
         <span class="label">Yardım</span>
@@ -138,6 +141,8 @@ export class HeaderTools {
   readonly collapse = input(false, { transform: booleanAttribute });
 
   protected readonly store = inject(ApplicationStore);
+  /** The demo screen pill is a mock-mode tool; HTTP mode has no demo tools (`Api.demo` is null). */
+  protected readonly demoMode = !!inject(Api).demo;
   protected readonly prefs = inject(Preferences);
   private readonly assistant = inject(Assistant);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;

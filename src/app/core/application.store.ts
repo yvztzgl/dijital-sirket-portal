@@ -1,9 +1,9 @@
 import { computed, effect, inject, Injectable, signal, untracked } from '@angular/core';
+import { Api, ReviewPatch } from './api';
+import { ApiError } from './api-error';
 import { Clock } from './clock';
-import { DemoSettings } from './demo-settings';
 import { pdfBytes, zipBytes } from './files';
 import { dateTime, initials } from './format';
-import { ApiError, MockApi, ReviewPatch } from './mock-api';
 import { Account, Application, DocItem, FounderType, LogEntry, PhoneLinkStatus, Stage, stepOf } from './models';
 import {
   callView,
@@ -64,12 +64,12 @@ export function routeFor(stage: Stage | null, founderType: FounderType = 'foreig
 
 /**
  * Single source of truth for the signed-in founder and their application. Screens read signals
- * from here and call its actions; it talks to the (mock) API and keeps long-running steps moving.
+ * from here and call its actions; it talks to the API (`Api`: the mock or the HTTP client,
+ * chosen by the build) and keeps long-running steps moving.
  */
 @Injectable({ providedIn: 'root' })
 export class ApplicationStore {
-  private readonly api = inject(MockApi);
-  private readonly demo = inject(DemoSettings);
+  private readonly api = inject(Api);
   readonly now = inject(Clock).now;
 
   readonly account = signal<Account | null>(null);
@@ -179,9 +179,7 @@ export class ApplicationStore {
       untracked(() => void this.finishByPhone().finally(() => (finishing = false)));
     });
     // Another tab or device moved the application on (the phone page starts the identity check): pick it up.
-    addEventListener('storage', (e) => {
-      if (e.key === 'dsp.db.v1') this.restore();
-    });
+    this.api.demo?.onExternalChange(() => this.restore());
   }
 
   // ---------------------------------------------------------------------------- actions
@@ -278,17 +276,23 @@ export class ApplicationStore {
     }
   }
 
-  /** Demo panel: create the demo founder at a given stage and sign in as them. */
+  /** Demo panel: create the demo founder at a given stage and sign in as them. Mock mode only. */
   async seed(stage: Stage, founderType: FounderType = 'foreign') {
     return this.run(async () => {
-      const r = await this.api.seed(stage, founderType);
+      const r = await this.demoTools().seed(stage, founderType);
       this.setSession(r.account, r.app);
     });
   }
 
+  /** Demo panel: delete all mock data. Mock mode only. */
   resetAll() {
-    this.api.reset();
+    this.demoTools().reset();
     this.setSession(null, null);
+  }
+
+  /** Simulation speed of the time-based steps: the demo panel's setting, real time without demo tools. */
+  speed() {
+    return this.api.demo?.speed() ?? 1;
   }
 
   clearError() {
@@ -354,7 +358,12 @@ export class ApplicationStore {
   }
 
   private dur(base: number) {
-    return base / this.demo.speed();
+    return base / this.speed();
+  }
+
+  private demoTools() {
+    if (!this.api.demo) throw new ApiError('Demo araçları yalnızca demo modunda kullanılabilir.');
+    return this.api.demo;
   }
 
   private email() {
@@ -370,14 +379,19 @@ export class ApplicationStore {
     else localStorage.removeItem(SESSION_KEY);
   }
 
+  /**
+   * Signs the founder back in after a reload from the mock's own storage. Without demo tools
+   * (HTTP mode) there is nothing to restore yet: a later piece asks the server for the session.
+   */
   private restore() {
+    const demo = this.api.demo;
+    if (!demo) return;
     const email = localStorage.getItem(SESSION_KEY);
     if (!email) return;
     try {
-      const db = JSON.parse(localStorage.getItem('dsp.db.v1') ?? '{}');
-      const acc = (db.users ?? []).find((u: Account) => u.email === email) ?? null;
+      const { account: acc, app } = demo.readSession(email);
       this.account.set(acc);
-      this.app.set(acc ? (db.apps?.[email] ?? null) : null);
+      this.app.set(app);
       if (!acc) localStorage.removeItem(SESSION_KEY);
     } catch {
       localStorage.removeItem(SESSION_KEY);

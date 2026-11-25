@@ -2,15 +2,18 @@ import { ChangeDetectionStrategy, Component, inject, input, output } from '@angu
 import { Icon } from '../shared/icon';
 import { Select } from '../shared/select';
 import { Router } from '@angular/router';
+import { Api } from '../core/api';
 import { ApplicationStore } from '../core/application.store';
 import { Assistant } from '../core/assistant';
 import { Confirm } from '../core/confirm';
 import { DemoSettings, Speed } from '../core/demo-settings';
-import { DEMO_ACCOUNT } from '../core/mock-api';
 import { SCREENS } from '../screens/screens';
 import { DemoNav } from './demo-nav';
 
-/** Prototype controls: simulation speed, forced scenarios, jump to any screen, reset. */
+/**
+ * Prototype controls: simulation speed, forced scenarios, jump to any screen, reset.
+ * Shown only in mock mode (the screen pill that opens it checks `Api.demo`).
+ */
 @Component({
   selector: 'app-demo-panel',
   imports: [Icon, Select],
@@ -88,8 +91,9 @@ export class DemoPanel {
   ];
   protected readonly screens = SCREENS;
   protected readonly screenOptions = SCREENS.map((s) => ({ value: s.id, label: `${s.code} · ${s.title}`, hint: '/' + s.path }));
-  protected readonly demoEmail = DEMO_ACCOUNT.email;
-  protected readonly demoPassword = DEMO_ACCOUNT.password;
+  // Read through the demo tools rather than imported from mock-api.ts, so the HTTP build does not bundle the mock.
+  protected readonly demoEmail = inject(Api).demo?.account.email ?? '';
+  protected readonly demoPassword = inject(Api).demo?.account.password ?? '';
 
   protected jump(id: string) {
     if (id) void this.nav.open(id);

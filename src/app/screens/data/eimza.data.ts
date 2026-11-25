@@ -2,7 +2,6 @@ import { computed, inject, signal } from '@angular/core';
 import { ApplicationStore } from '../../core/application.store';
 import { Assistant } from '../../core/assistant';
 import { Confirm } from '../../core/confirm';
-import { DemoSettings } from '../../core/demo-settings';
 import { followFlow } from '../../core/follow';
 import { clock, date, dateTime, tl0 } from '../../core/format';
 import { saveBytes } from '../../core/files';
@@ -12,7 +11,6 @@ import { AGENCIES, CALL_STEPS, DURATION } from '../../core/timeline';
 /** Step 4 e-signature (ESHS call or T.C. e-imza) and step 5 company setup (Ekranlar 3). */
 export class EimzaData {
   protected readonly store = inject(ApplicationStore);
-  private readonly demo = inject(DemoSettings);
   private readonly inbox = inject(Inbox);
   private readonly assistant = inject(Assistant);
   private readonly confirmDialog = inject(Confirm);
@@ -129,7 +127,7 @@ export class EimzaData {
     const s = this.sig();
     if (!s) return '';
     if (s.method !== 'eshs') return '· e-İmzanız doğrulandı · taahhütname belgelerinize eklendi';
-    return `· 5/5 adım · ${clock(DURATION.call / this.demo.speed())} dk · tutanak belgelerinize eklendi`;
+    return `· 5/5 adım · ${clock(DURATION.call / this.store.speed())} dk · tutanak belgelerinize eklendi`;
   });
 
   /** D-4c: "Kuruluş belgelerimin bu e-imza ile imzalanmasını onaylıyorum." The API checks it too. */

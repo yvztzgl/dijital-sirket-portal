@@ -10,8 +10,9 @@ Templates are generated — see `tools/design-import/README.md`.
 The whole flow runs on real application state, with no backend yet:
 
 - `src/app/core/mock-api.ts` is an in-browser stand-in for the platform API (data in `localStorage`,
-  simulated delays). Swap it for an HTTP client to connect a real backend; screens only talk to
-  `ApplicationStore` (`src/app/core/application.store.ts`).
+  simulated delays). Screens only talk to `ApplicationStore` (`src/app/core/application.store.ts`),
+  which talks to `Api`; `ng serve --configuration http` uses the HTTP client of the real API instead
+  (see [docs/api-client.md](docs/api-client.md)). The demo tools below exist only in the default (mock) mode.
 - What the founder enters at registration and review flows through every later screen. The pitch
   deck "AI reading" fills company fields from a sample profile.
 - Long-running steps (AI scan, AML checks, e-signature call, company setup) are time-based and

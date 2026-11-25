@@ -4,10 +4,9 @@ import { Assistant } from '../../core/assistant';
 import { followFlow } from '../../core/follow';
 import { clock, dateTime, dec1, hm, maskCard, maskPhone, tl, tl0 } from '../../core/format';
 import { Inbox } from '../../core/inbox';
-import { ADDRESS_DOC_MAX, validateCard } from '../../core/mock-api';
+import { ADDRESS_DOC_MAX, validateCard } from '../../core/rules';
 import { FEES, FUNDING_LABELS } from '../../core/models';
 import { DURATION, identityView, SCREENING_LISTS, screeningEvents } from '../../core/timeline';
-import { DemoSettings } from '../../core/demo-settings';
 
 const OTP_TTL = 180_000;
 
@@ -44,7 +43,6 @@ const fileSize = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.r
 export class UygunlukData {
   protected readonly store = inject(ApplicationStore);
   private readonly inbox = inject(Inbox);
-  private readonly demo = inject(DemoSettings);
   private readonly assistant = inject(Assistant);
 
   constructor() {
@@ -186,7 +184,7 @@ export class UygunlukData {
 
   private readonly events = computed(() => {
     const a = this.store.app();
-    return a?.eligibility ? screeningEvents(a, DURATION.screening / this.demo.speed()) : null;
+    return a?.eligibility ? screeningEvents(a, DURATION.screening / this.store.speed()) : null;
   });
 
   private readonly listTime = (iso?: string) => (iso ? hm(iso).concat(':', new Date(iso).getSeconds().toString().padStart(2, '0')) : '');
