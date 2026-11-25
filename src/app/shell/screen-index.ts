@@ -9,7 +9,7 @@ import { DemoNav } from './demo-nav';
   template: `
     <main class="page">
       <header class="head">
-        <span class="eyebrow">DİJİTAL ŞİRKET PLATFORMU · EKRANLAR</span>
+        <span class="eyebrow">TERMİNAL ŞİRKET · EKRANLAR</span>
         <h1>Tüm ekranlar</h1>
         <p>Claude Design projesinden aktarılan {{ screens.length }} masaüstü ekranı. Bir ekrana gitmek için başvurunuz o aşamada değilse demo kurucu o aşamaya hazırlanır.</p>
       </header>

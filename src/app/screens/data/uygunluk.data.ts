@@ -1,27 +1,58 @@
 import { computed, inject, signal } from '@angular/core';
 import { ApplicationStore } from '../../core/application.store';
+import { Assistant } from '../../core/assistant';
 import { followFlow } from '../../core/follow';
 import { clock, dateTime, dec1, hm, maskCard, maskPhone, tl, tl0 } from '../../core/format';
 import { Inbox } from '../../core/inbox';
-import { validateCard } from '../../core/mock-api';
+import { ADDRESS_DOC_MAX, validateCard } from '../../core/mock-api';
 import { FEES, FUNDING_LABELS } from '../../core/models';
-import { DURATION, eligibilityEvents, LIVENESS, SCREENING_LISTS } from '../../core/timeline';
+import { DURATION, identityView, SCREENING_LISTS, screeningEvents } from '../../core/timeline';
 import { DemoSettings } from '../../core/demo-settings';
 
 const OTP_TTL = 180_000;
 
-/** Step 2 eligibility (AML) and step 3 payment with 3-D Secure (Ekranlar 2). */
+/**
+ * What the founder is told to do and not to do during the camera check; shown on D-2a's
+ * pre-information view and on the phone page. Placeholders until the KYC vendor's capture rules
+ * are known (PROJECT_LOG, 2026-11-17 twenty-second entry).
+ */
+export const KYC_RULES = {
+  do: ['Pasaportun fotoğraflı sayfasını çerçeveye tam yerleştiriniz.', 'Yüzünüzü açık ve tam görünür tutunuz.', 'Doğrulama tamamlanana kadar kameranın karşısında kalınız.'],
+  dont: ['Güneş gözlüğü, şapka veya maske takmayınız.', 'Pasaportun fotokopisini veya ekran görüntüsünü göstermeyiniz.', 'Kadrajda başka bir kişi bulundurmayınız.'],
+};
+
+const PROMPTS = ['Başınızı çeviriniz', 'Göz kırpınız', 'Gülümseyiniz'];
+
+/** What the camera area shows at this moment of the check; the same on the computer and on the phone page. */
+export function cameraView(e: ReturnType<typeof identityView>) {
+  const face = e.passportRead && !e.identityDone;
+  return {
+    title: !e.passportRead ? 'Pasaportunuzu kameraya gösteriniz' : face ? 'Yüzünüzü çerçevenin içinde tutunuz' : 'Kimliğiniz doğrulandı',
+    view: (!e.passportRead ? 'passport' : face ? 'face' : 'wait') as 'passport' | 'face' | 'wait',
+    prompt: e.liveness < 0 ? 'Yüzünüzü çerçeveye yerleştiriniz' : (PROMPTS[e.liveness] ?? ''),
+    chips: PROMPTS.map((t, i) => ({ t, done: e.liveness > i, cur: e.liveness === i })),
+    wait: 'Bir sonraki aşamaya geçiliyor.',
+  };
+}
+
+const fileSize = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`);
+
+/**
+ * Step 2 (identity on D-2a, declaration on D-2d, list search on D-2e, result on D-2b / D-2c) and
+ * step 3 payment with 3-D Secure.
+ */
 export class UygunlukData {
   protected readonly store = inject(ApplicationStore);
   private readonly inbox = inject(Inbox);
   private readonly demo = inject(DemoSettings);
+  private readonly assistant = inject(Assistant);
 
   constructor() {
     this.store.clearError();
     followFlow();
   }
 
-  // --------------------------------------------------------------- D-2a checks in progress
+  // ------------------------------------------------------------------ D-2a identity check
 
   protected readonly passportLine = computed(() => {
     const f = this.store.app()?.founder;
@@ -30,67 +61,155 @@ export class UygunlukData {
     return `${f.nationality || '—'} · Pasaport no ●●●●${f.passportNo.slice(-4)} · Son geçerlilik ${String(exp.getMonth() + 1).padStart(2, '0')}/${exp.getFullYear() + 5}`;
   });
 
-  protected readonly live = computed(() => {
-    const e = this.store.eligibility();
-    const score = this.store.app()?.eligibility?.score ?? 0;
+  /**
+   * D-2a in the Odak layout. Null while the founder is still on the pre-information view; once
+   * started the camera check runs by itself (see timeline.identityView) and this says what the
+   * camera area shows at each moment. When it ends the application moves to the declaration screen.
+   */
+  protected readonly kyc = computed(() => {
+    const e = this.store.identity();
+    const f = this.store.app()?.founder;
     if (!e) return null;
-    const step1 = (e.passportRead ? 1 : 0) + Math.max(0, Math.min(2, e.liveness));
-    const chip = (i: number) => {
-      const done = e.liveness > i;
-      const cur = e.liveness === i;
-      return {
-        t: (done ? '✓ ' : '') + LIVENESS[i],
-        style: `padding:2px 8px;border-radius:999px;background:${done ? 'var(--bg-F0FDF4)' : cur ? 'var(--bg-061262)' : 'var(--bg-EEF1F6)'};color:${done ? 'var(--fg-15803D)' : cur ? 'var(--fg-FFFFFF)' : 'var(--fg-3B4660)'};font:600 11px/16px 'IBM Plex Sans',sans-serif`,
-      };
-    };
-    const circle = (state: 'done' | 'cur' | 'todo', n: number) => ({
-      n: state === 'done' ? '✓' : String(n),
-      style:
-        state === 'done'
-          ? "width:28px;height:28px;border-radius:50%;background:var(--bg-15803D);color:var(--fg-FFFFFF);display:grid;place-items:center;font:600 13px/1 'IBM Plex Sans',sans-serif"
-          : state === 'cur'
-            ? "width:28px;height:28px;border-radius:50%;background:var(--bg-061262);color:var(--fg-FFFFFF);display:grid;place-items:center;font:600 13px/1 'IBM Plex Sans',sans-serif;box-shadow:0 0 0 4px var(--bd-DCE6FF)"
-            : "width:28px;height:28px;border-radius:50%;border:1.5px solid var(--bd-C9D2E3);color:var(--fg-5B6478);display:grid;place-items:center;font:600 13px/1 'IBM Plex Sans',sans-serif;box-sizing:border-box",
-    });
-    const badge = (state: 'done' | 'cur' | 'todo', text: string) => ({
-      text: state === 'done' ? '✓ Tamamlandı' : state === 'cur' ? text : 'Sırada',
-      style:
-        state === 'done'
-          ? "padding:2px 9px;border-radius:999px;background:var(--bg-F0FDF4);color:var(--fg-15803D);font:600 11.5px/16px 'IBM Plex Sans',sans-serif"
-          : state === 'cur'
-            ? "padding:2px 9px;border-radius:999px;background:var(--bg-EFF4FF);color:var(--fg-061262);font:600 11.5px/16px 'IBM Plex Sans',sans-serif"
-            : "font:500 12px/16px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)",
-    });
-    const st = (i: number) => (e.stage > i ? 'done' : e.stage === i ? 'cur' : 'todo') as 'done' | 'cur' | 'todo';
+    const cam = cameraView(e);
+    const phone = this.store.app()?.eligibility?.via === 'phone';
+    const mrzName = (x = '') => x.toLocaleUpperCase('en-US').replace(/[^A-Z]/g, '');
     return {
-      c1: circle(st(0), 1),
-      b1: badge(st(0), `Devam ediyor · ${step1}/3`),
-      c2: circle(st(1), 2),
-      b2: badge(st(1), 'Devam ediyor'),
-      c3: circle(st(2), 3),
-      b3: badge(st(2), `${e.listsDone}/5 liste tarandı`),
-      passport: e.passportRead ? '✓ Pasaport okundu · MRZ doğrulandı' : 'Pasaport okunuyor…',
-      prompt: e.identityDone ? '✓ Canlılık doğrulandı' : e.liveness < 0 ? 'Yüzünüzü çerçeveye yerleştirin' : `Şimdi ${LIVENESS[e.liveness].toLocaleLowerCase('tr-TR')}`,
-      chips: [0, 1, 2].map(chip),
-      score: e.identityDone ? `Eşleşme skoru ${dec1(score)}` : 'Eşleşme skoru hesaplanıyor…',
+      ...cam,
+      /** The check was started from the phone page: this screen only follows it. */
+      phone,
+      title: phone && !e.identityDone ? 'Doğrulama telefonunuzda sürüyor' : cam.title,
+      lead: phone
+        ? 'Pasaportunuz ve yüzünüz telefonunuzun kamerasıyla doğrulanır. Bu sayfa kendiliğinden ilerler.'
+        : 'Kimliğiniz, pasaportunuz ve kameranız aracılığıyla doğrulanır. Doğrulama tamamlanana kadar kameranın karşısında kalınız.',
+      mrz: `${mrzName(f?.lastName)}<<${mrzName(f?.firstName)}`.padEnd(30, '<').slice(0, 30),
     };
   });
 
-  protected readonly passportOpen = signal(false);
+  /** D-2a pre-information: the consent tick. The button stays off until it is set; the API checks it too. */
+  protected readonly consent = signal(false);
 
-  // ---------------------------------------------------------------------- D-2b eligible
+  protected readonly rules = KYC_RULES;
+
+  /** D-2a "Telefonla devam et": the QR view is showing instead of the pre-information. */
+  protected readonly phoneMode = signal(false);
+  /** The link behind the QR code, with the time it has left. */
+  protected readonly phoneLink = computed(() => {
+    const l = this.store.app()?.phoneLink;
+    if (!l) return null;
+    const left = Date.parse(l.expiresAt) - this.store.now();
+    const path = `/eligibility/phone/${l.token}`;
+    return { url: location.origin + path, path, expired: left <= 0, left: clock(left) };
+  });
+
+  protected usePhone() {
+    this.phoneMode.set(true);
+    const l = this.phoneLink();
+    if (!l || l.expired) void this.store.createPhoneLink();
+  }
+
+  protected renewPhoneLink() {
+    void this.store.createPhoneLink();
+  }
+
+  protected useComputer() {
+    this.store.clearError();
+    this.phoneMode.set(false);
+  }
+
+  /** D-2a pre-information: "Doğrulamayı başlat". Until then `kyc()` is null and nothing runs. */
+  protected startCheck() {
+    void this.store.startEligibility(this.consent());
+  }
+
+  /** "Kamera çalışmıyor": Terminal AI answers in the side panel. */
+  protected askCamera() {
+    void this.assistant.ask('Kamera çalışmıyorsa ne yapılır?');
+  }
+
+  // ------------------------------------------------------------------- D-2d declaration
+
+  /** The address document chosen on this screen; it is sent when the declaration is confirmed. */
+  protected readonly addrFile = signal<{ name: string; size: number } | null>(null);
+  protected readonly addrError = signal<string | null>(null);
+  protected readonly addrDragging = signal(false);
+  protected readonly declared = signal(false);
+
+  protected readonly declaration = computed(() => {
+    const a = this.store.app();
+    const f = this.addrFile();
+    return {
+      address: a ? [a.contact.address, `${a.contact.postalCode} ${a.contact.country}`.trim()].filter(Boolean).join(', ') : '',
+      funding: a ? FUNDING_LABELS[a.funding] : '',
+      file: f ? { name: f.name, size: fileSize(f.size) } : null,
+      ready: !!f && this.declared(),
+    };
+  });
+
+  protected onAddrInput(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const f = input.files?.[0];
+    input.value = '';
+    if (f) this.takeAddr(f);
+  }
+
+  protected onAddrDrop(e: DragEvent) {
+    e.preventDefault();
+    this.addrDragging.set(false);
+    const f = e.dataTransfer?.files?.[0];
+    if (f) this.takeAddr(f);
+  }
+
+  protected onAddrDragOver(e: DragEvent) {
+    e.preventDefault();
+    this.addrDragging.set(true);
+  }
+
+  /** The same two checks the API makes, so the founder hears about a wrong file at once. */
+  private takeAddr(f: { name: string; size: number }) {
+    this.store.clearError();
+    if (!/\.(pdf|jpe?g|png)$/i.test(f.name)) return this.addrError.set('Adres belgesi PDF, JPG veya PNG biçiminde olmalıdır.');
+    if (f.size > ADDRESS_DOC_MAX) return this.addrError.set('Dosya 10 MB’tan büyüktür. Daha küçük bir dosya yükleyiniz.');
+    this.addrError.set(null);
+    this.addrFile.set({ name: f.name, size: f.size });
+  }
+
+  /** Demo help, like "Test kartını doldur" on the payment screen. */
+  protected useSampleAddr() {
+    this.takeAddr({ name: 'adres-belgesi.pdf', size: 412_000 });
+  }
+
+  protected submitDeclaration() {
+    void this.store.submitDeclaration({ file: this.addrFile(), declared: this.declared() });
+  }
+
+  // --------------------------------------------------------------------- D-2e list search
 
   private readonly events = computed(() => {
     const a = this.store.app();
-    return a?.eligibility ? eligibilityEvents(a, DURATION.eligibility / this.demo.speed()) : null;
+    return a?.eligibility ? screeningEvents(a, DURATION.screening / this.demo.speed()) : null;
   });
+
+  private readonly listTime = (iso?: string) => (iso ? hm(iso).concat(':', new Date(iso).getSeconds().toString().padStart(2, '0')) : '');
+
+  protected readonly scr = computed(() => {
+    const s = this.store.screening();
+    const times = this.events()?.listTimes ?? [];
+    const done = s?.listsDone ?? 0;
+    return {
+      done,
+      lists: SCREENING_LISTS.map((n, i) => ({ n, st: i < done ? 'ok' : i === done ? 'now' : '', t: i < done ? this.listTime(times[i]) : '' })),
+    };
+  });
+
+  // ---------------------------------------------------------------------- D-2b eligible
 
   protected readonly doneStages = computed(() => {
     const a = this.store.app();
     if (!a?.eligibility) return [];
+    const doc = a.eligibility.address?.fileName;
     return [
       { t: 'Kimlik doğrulama', s: `Pasaport MRZ doğrulandı · canlılık eşleşmesi ${dec1(a.eligibility.score)}`, d: this.passportLine() },
-      { t: 'Beyan onayı', s: `Adres belgesi alındı · fon kaynağı: ${FUNDING_LABELS[a.funding].toLocaleLowerCase('tr-TR')}`, d: `${a.contact.address}, ${a.contact.postalCode} ${a.contact.country}` },
+      { t: 'Beyan', s: `${doc ? `Adres belgesi: ${doc}` : 'Adres belgesi alındı'} · fon kaynağı: ${FUNDING_LABELS[a.funding].toLocaleLowerCase('tr-TR')}`, d: `${a.contact.address}, ${a.contact.postalCode} ${a.contact.country}` },
     ];
   });
 
@@ -99,12 +218,11 @@ export class UygunlukData {
     { t: 'Yaptırım ve PEP taraması', s: '5/5 liste tarandı · eşleşme bulunmadı', d: '' },
   ]);
 
-  protected readonly openStage = signal<number | null>(null);
   protected readonly listsOpen = signal(true);
 
   protected readonly lists = computed(() => {
     const times = this.events()?.listTimes ?? [];
-    return SCREENING_LISTS.map((n, i) => ({ n, t: times[i] ? hm(times[i]).concat(':', new Date(times[i]).getSeconds().toString().padStart(2, '0')) : '' }));
+    return SCREENING_LISTS.map((n, i) => ({ n, t: this.listTime(times[i]) }));
   });
 
   protected readonly finishedAt = computed(() => {

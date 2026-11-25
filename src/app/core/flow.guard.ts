@@ -11,6 +11,8 @@ export const SCREEN_STAGES: Record<string, { stages: Stage[]; founder?: FounderT
   d1c: { stages: ['review'] },
   rejection: { stages: ['titleConflict'] },
   d2a: { stages: ['eligibility'] },
+  d2d: { stages: ['declaration'] },
+  d2e: { stages: ['screening'] },
   d2b: { stages: ['eligible'] },
   d2c: { stages: ['manual'] },
   d3a: { stages: ['payment'] },

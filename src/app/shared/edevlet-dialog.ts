@@ -21,7 +21,7 @@ import { FormError } from './form-error';
       </div>
       <form (submit)="$event.preventDefault(); submit()" class="body">
         <p class="lead">
-          {{ mode() === 'login' ? 'Dijital Şirket Platformu’na e-Devlet ile giriş yapıyorsunuz.' : 'Hesabınız e-Devlet ile oluşturulur; e-posta doğrulaması gerekmez.' }}
+          {{ mode() === 'login' ? 'Terminal Şirket’e e-Devlet ile giriş yapıyorsunuz.' : 'Hesabınız e-Devlet ile oluşturulur; e-posta doğrulaması gerekmez.' }}
           Hesabınız yoksa ilk girişte otomatik açılır.
         </p>
         <label>T.C. Kimlik No

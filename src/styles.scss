@@ -1,4 +1,5 @@
 @use 'tokens';
+@use 'wizard';
 
 /* Global foundations — ported from the Claude Design screen canvases (helmet styles). */
 body {
@@ -63,6 +64,22 @@ input::placeholder {
   }
 }
 
+/* Show one of two images depending on the app theme (e.g. colour logo vs white logo). */
+.theme-light-only { display: block; }
+.theme-dark-only { display: none; }
+html.theme-dark .theme-light-only { display: none; }
+html.theme-dark .theme-dark-only { display: block; }
+
+/* Welcome hero globe (D-00): right half, behind the text; fades back on narrow screens. */
+.hero-globe {
+  position: absolute; z-index: -1; top: 40px; bottom: 0; right: -17vw; width: min(1200px, 66vw);
+  animation: heroGlobeIn 1.4s cubic-bezier(0.2, 0.8, 0.2, 1) 0.3s both;
+}
+@media (max-width: 900px) { .hero-globe { width: 110vw; right: -45vw; opacity: .4; } }
+/* Phones: the globe leaves the text and sits low in the hero, rising from the bottom edge. */
+@media (max-width: 640px) { .hero-globe { top: auto; bottom: -30vw; right: -22vw; width: 124vw; height: 124vw; opacity: .5; } }
+@keyframes heroGlobeIn { from { opacity: 0; transform: translateY(24px) scale(.97); } }
+
 /* Welcome hero headline ------------------------------------------------------------------ */
 .hero-title .hero-line { display: block; }
 
@@ -79,7 +96,7 @@ input::placeholder {
   padding: 0 0.06em 0.08em 0; /* room for the italic overhang so clipping doesn't cut glyphs */
   font: italic 400 1.18em/1 'IBM Plex Serif', Georgia, serif;
   letter-spacing: -0.015em;
-  background: linear-gradient(100deg, var(--bg-9DB6FF) 0%, var(--bg-FFFFFF) 35%, var(--bg-C9D4F0) 50%, var(--bg-FFFFFF) 65%, var(--bg-9DB6FF) 100%);
+  background: linear-gradient(100deg, var(--fg-061262) 0%, var(--fg-0C217E) 35%, color-mix(in srgb, var(--fg-0C217E) 45%, var(--fg-9DB6FF)) 50%, var(--fg-0C217E) 65%, var(--fg-061262) 100%);
   background-size: 250% 100%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -87,13 +104,28 @@ input::placeholder {
   animation: heroSheen 9s ease-in-out infinite alternate;
 }
 
+/* On the navy hero the accent and the live dot are light instead of navy. */
+.d00-navy .hero-accent {
+  background-image: linear-gradient(100deg, #9DB6FF 0%, #FFFFFF 35%, #C9D4F0 50%, #FFFFFF 65%, #9DB6FF 100%);
+}
+.d00-navy .live-dot { background: #9DB6FF; }
+
+/* Navy hero story layer (D-00): city labels and trails over the right of the skyline. */
+.d00-arrivals { position: absolute; z-index: -1; top: 96px; bottom: 0; right: 0; width: 44%; }
+@media (max-width: 1100px) { .d00-arrivals { width: 40%; } }
+/* Phones: the skyline and its trails get a stage of their own under the text. */
+@media (max-width: 640px) {
+  .d00-skyline { left: -94vw !important; right: auto !important; width: 200vw; }
+  .d00-arrivals { top: auto; left: 0; width: auto; height: 100vw; }
+}
+
 /* Small "live" dot: the same breathing as the stippled engravings. */
 .live-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--bg-9DB6FF);
-  box-shadow: 0 0 0 0 rgba(157, 182, 255, 0.5);
+  background: var(--bg-0C217E);
+  box-shadow: 0 0 0 0 rgba(12, 33, 126, 0.35);
   animation: liveDot 2.4s ease-in-out infinite;
 }
 
@@ -106,10 +138,58 @@ input::placeholder {
   to { background-position: 0% 0; }
 }
 @keyframes liveDot {
-  0%, 100% { opacity: 0.55; box-shadow: 0 0 0 0 rgba(157, 182, 255, 0.45); }
-  50% { opacity: 1; box-shadow: 0 0 0 6px rgba(157, 182, 255, 0); }
+  0%, 100% { opacity: 0.55; box-shadow: 0 0 0 0 rgba(12, 33, 126, 0.3); }
+  50% { opacity: 1; box-shadow: 0 0 0 6px rgba(12, 33, 126, 0); }
 }
 
+/* Welcome page (D-00) on narrow screens ---------------------------------------------------
+   The template's inline styles are the desktop layout, so these overrides need !important. */
+/* Sign-in button label when signed in: the long one, or a short one on phones. */
+.d00-narrow { display: none; }
+@media (max-width: 1100px) {
+  .d00-nav-link, .d00-brand-extra { display: none !important; }
+}
+@media (max-width: 900px) {
+  .d00-hero { padding: 28px 40px 0 !important; }
+  .d00-hero-body { padding: 56px 0 96px !important; }
+  .d00-steps-section { padding: 96px 40px 104px !important; gap: 56px !important; }
+  .d00-closing { padding: 80px 40px 96px !important; }
+  .d00-legal { padding: 20px 40px !important; flex-wrap: wrap; gap: 8px 24px !important; }
+}
+/* Steps turn from a row of five into a vertical list. */
+@media (max-width: 760px) {
+  .d00-steps { grid-template-columns: 1fr !important; row-gap: 28px; max-width: 440px !important; }
+  .d00-steps-line { display: none; }
+  .d00-steps li {
+    position: relative; display: grid !important; grid-template-columns: 44px 1fr; column-gap: 16px; row-gap: 2px !important;
+    align-items: start !important; text-align: left !important; padding: 0 !important;
+  }
+  .d00-steps li > :first-child { grid-row: 1 / span 2; }
+  .d00-steps li > :nth-child(3) { max-width: none !important; }
+  .d00-steps li:not(:last-child)::before {
+    content: ''; position: absolute; left: 22px; top: 44px; bottom: -28px; width: 1px; background: var(--bg-D6DEEE);
+  }
+}
+@media (max-width: 640px) {
+  .d00-hero { padding: 16px 20px 0 !important; }
+  .d00-nav { gap: 6px !important; }
+  .d00-wide { display: none; }
+  .d00-narrow { display: inline; }
+  .d00-logo { height: 28px !important; }
+  .d00-login { padding: 8px 12px !important; font-size: 13px !important; }
+  /* Room at the bottom for the globe. */
+  .d00-hero-body { justify-content: flex-start !important; gap: 20px !important; padding: 44px 0 58vw !important; }
+  .d00-navy .d00-hero-body { padding-bottom: 108vw !important; }
+  .d00-eyebrow { font-size: 11px !important; letter-spacing: .1em !important; }
+  .d00-lead { font-size: 17px !important; line-height: 26px !important; }
+  .d00-cta { flex-direction: column; align-items: stretch !important; gap: 16px !important; margin-top: 4px !important; }
+  .d00-cta > a { justify-content: center; text-align: center; }
+  .d00-steps-section { padding: 72px 20px 80px !important; gap: 44px !important; }
+  .d00-closing { padding: 64px 20px 150px !important; gap: 24px !important; }
+  .d00-legal { padding: 20px !important; }
+  .d00-legal-copy { flex: 1 1 100%; }
+  .d00-legal-gap { display: none; }
+}
 
 /* Smooth the switch between light and dark themes (skipped for reduced motion). */
 html.theme-switching, html.theme-switching * {

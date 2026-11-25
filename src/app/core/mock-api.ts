@@ -13,9 +13,10 @@ import {
   FundingSource,
   LogEntry,
   ScanField,
+  PhoneLinkStatus,
   Stage,
 } from './models';
-import { DURATION, eligibilityEvents, setupEvents, signatureDocs, titleDocs } from './timeline';
+import { DURATION, identityEvents, screeningEvents, setupEvents, signatureDocs, titleDocs } from './timeline';
 
 /**
  * In-browser stand-in for the platform backend. Every method is async and returns fresh copies,
@@ -51,6 +52,18 @@ export const DEMO_ACCOUNT = { email: 'john.doe@acme.com', password: 'Acme-2026!'
 
 const clone = <T>(v: T): T => structuredClone(v);
 const nowIso = () => new Date().toISOString();
+
+/** How long the QR code of the identity step's phone link stays valid. */
+export const PHONE_LINK_TTL = 10 * 60_000;
+
+/** Largest address document the declaration screen takes. */
+export const ADDRESS_DOC_MAX = 10 * 1024 * 1024;
+
+/** 128 random bits, URL-safe. */
+function randomToken() {
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
 
 @Injectable({ providedIn: 'root' })
 export class MockApi {
@@ -150,7 +163,7 @@ export class MockApi {
       const brand = brandFromFile(file.name);
       const root = brand.split(' ')[0];
       const prof = deckProfile(file.name, acc.founderType);
-      app.company = { ...app.company, deckName: brand, root, activity: prof.activity, nace: prof.nace, suggestedNace: prof.suggestedNace };
+      app.company = { ...app.company, deckName: brand, logo: deckLogo(brand), root, activity: prof.activity, nace: prof.nace, suggestedNace: prof.suggestedNace };
       app.founder.nationality = prof.nationality;
       app.contact = { email: acc.email, ...prof.contact };
       app.funding = prof.funding;
@@ -196,10 +209,12 @@ export class MockApi {
     });
   }
 
-  /** Submit the reviewed data: reserve the title in MERSİS, then start eligibility checks. */
+  /** Submit the reviewed data: reserve the title in MERSİS, then open the identity step (see startEligibility). */
   async submitReview(email: string) {
     await this.wait(1_200);
-    return this.mutate(email, ['review', 'titleConflict'], (app) => this.reserveAndStart(app));
+    return this.mutate(email, ['review', 'titleConflict'], (app) => {
+      this.reserveAndStart(app);
+    });
   }
 
   async chooseTitle(email: string, title: string) {
@@ -232,25 +247,142 @@ export class MockApi {
     }
     app.titleCheck = { status: 'ok', candidate };
     log(app, 'Unvan MERSİS’te rezerve edildi', 'k');
-    const manual = app.funding === 'third-party' || this.demo.state().forceManual;
-    app.eligibility = {
-      startedAt: nowIso(),
-      score: Math.round((manual ? 96.5 + Math.random() : 97.5 + Math.random() * 1.5) * 10) / 10,
-      result: manual ? 'manual' : 'eligible',
-    };
+    // The identity step opens on its pre-information view; nothing runs until the founder starts it.
+    app.eligibility = undefined;
     app.stage = 'eligibility';
   }
 
   // -------------------------------------------------------------------- step 2 · uygunluk
 
-  async completeEligibility(email: string) {
+  /**
+   * The founder has read the pre-information on D-2a, ticked the consent and pressed "Doğrulamayı
+   * başlat": the camera check and the screening start now. Refused without the consent. The
+   * consent and the start are logged as the founder's own actions and the consent's time is kept
+   * on the application. Calling it again while the check runs changes nothing. Starting on the
+   * computer cancels a phone link that was not used.
+   */
+  async startEligibility(email: string, consent: boolean) {
+    await this.wait(500);
     return this.mutate(email, ['eligibility'], (app) => {
-      const ev = eligibilityEvents(app, this.dur(DURATION.eligibility));
+      if (app.eligibility) return;
+      this.begin(app, consent);
+      app.phoneLink = undefined;
+    });
+  }
+
+  private begin(app: Application, consent: boolean, via?: 'phone') {
+    if (!consent) throw new ApiError('Devam etmek için açık rıza metnini onaylayınız.');
+    const manual = app.funding === 'third-party' || this.demo.state().forceManual;
+    const at = nowIso();
+    log(app, 'Açık rıza metni onaylandı (yüz görüntüsü ile kimlik doğrulama)', 'u');
+    log(app, via === 'phone' ? 'Kimlik doğrulama telefondan başlatıldı' : 'Kimlik doğrulama başlatıldı', 'u');
+    app.eligibility = {
+      startedAt: at,
+      consentAt: at,
+      ...(via ? { via } : {}),
+      score: Math.round((manual ? 96.5 + Math.random() : 97.5 + Math.random() * 1.5) * 10) / 10,
+      result: manual ? 'manual' : 'eligible',
+    };
+  }
+
+  /** The camera check ended: the founder goes on to the declaration screen. */
+  async completeIdentity(email: string) {
+    return this.mutate(email, ['eligibility'], (app) => {
+      if (!app.eligibility) throw new ApiError('Kimlik doğrulaması henüz başlatılmamıştır.');
+      const logs = identityEvents(app, this.dur(DURATION.identity));
+      app.logs.push(...logs);
+      app.eligibility.identityDoneAt = logs[logs.length - 1].at;
+      app.stage = 'declaration';
+    });
+  }
+
+  /**
+   * Declaration screen (D-2d): the founder uploads a document showing the declared address and
+   * confirms that the application's information is true; the list search starts.
+   * The mock keeps only the file's name and size. A real API must store the file encrypted, scan
+   * it, and record who confirmed which declaration text.
+   */
+  async submitDeclaration(email: string, input: { file: { name: string; size: number } | null; declared: boolean }) {
+    await this.wait(700);
+    return this.mutate(email, ['declaration'], (app) => {
+      const f = input.file;
+      if (!f) throw new ApiError('Adres belgenizi yükleyiniz.');
+      if (!/\.(pdf|jpe?g|png)$/i.test(f.name)) throw new ApiError('Adres belgesi PDF, JPG veya PNG biçiminde olmalıdır.');
+      if (f.size > ADDRESS_DOC_MAX) throw new ApiError('Dosya 10 MB’tan büyüktür. Daha küçük bir dosya yükleyiniz.');
+      if (!input.declared) throw new ApiError('Devam etmek için beyanı onaylayınız.');
+      const at = nowIso();
+      log(app, `Adres belgesi yüklendi · ${f.name}`, 'u');
+      log(app, 'Bilgilerin doğruluğu beyan edildi', 'u');
+      Object.assign(app.eligibility!, { address: { fileName: f.name, sizeKb: Math.max(1, Math.round(f.size / 1024)), at }, declaredAt: at, screeningStartedAt: at });
+      app.stage = 'screening';
+    });
+  }
+
+  /** The list search ended: the result, its log lines and the three documents. */
+  async completeScreening(email: string) {
+    return this.mutate(email, ['screening'], (app) => {
+      const ev = screeningEvents(app, this.dur(DURATION.screening));
       app.logs.push(...ev.logs);
       app.docs.push(...ev.docs);
       app.eligibility!.finishedAt = ev.listTimes[4];
       app.stage = app.eligibility!.result === 'manual' ? 'manual' : 'eligible';
     });
+  }
+
+  // ------------------------------------------------ step 2 · identity check on the phone (QR)
+
+  /**
+   * D-2a "Telefonla devam et": makes the link the QR code carries. It is valid for ten minutes,
+   * only while the check has not started, and replaces any earlier link. Logged.
+   *
+   * For a real API: the token must be at least 128 random bits and stored hashed; the link must
+   * grant this one step of this one application and no session; creation and every use must be
+   * audited with the device they came from; attempts must be rate-limited.
+   */
+  async createPhoneLink(email: string) {
+    await this.wait(400);
+    return this.mutate(email, ['eligibility'], (app) => {
+      if (app.eligibility) throw new ApiError('Kimlik doğrulaması zaten başlatılmıştır.');
+      const now = Date.now();
+      app.phoneLink = { token: randomToken(), createdAt: new Date(now).toISOString(), expiresAt: new Date(now + PHONE_LINK_TTL).toISOString() };
+      log(app, 'Telefonla doğrulama için QR kod oluşturuldu', 'u');
+    });
+  }
+
+  /** The phone page asks where its link stands. Needs no session and reveals nothing about the founder. */
+  async phoneLinkStatus(token: string): Promise<PhoneLinkStatus> {
+    await this.wait(300);
+    const app = this.appByToken(token)?.[1];
+    if (!app) return { state: 'invalid' };
+    if (app.stage !== 'eligibility') return app.eligibility?.via === 'phone' ? { state: 'done' } : { state: 'invalid' };
+    if (app.eligibility) return app.eligibility.via === 'phone' ? { state: 'running', startedAt: app.eligibility.startedAt } : { state: 'invalid' };
+    return Date.now() > Date.parse(app.phoneLink!.expiresAt) ? { state: 'expired' } : { state: 'ready', expiresAt: app.phoneLink!.expiresAt };
+  }
+
+  /** The phone page's "Doğrulamayı başlat": same rules as on the computer, plus the link must be alive. */
+  async startEligibilityByPhone(token: string, consent: boolean) {
+    await this.wait(500);
+    const email = this.appByToken(token)?.[0];
+    if (!email) throw new ApiError('Bağlantı geçersizdir. Bilgisayarınızdaki sayfadan yeni bir QR kod oluşturunuz.');
+    await this.mutate(email, ['eligibility'], (app) => {
+      if (app.eligibility) return;
+      if (Date.now() > Date.parse(app.phoneLink!.expiresAt)) throw new ApiError('Bağlantının süresi dolmuştur. Bilgisayarınızdaki sayfadan yeni bir QR kod oluşturunuz.');
+      this.begin(app, consent, 'phone');
+      app.phoneLink!.usedAt = app.eligibility!.startedAt;
+    });
+    return this.phoneLinkStatus(token);
+  }
+
+  /** The phone page saw the camera check through (in the mock the client's clock finishes time-based steps). */
+  async completeIdentityByPhone(token: string) {
+    const email = this.appByToken(token)?.[0];
+    if (email) await this.completeIdentity(email);
+    return this.phoneLinkStatus(token);
+  }
+
+  private appByToken(token: string): [string, Application] | undefined {
+    if (!token) return undefined;
+    return Object.entries(this.db().apps).find(([, a]) => a.phoneLink?.token === token);
   }
 
   /** From manual review: go back and correct the deck data (eligibility will run again). */
@@ -259,6 +391,7 @@ export class MockApi {
     return this.mutate(email, ['manual', 'eligible', 'titleConflict'], (app) => {
       app.docs = app.docs.filter((d) => !d.group.startsWith('1 ·'));
       app.eligibility = undefined;
+      app.phoneLink = undefined;
       app.titleCheck = undefined;
       app.stage = 'review';
       log(app, 'Sunum bilgileri düzeltme için yeniden açıldı', 'u');
@@ -330,9 +463,25 @@ export class MockApi {
 
   // ------------------------------------------------------------------ step 4 · e-imza
 
+  /**
+   * D-4a pre-information: the founder has read what the call needs and ticked the consent (the
+   * call is recorded; an e-signature is issued in their name). Kept on the application, so a
+   * reload or a call that was ended does not ask again. Refused without the tick.
+   */
+  async acceptCallTerms(email: string, consent: boolean) {
+    await this.wait(300);
+    return this.mutate(email, ['signing'], (app) => {
+      if (app.callConsentAt) return;
+      if (!consent) throw new ApiError('Devam etmek için onay metnini işaretleyiniz.');
+      app.callConsentAt = nowIso();
+      log(app, 'Görüşme kaydı ve e-imza düzenlenmesi onaylandı', 'u');
+    });
+  }
+
   async startCall(email: string) {
     await this.wait(800);
     return this.mutate(email, ['signing'], (app) => {
+      if (!app.callConsentAt) throw new ApiError('Görüşme başlamadan önce ön bilgilendirmeyi onaylayınız.');
       app.call = { startedAt: nowIso() };
       app.stage = 'calling';
       log(app, 'ESHS görüntülü görüşmesi başladı', 'k');
@@ -376,11 +525,19 @@ export class MockApi {
 
   // ---------------------------------------------------------------- step 5 · kuruluş
 
-  async startSetup(email: string) {
+  /**
+   * D-4c "Kuruluşu başlat": the formation documents are signed with the founder's e-signature and
+   * sent to the agencies. Refused unless the founder has confirmed exactly that on the screen;
+   * the confirmation is logged as the founder's action and its time kept.
+   */
+  async startSetup(email: string, confirmed: boolean) {
     await this.wait(600);
     return this.mutate(email, ['signed'], (app) => {
-      app.setup = { startedAt: nowIso() };
+      if (!confirmed) throw new ApiError('Devam etmek için belgelerinizin imzalanmasını onaylayınız.');
+      const at = nowIso();
+      app.setup = { startedAt: at, signConsentAt: at };
       app.stage = 'setup';
+      log(app, 'Kuruluş belgelerinin e-imza ile imzalanması onaylandı', 'u');
       log(app, 'Kuruluş başlatıldı', 'u');
     });
   }
@@ -459,7 +616,7 @@ export class MockApi {
       kind: 'mail',
       from: 'no-reply@dijitalsirket.gov.tr',
       title: 'E-posta doğrulama kodunuz',
-      body: `Dijital Şirket Platformu hesabınızı doğrulamak için kodunuz: ${code}. 10 dakika geçerlidir.`,
+      body: `Terminal Şirket hesabınızı doğrulamak için kodunuz: ${code}. 10 dakika geçerlidir.`,
       code,
     });
   }
@@ -475,7 +632,7 @@ export class MockApi {
   private db(): Db {
     try {
       const v = JSON.parse(localStorage.getItem(DB_KEY) ?? '');
-      if (v && Array.isArray(v.users)) return v;
+      if (v && Array.isArray(v.users)) return upgrade(v);
     } catch {
       /* empty or corrupt store: start fresh */
     }
@@ -519,6 +676,19 @@ function newApplication(acc: Account): Application {
   return app;
 }
 
+/**
+ * Applications saved before 2026-11-20 may sit at the removed `profile` stage (D-1e) or carry its
+ * statement and comparison; they continue at the deck upload with those dropped.
+ */
+function upgrade(db: Db): Db {
+  for (const app of Object.values(db.apps) as unknown as Record<string, unknown>[]) {
+    if (app['stage'] === 'profile') app['stage'] = 'verified';
+    delete app['profile'];
+    delete app['crossCheck'];
+  }
+  return db;
+}
+
 function log(app: Application, text: string, who: LogEntry['who']) {
   app.logs.push({ at: nowIso(), text, who });
 }
@@ -539,6 +709,22 @@ export function edevletIdentity(tckn: string) {
 }
 
 /** "acme-cloud-pitch_v3.pdf" → "Acme Cloud" */
+/**
+ * Stand-in for the logo a real scan would lift from the deck's first page: the brand's initials
+ * on a tile whose colour is picked from the name. Returned as an SVG data URL so it needs no file.
+ */
+export function deckLogo(brand: string): string {
+  const words = brand.trim().split(/\s+/).filter(Boolean);
+  const initials = (words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? '?').slice(0, 2)).toLocaleUpperCase('tr-TR');
+  const tiles = ['#0C217E', '#0F766E', '#7C2D92', '#B45309', '#1D4ED8', '#9F1239'];
+  let h = 0;
+  for (const ch of brand) h = (h * 31 + ch.codePointAt(0)!) >>> 0;
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="${tiles[h % tiles.length]}"/>` +
+    `<text x="32" y="41" text-anchor="middle" font-family="IBM Plex Sans, Arial, sans-serif" font-size="25" font-weight="600" fill="#fff">${initials}</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 export function brandFromFile(name: string): string {
   const base = name.replace(/\.[^.]+$/, '');
   const words = base
@@ -566,7 +752,8 @@ export function alternativesFor(root: string, candidate: string): string[] {
 
 /**
  * What the simulated AI Reviewer "reads" from a deck. The downloadable sample deck
- * (public/assets/samples/lumora-analytics-pitch.pptx) returns exactly what is on its slides;
+ * (public/assets/samples/lumora-analytics-pitch.pptx, built by tools/sample-deck in the deck format of
+ * src/app/core/deck-format.json) returns exactly what is on its slides;
  * any other file gets a generic profile with two fields flagged for checking.
  * The founder's name and e-mail always come from the signed-in account (the applicant).
  */
@@ -591,7 +778,7 @@ export function deckProfile(fileName: string, founderType: FounderType): DeckPro
       contact: { phone: '+49 151 2345 6789', address: 'Torstraße 45, Berlin', postalCode: '10119', country: 'Almanya' },
       funding: 'own-abroad',
       marks: {},
-      pages: { title: 1, nace: 5, founder: 6, contact: 7, funding: 8, total: 9 },
+      pages: { title: 13, nace: 13, founder: 14, contact: 15, funding: 16, total: 16 },
     };
   }
   const foreign = founderType === 'foreign';
@@ -624,13 +811,13 @@ export function luhn(num: string) {
 }
 
 export function validateCard(c: { holder: string; number: string; expiry: string; cvv: string }, now = new Date()): string | null {
-  if (c.holder.trim().length < 3) return 'Kart üzerindeki adı yazın.';
-  if (!luhn(c.number)) return 'Kart numarası geçersiz.';
+  if (c.holder.trim().length < 3) return 'Kart üzerindeki adı yazınız.';
+  if (!luhn(c.number)) return 'Kart numarası geçersizdir.';
   const m = /^(\d{2})\s*\/\s*(\d{2})$/.exec(c.expiry.trim());
-  if (!m || +m[1] < 1 || +m[1] > 12) return 'Son kullanma tarihini AA/YY biçiminde yazın.';
+  if (!m || +m[1] < 1 || +m[1] > 12) return 'Son kullanma tarihini AA/YY biçiminde yazınız.';
   const end = new Date(2000 + +m[2], +m[1], 1);
-  if (end <= now) return 'Kartın son kullanma tarihi geçmiş.';
-  if (!/^\d{3,4}$/.test(c.cvv.trim())) return 'Güvenlik kodu (CVV) 3 veya 4 haneli olmalı.';
+  if (end <= now) return 'Kartın son kullanma tarihi geçmiştir.';
+  if (!/^\d{3,4}$/.test(c.cvv.trim())) return 'Güvenlik kodu (CVV) 3 veya 4 haneli olmalıdır.';
   return null;
 }
 
@@ -658,6 +845,7 @@ export const FUNDING_OPTIONS: FundingSource[] = ['own-abroad', 'own-turkey', 'in
 /** Drives the real API methods in order until the application reaches `want`. */
 async function fastForward(api: MockApi, email: string, want: Stage) {
   if (want === 'registered' || want === 'verified') return;
+  const resident = JSON.parse(localStorage.getItem(DB_KEY)!).apps[email].founderType === 'resident';
   await api.uploadDeck(email, { name: 'acme-cloud-pitch.pdf', size: 4_812_000 });
   if (want === 'scanning') return;
   await api.completeScan(email);
@@ -669,9 +857,15 @@ async function fastForward(api: MockApi, email: string, want: Stage) {
   }
   await api.updateReview(email, { company: { activity: 'Bulut Yazılım' }, funding: want === 'manual' ? 'third-party' : 'own-abroad' }, ['title']);
   await api.submitReview(email);
-  if (want === 'eligibility') return;
-  await backdate(email, 'eligibility');
-  await api.completeEligibility(email);
+  if (want === 'eligibility') return; // D-2a opens on its pre-information view
+  await api.startEligibility(email, true);
+  await backdate(email, 'identity');
+  await api.completeIdentity(email);
+  if (want === 'declaration') return;
+  await api.submitDeclaration(email, { file: { name: 'adres-belgesi.pdf', size: 412_000 }, declared: true });
+  if (want === 'screening') return;
+  await backdate(email, 'screening');
+  await api.completeScreening(email);
   if (want === 'eligible' || want === 'manual') return;
   await api.proceedToPayment(email);
   if (want === 'payment') return;
@@ -680,55 +874,70 @@ async function fastForward(api: MockApi, email: string, want: Stage) {
   const otp = JSON.parse(localStorage.getItem(DB_KEY)!).apps[email].payment.otp as string;
   await api.confirm3ds(email, otp);
   if (want === 'signing') return;
-  const resident = JSON.parse(localStorage.getItem(DB_KEY)!).apps[email].founderType === 'resident';
   if (resident) {
     await api.signResident(email, 'existing');
   } else {
+    await api.acceptCallTerms(email, true);
     await api.startCall(email);
     if (want === 'calling') return;
     await api.completeCall(email);
   }
   if (want === 'signed') return;
-  await api.startSetup(email);
+  await api.startSetup(email, true);
   if (want === 'setup') return;
   await backdate(email, 'setup');
   await api.completeSetup(email);
 }
 
 /** Moves a running process's start into the past so seeded data has realistic, ordered timestamps. */
-async function backdate(email: string, which: 'eligibility' | 'setup') {
+async function backdate(email: string, which: 'identity' | 'screening' | 'setup') {
   const db = JSON.parse(localStorage.getItem(DB_KEY)!) as Db;
   const app = db.apps[email];
-  const ms = which === 'eligibility' ? DURATION.eligibility : DURATION.setup;
-  if (which === 'eligibility') app.eligibility!.startedAt = new Date(Date.now() - ms).toISOString();
-  else app.setup!.startedAt = new Date(Date.now() - ms).toISOString();
+  const past = (ms: number) => new Date(Date.now() - ms).toISOString();
+  if (which === 'identity') {
+    // Far enough back that the declaration and the list search that follow still come after it.
+    app.eligibility!.startedAt = app.eligibility!.consentAt = past(DURATION.identity + DURATION.screening + 4_000);
+    app.logs.slice(-2).forEach((l) => (l.at = app.eligibility!.startedAt));
+  } else if (which === 'screening') {
+    const at = past(DURATION.screening);
+    Object.assign(app.eligibility!, { declaredAt: at, screeningStartedAt: at, address: { ...app.eligibility!.address!, at } });
+    app.logs.slice(-2).forEach((l) => (l.at = at));
+  } else app.setup!.startedAt = past(DURATION.setup);
   localStorage.setItem(DB_KEY, JSON.stringify(db));
 }
 
 // ------------------------------------------------------------------------------ Terminal AI
 
+/**
+ * Canned answers, matched by pattern. Written in the formal, impersonal register the owner asked
+ * for on 2026-11-17 (no first person, no "siz" imperatives); the facts are the ones the earlier
+ * wording stated. The side panel's suggested questions must each match one of these patterns.
+ */
 const ANSWERS: [RegExp, string][] = [
-  [/format|pdf|pptx|keynote|dosya/i, 'PDF, PowerPoint (.pptx) ve Keynote (.key) dosyalarını okuyabilirim; en fazla 50 MB.'],
-  [/gizli|kvkk|saklan|veri/i, 'Sunumunuz yalnızca başvurunuz için işlenir, KVKK kapsamında Türkiye’deki sunucularda şifreli saklanır ve kurumlarla yalnızca gerekli alanlar paylaşılır.'],
-  [/anonim|neden a\.?ş|şirket türü/i, 'Tek pay sahipli anonim şirket, yabancı kurucuların tamamen çevrimiçi kurabildiği ve yatırımcıların en çok tercih ettiği türdür.'],
-  [/nace|faaliyet kodu/i, 'NACE kodları şirketinizin faaliyet alanını tanımlar; vergi ve SGK kayıtları bu kodlara göre açılır. Birden fazla kod seçebilirsiniz.'],
-  [/unvan|rezerv/i, 'Unvanınızı MERSİS’te sorgulayıp benzer kayıtlı unvan yoksa 30 gün süreyle rezerve ederim.'],
-  [/sermaye|250/i, 'Anonim şirketler için asgari sermaye 250.000 TL’dir; %25’i (62.500 TL) tescil öncesi banka hesabında bloke edilir.'],
-  [/mrz/i, 'MRZ, pasaportun alt kısmındaki makine tarafından okunabilir iki satırdır; kimlik bilgilerinizi buradan doğrularım.'],
+  [/sermaye kaynağı/i, 'Sermaye kaynağı, şirkete konacak paranın nereden geldiğini gösterir: kendi hesabınız, bir yatırımcı veya üçüncü bir taraf. Üçüncü taraf transferleri uyum ekibince incelenir.'],
+  [/format|pdf|pptx|keynote|dosya/i, 'PDF, PowerPoint (.pptx) ve Keynote (.key) dosyaları kabul edilir; dosya boyutu en fazla 50 MB olabilir.'],
+  [/gizli|kvkk|saklan|veri/i, 'Sunumunuz yalnızca başvurunuz kapsamında işlenir, KVKK uyarınca Türkiye’deki sunucularda şifreli olarak saklanır ve kurumlarla yalnızca gerekli alanlar paylaşılır.'],
+  [/adres belgesi/i, 'Son üç ay içinde düzenlenmiş fatura, banka hesap özeti veya yerleşim yeri belgesi kabul edilir. Belge üzerinde adınız ve beyan ettiğiniz adres okunmalıdır.'],
+  [/okun/i, 'Şirket adı, faaliyet alanı, kurucu, iletişim ve sermaye bilgileri okunur. Okunan her bilgi bir sonraki ekranda düzeltilebilir.'],
+  [/anonim|neden a\.?ş|şirket türü/i, 'Tek pay sahipli anonim şirket, yabancı kurucuların tamamen çevrim içi kurabildiği ve yatırımcıların en çok tercih ettiği şirket türüdür.'],
+  [/nace|faaliyet kodu/i, 'NACE kodları şirketinizin faaliyet alanını tanımlar; vergi ve SGK kayıtları bu kodlara göre açılır. Birden fazla kod seçilebilir.'],
+  [/unvan|rezerv/i, 'Unvan MERSİS’te sorgulanır; benzer kayıtlı bir unvan bulunmuyorsa 30 gün süreyle rezerve edilir.'],
+  [/sermaye|250/i, 'Anonim şirketler için asgari sermaye 250.000 TL’dir; %25’i (62.500 TL) tescil öncesinde banka hesabında bloke edilir.'],
+  [/mrz/i, 'MRZ, pasaportun alt kısmında yer alan ve makine tarafından okunabilen iki satırdır; kimlik bilgileriniz bu satırlardan doğrulanır.'],
   [/liste|yaptırım|pep/i, 'BM, AB, OFAC SDN, ulusal malvarlığı dondurma ve PEP listelerinde tarama yapılır.'],
-  [/manuel|ne kadar sür/i, 'Manuel inceleme en geç 2 iş günü sürer; sonuç e-posta ile bildirilir.'],
+  [/manuel|ne kadar sür/i, 'Manuel inceleme en geç 2 iş günü içinde sonuçlanır; sonuç e-posta ile bildirilir.'],
   [/belge.*iste|hangi belge/i, 'Genellikle fon kaynağını gösteren banka dekontu veya transferi yapan tarafın kimlik belgesi istenir.'],
   [/fatura/i, 'Fatura başvuru sahibi adına kesilir; şirket kurulduktan sonra şirket adına yeniden düzenlenebilir.'],
-  [/iade/i, 'Kurum harçları ödendikten sonra iade edilemez; kuruluş başlamadan önce iptal ederseniz platform bedeli iade edilir.'],
-  [/e-?imza nedir|e-?imza/i, 'Günlük e-imza, ESHS operatörüyle görüntülü görüşmeyle düzenlenen ve 24 saat geçerli nitelikli elektronik imzadır.'],
-  [/kayded|kayıt/i, 'Görüşme mevzuat gereği kaydedilir ve yalnızca ESHS tarafından saklanır.'],
-  [/kamera/i, 'Kamerasız cihazdan devam edemezsiniz; telefonunuzla bu sayfayı açıp görüşmeyi oradan başlatabilirsiniz.'],
-  [/mali mühür/i, 'Mali mühür, e-Fatura ve e-Defter için şirketinizin elektronik mührüdür; TÜBİTAK Kamu SM düzenler.'],
-  [/iban|banka/i, 'IBAN, Halkbank hesabınız açılınca bu panelde ve e-postanızda görünür.'],
-  [/müşavir/i, 'Kuruluş sonunda Terminal İstanbul Müşavirlik’ten bir SMMM atanır; ilk görüşmeyi buradan planlayabilirsiniz.'],
-  [/yatır/i, 'Sermayenin %25’ini Halkbank hesabınıza transfer edin; blokaj tescille birlikte kalkar.'],
+  [/iade/i, 'Kurum harçları ödendikten sonra iade edilemez; kuruluş başlamadan önce başvuru iptal edilirse platform hizmet bedeli iade edilir.'],
+  [/e-?imza nedir|e-?imza/i, 'Günlük e-imza, lisanslı e-imza sağlayıcısının (ESHS) operatörüyle yapılan görüntülü görüşmede düzenlenen ve 24 saat geçerli olan nitelikli elektronik imzadır.'],
+  [/kayded|kayıt/i, 'Görüşme mevzuat gereği kaydedilir ve yalnızca e-imza sağlayıcısı tarafından saklanır.'],
+  [/kamera/i, 'Kamerası bulunmayan bir cihazla devam edilemez. Kimlik adımındaki “Telefonla devam et” seçeneğiyle açılan QR kodu telefonunuzla okutarak doğrulamayı telefonunuzdan yapabilirsiniz.'],
+  [/mali mühür/i, 'Mali mühür, e-Fatura ve e-Defter işlemlerinde kullanılan şirket elektronik mührüdür; TÜBİTAK Kamu SM tarafından düzenlenir.'],
+  [/iban|banka/i, 'IBAN, Halkbank hesabınız açıldığında bu ekranda ve e-posta adresinizde bildirilir.'],
+  [/müşavir/i, 'Kuruluşun sonunda Terminal İstanbul Müşavirlik tarafından bir SMMM atanır; ilk görüşme kuruluş ekranından talep edilebilir.'],
+  [/yatır/i, 'Sermayenin %25’i Halkbank hesabınıza transfer edilmelidir; blokaj tescille birlikte kalkar.'],
 ];
 
 function answer(q: string) {
-  return ANSWERS.find(([re]) => re.test(q))?.[1] ?? 'Bu konuda size yardımcı olayım: sorunuzu başvurunuzla birlikte uyum ekibine iletiyorum, en geç 1 iş günü içinde yanıtlanır.';
+  return ANSWERS.find(([re]) => re.test(q))?.[1] ?? 'Sorunuz başvurunuzla birlikte uyum ekibine iletilmiştir; en geç 1 iş günü içinde yanıtlanacaktır.';
 }

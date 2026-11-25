@@ -1,9 +1,11 @@
 @let v = vals();
 <header class="bar">
-  <a class="brand" [routerLink]="v.signedIn ? store.resumeRoute() : '/'" aria-label="Dijital Şirket Platformu — ana sayfa">
-    <span class="mono" aria-hidden="true">DŞ</span>
+  <a class="brand" [routerLink]="v.signedIn ? store.resumeRoute() : '/'" aria-label="Terminal Şirket — ana sayfa">
+    <img class="logo logo-light" src="/assets/brand/terminal-istanbul.svg" alt="" width="99" height="32" />
+    <img class="logo logo-dark" src="/assets/brand/terminal-istanbul-white.svg" alt="" width="99" height="32" />
+    <span class="logo-sep" aria-hidden="true"></span>
     <span class="names">
-      <span class="name">Dijital Şirket Platformu <span class="tag">Terminal İstanbul</span></span>
+      <span class="name">Terminal Şirket</span>
       <span class="sub">Girişimciler için uçtan uca dijital şirket kuruluşu</span>
     </span>
   </a>

@@ -1,0 +1,95 @@
+@let v = view();
+<div class="wz-page wz-m" data-screen-label="D-2a-m Kimlik (telefon)">
+  <header class="wz-m-top">
+    <img class="logo logo-light" src="/assets/brand/terminal-istanbul.svg" alt="Terminal İstanbul" width="80" height="26" />
+    <img class="logo logo-dark" src="/assets/brand/terminal-istanbul-white.svg" alt="Terminal İstanbul" width="80" height="26" />
+    <span class="sep" aria-hidden="true"></span>
+    <span>Kimlik doğrulama</span>
+  </header>
+
+  <main class="wz-m-main">
+    @switch (v.state) {
+      @case ('loading') {
+        <p class="wz-lead" role="status">Bağlantı kontrol ediliyor…</p>
+      }
+      @case ('ready') {
+        <div class="wz-head">
+          <h1 class="wz-h1">Kimlik doğrulamasını başlatınız</h1>
+          <p class="wz-lead">Doğrulama, pasaportunuz ve telefonunuzun kamerası ile yapılır.</p>
+        </div>
+
+        <section class="wz-rules" aria-labelledby="kyc-rules-m">
+          <h2 id="kyc-rules-m"><app-icon name="alert" size="16px" [stroke]="2" />Doğrulama sırasında dikkat edilecekler</h2>
+          <div class="cols">
+            <ul class="do" aria-label="Yapınız">
+              @for (r of rules.do; track r) {<li><app-icon name="check" size="14px" [stroke]="2.6" />{{ r }}</li>}
+            </ul>
+            <ul class="dont" aria-label="Yapmayınız">
+              @for (r of rules.dont; track r) {<li><app-icon name="x" size="14px" [stroke]="2.6" />{{ r }}</li>}
+            </ul>
+          </div>
+        </section>
+
+        <label class="wz-check"><input type="checkbox" [checked]="consent()" (change)="consent.set($any($event.target).checked)"><span><a href="#" (click)="$event.preventDefault()">Açık Rıza Metni</a>’ni okudum; yüz görüntümün kimlik doğrulaması amacıyla işlenmesini kabul ediyorum.</span></label>
+
+        <app-form-error />
+        <button type="button" class="wz-btn" (click)="start()" [disabled]="!consent() || store.busy()"><app-icon name="video" size="16px" [stroke]="2" />{{ store.busy() ? 'Kamera açılıyor…' : 'Doğrulamayı başlat' }}</button>
+
+        <p class="wz-foot"><app-icon name="lock" size="13px" [stroke]="2" />Görüntü kaydı saklanmaz; yalnızca eşleşme sonucu saklanır.</p>
+      }
+      @case ('running') {
+        <div class="wz-head">
+          <h1 class="wz-h1">{{ v.cam?.title }}</h1>
+        </div>
+
+        <div class="wz-cam wz-kyc">
+          <span class="tag"><span class="dot" aria-hidden="true"></span>Kamera açık</span>
+          @if (v.cam?.view === 'passport') {
+            <div class="pass" aria-hidden="true">
+              <div class="row"><span class="photo"></span><span class="lines"><i></i><i></i><i></i><i></i></span></div>
+              <span class="mrz"><span>P&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;</span><span>&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;</span></span>
+            </div>
+            <span class="cap" aria-live="polite">Fotoğraflı sayfayı çerçeveye yerleştiriniz</span>
+          }
+          @if (v.cam?.view === 'face') {
+            <span class="oval" aria-hidden="true"></span>
+            <span class="prompt" aria-live="polite">{{ v.cam?.prompt }}</span>
+            <ul class="pills">
+              @for (c of v.cam?.chips ?? []; track c.t) {<li [class.done]="c.done" [class.cur]="c.cur">@if (c.done) {<app-icon name="check" size="12px" [stroke]="3" />}{{ c.t }}</li>}
+            </ul>
+          }
+          @if (v.cam?.view === 'wait') {
+            <div class="okay" aria-live="polite">
+              <span aria-hidden="true"><app-icon name="check" size="26px" [stroke]="2.6" /></span>
+              <b>Kimliğiniz doğrulandı</b>
+              <small>{{ v.cam?.wait }}</small>
+            </div>
+          }
+        </div>
+
+        <p class="wz-foot"><app-icon name="lock" size="13px" [stroke]="2" />Görüntü kaydı saklanmaz; yalnızca eşleşme sonucu saklanır.</p>
+      }
+      @case ('done') {
+        <span class="wz-m-mark ok" aria-hidden="true"><app-icon name="check" size="30px" [stroke]="2.6" /></span>
+        <div class="wz-head">
+          <h1 class="wz-h1">Doğrulama tamamlandı</h1>
+          <p class="wz-lead">Bilgisayarınızdaki sayfaya dönünüz; başvurunuz oradan devam eder. Bu sayfayı kapatabilirsiniz.</p>
+        </div>
+      }
+      @case ('expired') {
+        <span class="wz-m-mark" aria-hidden="true"><app-icon name="clock" size="28px" [stroke]="2" /></span>
+        <div class="wz-head">
+          <h1 class="wz-h1">Bağlantının süresi doldu</h1>
+          <p class="wz-lead">Bilgisayarınızdaki sayfadan yeni bir QR kod oluşturunuz.</p>
+        </div>
+      }
+      @default {
+        <span class="wz-m-mark" aria-hidden="true"><app-icon name="alert" size="28px" [stroke]="2" /></span>
+        <div class="wz-head">
+          <h1 class="wz-h1">Bağlantı geçersiz</h1>
+          <p class="wz-lead">Bu bağlantı kullanılamaz. Bilgisayarınızdaki sayfadan yeni bir QR kod oluşturunuz.</p>
+        </div>
+      }
+    }
+  </main>
+</div>

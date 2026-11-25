@@ -1,15 +1,12 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { IText, Icon } from '../../shared/icon';
-import { AiCard } from '../../shared/ai-card';
-import { SidePanel } from '../../shared/side-panel';
-import { Stepper } from '../../shared/stepper';
-import { TopBar } from '../../shared/top-bar';
+import { Icon } from '../../shared/icon';
+import { StepPage } from '../../shared/step-page';
 import { UygunlukData } from '../data/uygunluk.data';
 
-/** D-2b — Uygunluk · tamamlandı. Üç aşama tek satıra kapandı; tarama satırları açılmış hâli gösteriliyor. */
+/** D-2b — Kimlik doğrulandı. The three finished checks and one action: go to payment. */
 @Component({
   selector: 'app-screen-d2b',
-  imports: [AiCard, IText, Icon, SidePanel, Stepper, TopBar],
+  imports: [Icon, StepPage],
   templateUrl: './d2b.html',
   host: { style: 'display:block' },
   changeDetection: ChangeDetectionStrategy.OnPush,

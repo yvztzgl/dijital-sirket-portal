@@ -4,6 +4,7 @@ import { Select } from '../shared/select';
 import { Router } from '@angular/router';
 import { ApplicationStore } from '../core/application.store';
 import { Assistant } from '../core/assistant';
+import { Confirm } from '../core/confirm';
 import { DemoSettings, Speed } from '../core/demo-settings';
 import { DEMO_ACCOUNT } from '../core/mock-api';
 import { SCREENS } from '../screens/screens';
@@ -78,6 +79,7 @@ export class DemoPanel {
   protected readonly nav = inject(DemoNav);
   private readonly router = inject(Router);
   private readonly assistant = inject(Assistant);
+  private readonly confirm = inject(Confirm);
 
   protected readonly speeds: { v: Speed; t: string }[] = [
     { v: 1, t: '1×' },
@@ -93,8 +95,17 @@ export class DemoPanel {
     if (id) void this.nav.open(id);
   }
 
-  protected reset() {
-    if (!confirm('Tüm hesaplar ve başvurular bu tarayıcıdan silinsin mi?')) return;
+  protected async reset() {
+    const ok = await this.confirm.ask({
+      tone: 'danger',
+      icon: 'refresh',
+      title: 'Demo verileri silinsin mi?',
+      message: 'Bu tarayıcıda kayıtlı tüm demo verileri silinir. Bu işlem geri alınamaz.',
+      details: { label: 'Silinecek veriler', items: ['Hesaplar ve oturum', 'Başvurular ve belgeler', 'Terminal AI yazışmaları'] },
+      confirm: 'Verileri sil',
+      cancel: 'Vazgeç',
+    });
+    if (!ok) return;
     this.store.resetAll();
     this.assistant.clear();
     void this.router.navigateByUrl('/');

@@ -1,43 +1,87 @@
-<div data-screen-label="D-4a e-İmza öncesi" style="width:100%;min-height:100vh;background:var(--bg-F4F6FB);overflow:clip">
-      <app-top-bar ></app-top-bar>
-      <div style="display:grid;grid-template-columns:minmax(0,1fr) 384px;gap:24px;padding:24px 32px 40px;align-items:start">
-        <main style="display:flex;flex-direction:column;gap:16px;min-width:0">
-          <app-stepper [current]="4"></app-stepper>
-          <app-ai-card cardTitle="Pasaportunuzu yanınızda bulundurun" reason="Görüşme yaklaşık 4 dakika sürer; operatör fotoğraflı sayfayı kameraya göstermenizi isteyecek."></app-ai-card>
-          <section style="background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:14px;padding:28px;display:flex;flex-direction:column;gap:20px">
-            <div style="display:flex;flex-direction:column;gap:4px"><h3 style="margin:0;font:600 22px/30px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">e-İmza · ESHS ile görüntülü görüşme</h3><p style="margin:0;font:400 14.5px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">Lisanslı e-imza sağlayıcısı ESHS'nin operatörü kimliğinizi doğrular ve size 24 saat geçerli günlük e-imza düzenler.</p></div>
-            <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:24px">
-              <div style="position:relative;height:330px;border-radius:14px;background:radial-gradient(ellipse at 50% 35%,var(--bg-24356A),var(--bg-0B1430) 75%);overflow:hidden">
-                <span aria-hidden="true" style="position:absolute;left:50%;top:70px;transform:translateX(-50%);width:110px;height:136px;border-radius:50%;background:radial-gradient(ellipse at 45% 40%,var(--bg-7387BC),var(--bg-3A4E82))"></span>
-                <span aria-hidden="true" style="position:absolute;left:50%;top:200px;transform:translateX(-50%);width:250px;height:180px;border-radius:50% 50% 0 0;background:linear-gradient(var(--bg-3A4E82),var(--bg-26386A))"></span>
-                <span style="position:absolute;left:14px;top:14px;padding:4px 10px;border-radius:999px;background:rgba(0,0,0,.45);color:var(--fg-FFFFFF);font:600 11.5px/16px 'IBM Plex Sans',sans-serif">Önizleme · Siz</span>
-                <div style="position:absolute;left:0;right:0;bottom:14px;display:flex;justify-content:center;gap:10px">
-                  <button type="button" (click)="mic.set(!mic())" [attr.aria-pressed]="mic()" [attr.aria-label]="mic() ? 'Mikrofonu kapat' : 'Mikrofonu aç'" [attr.style]="`width:40px;height:40px;border-radius:50%;border:0;background:${mic() ? 'rgba(255,255,255,.16)' : 'var(--bg-D92D20)'};color:var(--fg-FFFFFF);font:600 11px/1 'IBM Plex Sans',sans-serif;cursor:pointer`">{{ mic() ? 'Mik' : 'Kapalı' }}</button>
-                  <button type="button" (click)="cam.set(!cam())" [attr.aria-pressed]="cam()" [attr.aria-label]="cam() ? 'Kamerayı kapat' : 'Kamerayı aç'" [attr.style]="`width:40px;height:40px;border-radius:50%;border:0;background:${cam() ? 'rgba(255,255,255,.16)' : 'var(--bg-D92D20)'};color:var(--fg-FFFFFF);font:600 11px/1 'IBM Plex Sans',sans-serif;cursor:pointer`">{{ cam() ? 'Kam' : 'Kapalı' }}</button>
-                </div>
-              </div>
-              <div style="display:flex;flex-direction:column;gap:14px">
-                <span style="font:600 10.5px/14px 'IBM Plex Sans',sans-serif;letter-spacing:.1em;color:var(--fg-5B6478)">CİHAZ KONTROLÜ</span>
-                @for (c of checks(); track $index) {
-                  <div style="display:flex;align-items:center;gap:10px;font:500 14px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-1F2A44)"><span style="width:20px;height:20px;border-radius:50%;background:var(--bg-F0FDF4);border:1px solid var(--bd-BBE5C8);color:var(--fg-15803D);display:grid;place-items:center;font:700 10px/1 'IBM Plex Sans',sans-serif"><app-icon name="check" /></span>{{ c }}</div>
-                }
-                <span style="font:600 10.5px/14px 'IBM Plex Sans',sans-serif;letter-spacing:.1em;color:var(--fg-5B6478);margin-top:8px">GÖRÜŞMEDE</span>
-                <ol style="margin:0;padding:0 0 0 18px;font:400 13.5px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660)"><li>Pasaportunuzu kameraya gösterirsiniz</li><li>Yüz eşleşmesi onaylanır</li><li>Sözlü onay verirsiniz</li><li>Kayıt imzalanır, günlük e-imza düzenlenir</li></ol>
-              </div>
-            </div>
-            <div style="display:flex;align-items:center;gap:16px;padding-top:4px">
-              <button type="button" (click)="startCall()" [disabled]="store.busy()" style="border:0;background:var(--bg-061262);color:var(--fg-FFFFFF);border-radius:10px;padding:14px 24px;font:600 15px/20px 'IBM Plex Sans',sans-serif;display:flex;align-items:center;gap:10px;cursor:pointer"><span [attr.style]="`width:8px;height:8px;border-radius:50%;background:${devicesReady() ? 'var(--bg-7EE2A8)' : 'var(--bg-F04438)'}`"></span>{{ store.busy() ? 'Operatöre bağlanılıyor…' : 'ESHS operatörünü ara' }}</button>
-              <span style="font:400 13px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">Ortalama bekleme &lt; 1 dk · Görüşme yasal gereklilik gereği kayıt altına alınır</span>
-            </div>
-            <div style="display:flex;flex-direction:column;border-top:1px solid var(--bd-EEF1F6)">
-              <button type="button" (click)="faq.set(faq() === 'what' ? null : 'what')" [attr.aria-expanded]="faq() === 'what'" style="display:flex;justify-content:space-between;border:0;border-bottom:1px solid var(--bd-EEF1F6);background:transparent;padding:12px 0;font:600 14px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262);cursor:pointer">e-İmza nedir?<span style="color:var(--fg-061262);font-size:13px"><app-itext [text]="faq() === 'what' ? 'Detayları gizle ▴' : 'Detayları göster ▾'" /></span></button>
-              @if (faq() === 'what') {<p style="margin:0;padding:4px 0 12px;font:400 13.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660)">Günlük e-imza, ESHS’nin düzenlediği ve 24 saat geçerli nitelikli elektronik imzadır. Islak imzayla aynı hukuki geçerliliğe sahiptir ve yalnızca şirket kuruluş belgeleriniz için kullanılır.</p>}
-              <button type="button" (click)="faq.set(faq() === 'how' ? null : 'how')" [attr.aria-expanded]="faq() === 'how'" style="display:flex;justify-content:space-between;border:0;background:transparent;padding:12px 0;font:600 14px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262);cursor:pointer">Görüşme nasıl yapılır?<span style="color:var(--fg-061262);font-size:13px"><app-itext [text]="faq() === 'how' ? 'Detayları gizle ▴' : 'Detayları göster ▾'" /></span></button>
-              @if (faq() === 'how') {<p style="margin:0;padding:4px 0 12px;font:400 13.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660)">Sessiz ve aydınlık bir ortamda olun. Operatör pasaportunuzun fotoğraflı sayfasını kameraya göstermenizi, ardından yüzünüzü çerçevede tutmanızı ve sözlü onay vermenizi ister. Görüşme yaklaşık 4 dakika sürer.</p>}
-              <app-form-error />
-            </div>
-          </section>
-        </main>
-        <app-side-panel tab="ai" ctx="sign"></app-side-panel>
-      </div>
+<app-step-page [step]="4" ctx="sign" label="D-4a e-İmza öncesi" [width]="briefed() ? 1040 : 740">
+  @if (!briefed()) {
+    <!-- Pre-information: what the call needs, what to mind, and the consent. The camera check comes after "Devam et". -->
+    <div class="wz-head">
+      <h1 class="wz-h1">Görüntülü görüşmeye hazırlanınız</h1>
+      <p class="wz-lead">Lisanslı e-imza sağlayıcısının operatörü kimliğinizi doğrular ve kuruluş belgelerinizin imzalanacağı, 24 saat geçerli e-imzanızı düzenler.</p>
     </div>
+
+    <!-- The same three pictures as the identity step's requirements (D-2a): the needs are the same. -->
+    <section class="wz-tiles wz-need" aria-labelledby="call-need">
+      <h2 id="call-need" class="wz-card-h">Görüşme için gerekenler</h2>
+      <ol>
+        <li><span class="pic" aria-hidden="true"><img src="/assets/illustrations/id-passport.webp" alt=""></span><b>Pasaportunuz</b><small>Kimlik adımında kullandığınız pasaport gereklidir.</small></li>
+        <li><span class="pic" aria-hidden="true"><img src="/assets/illustrations/id-camera.webp" alt=""></span><b>Kamera ve mikrofon</b><small>Görüşme görüntülü ve sesli yapılır.</small></li>
+        <li><span class="pic" aria-hidden="true"><img src="/assets/illustrations/id-light.webp" alt=""></span><b>Sessiz ve aydınlık bir ortam</b><small>Yüzünüz ve sesiniz net algılanmalıdır.</small></li>
+      </ol>
+    </section>
+
+    <section class="wz-rules" aria-labelledby="call-rules">
+      <h2 id="call-rules"><app-icon name="alert" size="16px" [stroke]="2" />Görüşme sırasında dikkat edilecekler</h2>
+      <div class="cols">
+        <ul class="do" aria-label="Yapınız">
+          @for (r of callRules.do; track r) {<li><app-icon name="check" size="14px" [stroke]="2.6" />{{ r }}</li>}
+        </ul>
+        <ul class="dont" aria-label="Yapmayınız">
+          @for (r of callRules.dont; track r) {<li><app-icon name="x" size="14px" [stroke]="2.6" />{{ r }}</li>}
+        </ul>
+      </div>
+    </section>
+
+    <label class="wz-check"><input type="checkbox" [checked]="callConsent()" (change)="callConsent.set($any($event.target).checked)"><span><a href="#" (click)="$event.preventDefault()">Aydınlatma Metni</a>’ni okudum; görüşmenin kayıt altına alınmasını ve adıma e-imza düzenlenmesini kabul ediyorum.</span></label>
+
+    <app-form-error />
+    <div class="wz-actions">
+      <button type="button" class="wz-btn" (click)="acceptCallTerms()" [disabled]="!callConsent() || store.busy()">Devam et</button>
+    </div>
+
+    <p class="wz-foot"><app-icon name="info" size="13px" [stroke]="2" />Görüşme, yasal gereklilik uyarınca kayıt altına alınır.</p>
+  } @else {
+    <div class="wz-head">
+      <h1 class="wz-h1">Görüntülü görüşmeye katılınız</h1>
+    </div>
+
+    <!-- Before the call: the same stage as the call itself (D-4b), with the founder alone on it. They check camera and
+         microphone and call the operator from here. -->
+    <section class="wz-meet wz-meet--lobby" aria-label="Kamera önizlemesi">
+      <div class="top">
+        <span class="pill">Kamera önizlemesi</span>
+      </div>
+
+      <div class="host" [class.off]="!cam()">
+        @if (cam()) {
+          <span class="avatar still" aria-hidden="true">{{ initials() }}</span>
+        } @else {
+          <span class="avatar still dim" aria-hidden="true"><app-icon name="video-off" size="34px" [stroke]="1.8" /></span>
+        }
+        <span class="name">{{ cam() ? store.fullName() : 'Kameranız kapalı' }}</span>
+      </div>
+
+      <ul class="checks" aria-label="Cihaz kontrolü">
+        <li class="pill"><i class="dot" [class.off]="!cam()" aria-hidden="true"></i>{{ cam() ? 'Kamera hazır' : 'Kamera kapalı' }}</li>
+        <li class="pill"><i class="dot" [class.off]="!mic()" aria-hidden="true"></i>{{ mic() ? 'Mikrofon hazır' : 'Mikrofon kapalı' }}</li>
+        <li class="pill"><i class="dot" aria-hidden="true"></i>Bağlantı uygun</li>
+      </ul>
+
+      <div class="ctl">
+        <button type="button" class="rnd" (click)="mic.set(!mic())" [attr.aria-pressed]="mic()" [class.off]="!mic()" [attr.aria-label]="mic() ? 'Mikrofonu kapat' : 'Mikrofonu aç'"><app-icon [name]="mic() ? 'mic' : 'mic-off'" size="20px" [stroke]="2" /></button>
+        <button type="button" class="rnd" (click)="cam.set(!cam())" [attr.aria-pressed]="cam()" [class.off]="!cam()" [attr.aria-label]="cam() ? 'Kamerayı kapat' : 'Kamerayı aç'"><app-icon [name]="cam() ? 'video' : 'video-off'" size="20px" [stroke]="2" /></button>
+        <button type="button" class="go" (click)="startCall()" [disabled]="store.busy()"><app-icon name="video" size="18px" [stroke]="2" />{{ store.busy() ? 'Operatöre bağlanılıyor…' : 'Operatörü ara' }}</button>
+      </div>
+    </section>
+
+    <app-form-error />
+
+    <section class="wz-tiles wz-during" aria-labelledby="call-steps">
+      <h2 id="call-steps" class="wz-card-h">Görüşme sırasında</h2>
+      <ol>
+        <li><span class="pic" aria-hidden="true"><img src="/assets/illustrations/call-show.webp" alt=""><span class="num">1</span></span><b>Pasaportunuzu gösterirsiniz</b><small>Fotoğraflı sayfa kameraya tutulur.</small></li>
+        <li><span class="pic" aria-hidden="true"><img src="/assets/illustrations/call-match.webp" alt=""><span class="num">2</span></span><b>Yüzünüz eşleştirilir</b><small>Operatör eşleşmeyi onaylar.</small></li>
+        <li><span class="pic" aria-hidden="true"><img src="/assets/illustrations/call-consent.webp" alt=""><span class="num">3</span></span><b>Sözlü onay verirsiniz</b><small>Kuruluş talebinizi sesli olarak teyit edersiniz.</small></li>
+        <li><span class="pic" aria-hidden="true"><img src="/assets/illustrations/call-sign.webp" alt=""><span class="num">4</span></span><b>E-imzanız düzenlenir</b><small>Belgeleriniz bu imzayla imzalanır.</small></li>
+      </ol>
+    </section>
+
+    <p class="wz-foot"><app-icon name="info" size="13px" [stroke]="2" />Görüşme, yasal gereklilik uyarınca kayıt altına alınır.</p>
+  }
+</app-step-page>

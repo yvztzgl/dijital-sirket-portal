@@ -1,0 +1,181 @@
+<div class="lp" data-screen-label="D-00 Karşılama">
+  <nav class="lp-nav">
+    <a routerLink="/" class="lp-brand" aria-label="Terminal Şirket">
+      <img class="theme-light-only" src="/assets/brand/terminal-istanbul.svg" alt="Terminal İstanbul" width="99" height="32">
+      <img class="theme-dark-only" src="/assets/brand/terminal-istanbul-white.svg" alt="Terminal İstanbul" width="99" height="32">
+      <span class="lp-brand-rule" aria-hidden="true"></span>
+      <span class="lp-brand-name">Terminal Şirket</span>
+    </a>
+    <span class="lp-grow"></span>
+    <app-header-tools collapse />
+    <a class="ui-btn ui-btn--outline lp-login" [routerLink]="store.signedIn() ? store.resumeRoute() : '/login'">@if (store.signedIn()) {<span class="lp-wide">Başvuruma dön</span><span class="lp-narrow">Devam et</span>} @else {Giriş yap}</a>
+  </nav>
+
+  <header class="lp-hero">
+    <h1 class="hero-title lp-title"><span class="hero-line">Oturduğunuz yerden</span><span class="hero-line"><em class="hero-accent">Dijital Şirketinizi</em></span><span class="hero-line">Terminal İstanbul’da kurun.</span></h1>
+    <p class="lp-lead">Projenizi yükleyin, dakikalar içerisinde şirket kurulumuna başlayın.</p>
+    <a class="ui-btn ui-btn--primary lp-cta" href="/register" (click)="$event.preventDefault(); start()"><app-itext [text]="store.signedIn() ? 'Başvuruma devam et →' : 'Başvuruya başla →'" /></a>
+    <ul class="lp-figs">
+      @for (f of figures; track f.label) {
+        <li><app-icon [name]="f.icon" size="1.1em" [stroke]="1.9" /><b>{{ f.value }}</b>{{ f.label }}</li>
+      }
+    </ul>
+  </header>
+
+  <!-- The pinned sequence: map → dive into İstanbul → the five steps. -->
+  <section #track class="track" [class.is-static]="still()" [style.--track]="trackHeight" aria-label="Nasıl çalışır">
+    <div #pin class="pin">
+      <div #card class="card">
+        <canvas #map class="map" role="img" aria-label="Dünya haritası: dünyanın dört bir yanındaki şehirlerden İstanbul’a uzanan yaylar"></canvas>
+        <div class="founders" aria-hidden="true">
+          @for (f of founders; track f.name) {
+            <div #founder class="founder">
+              <span class="avatar">@if (f.photo) {<img [src]="f.photo" alt="">} @else {{{ f.name.charAt(0) }}}</span>
+              <span class="who"><b><img [src]="flag(f.iso)" alt="" width="15" height="11">{{ f.name }}</b><small>{{ f.company }}</small></span>
+            </div>
+          }
+        </div>
+        <!-- The İstanbul point's name, shown by the script while the map dives towards it. -->
+        <span #place class="place" aria-hidden="true"><i></i>Terminal İstanbul</span>
+        <span class="hint" aria-hidden="true">Kaydırın<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6" /></svg></span>
+      </div>
+
+      <div #white class="white">
+        <div class="story">
+          <!-- The five steps. The one on screen is open with its text; a click scrolls to a step. -->
+          <nav class="steps" aria-label="Başvuru adımları">
+            <h2 class="steps-h">Beş adımda şirket kuruluşu</h2>
+            <ol>
+              @for (s of steps; track s.key; let i = $index) {
+                <li [class.on]="now() === i" [class.done]="now() > i">
+                  <button type="button" (click)="goTo(i)" [attr.aria-current]="now() === i ? 'step' : null">
+                    <span class="num"><b>{{ i + 1 }}</b><app-icon name="check" size="14px" [stroke]="2.6" /></span>
+                    <span class="name">{{ s.title }}</span>
+                  </button>
+                  <div class="more"><p>{{ s.text }}</p></div>
+                </li>
+              }
+            </ol>
+            <p class="sample">Ekrandaki bilgiler örnek bir başvurudan alınmıştır.</p>
+          </nav>
+
+          @for (s of steps; track s.key; let i = $index) {
+            <article class="step">
+              <!-- Shown instead of the list on narrow screens and on the still page. -->
+              <div class="step-text">
+                <span class="count">{{ i + 1 }}. adım, {{ steps.length }} adımdan</span>
+                <h3>{{ s.title }}</h3>
+                <p>{{ s.text }}</p>
+              </div>
+
+              <div class="stage" [class.stage--rise]="s.key === 'setup'" [style.--pic]="s.bg">
+                @if (s.key === 'setup') {
+                  <!-- D-5a's building, rising with the scroll: the whole picture as faint dots (still to be
+                       built) and, over it, the picture in full up to the height reached (--built, set by the script). -->
+                  <div class="rise-area" aria-hidden="true">
+                    <div class="rise"><img class="plan" [src]="s.pic" alt=""><img class="built" [src]="s.pic" alt=""><span class="level"></span></div>
+                  </div>
+                } @else {
+                  <img class="pic" [src]="s.pic" alt="" aria-hidden="true">
+                }
+                <div class="ui" aria-hidden="true">
+                  @switch (s.key) {
+                    @case ('deck') {
+                      <div class="u-head">
+                        <span class="u-file">PDF</span>
+                        <span class="u-head-t"><strong>acme-cloud-pitch.pdf</strong><small class="u-swap st" style="--at:.55"><i>10 sayfa okunuyor</i><b>10 sayfa okundu</b></small></span>
+                        <span class="u-pct"></span>
+                      </div>
+                      <div class="u-bar"><i></i></div>
+                      <ul class="u-rows">
+                        @for (f of mock.fields; track f[0]; let j = $index) {
+                          <li class="pop" [class.warn]="j === 3" [style.--at]="0.1 + j * 0.09">
+                            <span>{{ f[0] }}</span><strong>{{ f[1] }}</strong>
+                            @if (j === 3) {<em class="u-flag">Kontrol ediniz</em>} @else {<em>s. {{ f[2] }}</em>}
+                          </li>
+                        }
+                      </ul>
+                    }
+                    @case ('id') {
+                      <ul class="u-checks">
+                        @for (c of mock.checks; track c[0]; let j = $index) {
+                          <li class="st" [style.--at]="0.18 + j * 0.2">
+                            <span class="u-num"><b>{{ j + 1 }}</b><i class="u-ok"></i></span>
+                            <span class="u-check-t"><strong>{{ c[0] }}</strong><small>{{ c[1] }}</small></span>
+                            <span class="u-status"><i>{{ j === 0 ? 'Sürüyor' : 'Sırada' }}</i><b>{{ c[2] }}</b></span>
+                          </li>
+                        }
+                      </ul>
+                      <div class="u-verdict pop" style="--at:.8"><i class="u-ok"></i><span><strong>Dijital kuruluşa uygun</strong><small>Tarama raporu belgelerinize eklendi.</small></span></div>
+                    }
+                    @case ('pay') {
+                      <div class="u-title">Ödeme özeti<small>Acme Bulut Yazılım Anonim Şirketi</small></div>
+                      <ul class="u-fees">
+                        @for (f of mock.fees; track f[0]) {<li><span>{{ f[0] }}</span><b>{{ f[1] }}</b></li>}
+                      </ul>
+                      <div class="u-total"><span>Toplam</span><b>{{ mock.total }}</b></div>
+                      <span class="u-button st" style="--at:.5"><b>{{ mock.total }} öde</b><i><i class="u-ok"></i>Ödeme alındı</i></span>
+                    }
+                    @case ('sign') {
+                      <div class="u-call">
+                        <div class="u-call-bar"><span class="u-rec">Kayıt</span><span>Görüntülü kimlik doğrulama</span><span class="u-timer"></span></div>
+                        <div class="u-caption">
+                          <b>Operatör</b>
+                          <span class="u-lines">
+                            <i class="u-range" style="--a:0;--b:.26">Pasaportunuzun fotoğraflı sayfasını kameraya gösterir misiniz?</i>
+                            <i class="u-range" style="--a:.26;--b:.5">Yüzünüzü çerçevenin ortasında tutunuz, eşleşmeyi onaylıyorum.</i>
+                            <i class="u-range" style="--a:.5;--b:.74">Kuruluş belgelerinizin e-imzayla imzalanmasını onaylıyor musunuz?</i>
+                            <i class="u-range" style="--a:.74;--b:2">e-İmzanız düzenlendi. İyi günler dilerim.</i>
+                          </span>
+                        </div>
+                      </div>
+                      <ol class="u-list">
+                        @for (c of mock.call; track c; let j = $index) {
+                          <li class="st" [style.--at]="0.14 + j * 0.15"><span class="u-num"><b>{{ j + 1 }}</b><i class="u-ok"></i></span>{{ c }}</li>
+                        }
+                      </ol>
+                    }
+                    @case ('setup') {
+                      <div class="u-setup">
+                        <div class="u-run">
+                          <div class="u-run-top"><span class="u-title">Kurum adımları</span><span class="u-n"><b class="u-count"></b> / 6 tamamlandı</span></div>
+                          <div class="u-segs">@for (a of mock.agencies; track a[0]; let j = $index) {<i class="st" [style.--at]="0.1 + j * 0.11"></i>}</div>
+                          <span class="u-now">
+                            @for (a of mock.agencies; track a[0]; let j = $index) {
+                              <i class="u-range" [style.--a]="j === 0 ? -1 : 0.1 + j * 0.11" [style.--b]="0.1 + (j + 1) * 0.11"><strong>{{ a[0] }}</strong><small>{{ a[1] }}</small></i>
+                            }
+                          </span>
+                        </div>
+                        <div class="u-done">
+                          <div class="u-founded"><i class="u-ok"></i><span><strong>Şirketiniz kuruldu</strong><small>Acme Bulut Yazılım Anonim Şirketi</small></span></div>
+                          <dl class="u-results">
+                            <div><dt>Vergi kimlik no</dt><dd>014 807 5882</dd></div>
+                            <div><dt>MERSİS no</dt><dd>0279 6863 4939 0001</dd></div>
+                            <div><dt>IBAN<span class="u-bank">, Halkbank</span></dt><dd>TR04 0001 2009 5099 4653 1540 95</dd></div>
+                          </dl>
+                        </div>
+                      </div>
+                    }
+                  }
+                </div>
+              </div>
+            </article>
+          }
+          <div class="rail" aria-hidden="true">@for (s of steps; track s.key; let j = $index) {<i [style.--i]="j"></i>}</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="lp-close">
+    <h2>Başvurunuz her adımda kaydedilir. <em>Kaldığınız yerden devam edersiniz.</em></h2>
+    <a class="ui-btn ui-btn--primary lp-cta" href="/register" (click)="$event.preventDefault(); start()"><app-itext [text]="store.signedIn() ? 'Başvuruma devam et →' : 'Başvuruya başla →'" /></a>
+  </section>
+  <footer class="lp-foot">
+    <span>© 2026 Terminal Şirket · Terminal İstanbul</span>
+    <span class="lp-grow"></span>
+    <a href="#" (click)="$event.preventDefault()">KVKK Aydınlatma Metni</a>
+    <a href="#" (click)="$event.preventDefault()">Kullanım Koşulları</a>
+    <a href="#" (click)="$event.preventDefault()">Çerez Politikası</a>
+  </footer>
+</div>

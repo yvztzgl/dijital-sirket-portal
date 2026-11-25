@@ -83,8 +83,10 @@ describe('MockApi flow', () => {
 
   const lastCode = () => inbox.messages()[0].code!;
 
+  /** Registers and verifies the e-mail, so the founder is at the deck upload (D-1a). */
   async function verifiedFounder(email = 'ayse@novalab.io') {
     await api.register({ firstName: 'Ayşe', lastName: 'Kaya', email, password: 'Nova-Lab-2026!' });
+    await expect(api.uploadDeck(email, { name: 'x.pdf', size: 1 })).rejects.toThrow('bulunamadı');
     await expect(api.verifyEmail(email, '000000')).rejects.toBeInstanceOf(ApiError);
     const { app } = await api.verifyEmail(email, lastCode());
     return app;
@@ -113,6 +115,77 @@ describe('MockApi flow', () => {
     expect(app.company.activity).toBe('Bulut Yazılım');
   });
 
+  it('hands the identity check to a phone through a short-lived link', async () => {
+    const email = 'ayse@novalab.io';
+    await verifiedFounder(email);
+    await api.uploadDeck(email, { name: 'novalab-deck.pdf', size: 1000 });
+    await api.completeScan(email);
+    await api.submitReview(email);
+    expect(await api.phoneLinkStatus('nope')).toEqual({ state: 'invalid' });
+
+    let app = await api.createPhoneLink(email);
+    const first = app.phoneLink!.token;
+    expect(first.length).toBeGreaterThanOrEqual(22);
+    expect((await api.phoneLinkStatus(first)).state).toBe('ready');
+    // A new code replaces the old one.
+    app = await api.createPhoneLink(email);
+    const token = app.phoneLink!.token;
+    expect(token).not.toBe(first);
+    expect(await api.phoneLinkStatus(first)).toEqual({ state: 'invalid' });
+
+    await expect(api.startEligibilityByPhone('nope', true)).rejects.toThrow('geçersiz');
+    await expect(api.startEligibilityByPhone(token, false)).rejects.toThrow('açık rıza');
+    const running = await api.startEligibilityByPhone(token, true);
+    expect(running.state).toBe('running');
+    app = (await api.login(email, 'Nova-Lab-2026!')).app!;
+    expect(app.eligibility!.via).toBe('phone');
+    expect(app.phoneLink!.usedAt).toBe(app.eligibility!.startedAt);
+    expect(app.logs.at(-1)!.text).toContain('telefondan');
+    // The status tells the phone nothing about the founder.
+    expect(Object.keys(running).sort()).toEqual(['startedAt', 'state']);
+    await expect(api.createPhoneLink(email)).rejects.toThrow('zaten');
+
+    // The phone does the camera check only; the declaration is made on the computer.
+    expect(await api.completeIdentityByPhone(token)).toEqual({ state: 'done' });
+    expect((await api.login(email, 'Nova-Lab-2026!')).app!.stage).toBe('declaration');
+  });
+
+  it('lets a phone link run out, and cancels it when the check starts on the computer', async () => {
+    const email = 'ayse@novalab.io';
+    await verifiedFounder(email);
+    await api.uploadDeck(email, { name: 'novalab-deck.pdf', size: 1000 });
+    await api.completeScan(email);
+    await api.submitReview(email);
+    let app = await api.createPhoneLink(email);
+    const token = app.phoneLink!.token;
+    const realNow = Date.now;
+    Date.now = () => realNow() + 11 * 60_000;
+    try {
+      expect(await api.phoneLinkStatus(token)).toEqual({ state: 'expired' });
+      await expect(api.startEligibilityByPhone(token, true)).rejects.toThrow('süresi dolmuştur');
+    } finally {
+      Date.now = realNow;
+    }
+    app = await api.startEligibility(email, true);
+    expect(app.phoneLink).toBeUndefined();
+    expect(await api.phoneLinkStatus(token)).toEqual({ state: 'invalid' });
+  });
+
+  it('asks for consent before the video call can start', async () => {
+    const { account } = await api.seed('signing');
+    await expect(api.startCall(account.email)).rejects.toThrow('ön bilgilendirmeyi');
+    await expect(api.acceptCallTerms(account.email, false)).rejects.toThrow('onay metnini');
+    let app = await api.acceptCallTerms(account.email, true);
+    expect(app.callConsentAt).toBeTruthy();
+    expect(app.logs.at(-1)!.who).toBe('u');
+    app = await api.startCall(account.email);
+    expect(app.stage).toBe('calling');
+    // A call that was ended does not ask again.
+    app = await api.endCall(account.email);
+    expect(app.callConsentAt).toBeTruthy();
+    expect((await api.startCall(account.email)).stage).toBe('calling');
+  });
+
   it('sends third-party funding to manual review, and runs payment with 3-D Secure', async () => {
     const email = 'ayse@novalab.io';
     await verifiedFounder(email);
@@ -121,7 +194,34 @@ describe('MockApi flow', () => {
     await api.updateReview(email, { funding: 'third-party' }, ['funding']);
     let app = await api.submitReview(email);
     expect(app.stage).toBe('eligibility');
-    app = await api.completeEligibility(email);
+    // The identity check waits for the founder: nothing runs before "Doğrulamayı başlat".
+    expect(app.eligibility).toBeUndefined();
+    await expect(api.completeIdentity(email)).rejects.toThrow('başlatılmamıştır');
+    await expect(api.startEligibility(email, false)).rejects.toThrow('açık rıza');
+    app = await api.startEligibility(email, true);
+    expect(app.eligibility!.result).toBe('manual');
+    expect(app.eligibility!.consentAt).toBe(app.eligibility!.startedAt);
+    expect(app.logs.slice(-2).map((l) => l.who)).toEqual(['u', 'u']);
+    expect(app.logs.at(-2)!.text).toContain('Açık rıza');
+    const startedAt = app.eligibility!.startedAt;
+    app = await api.startEligibility(email, true);
+    expect(app.eligibility!.startedAt).toBe(startedAt);
+    // Three stages, three screens: camera check, then the founder's declaration, then the list search.
+    app = await api.completeIdentity(email);
+    expect(app.stage).toBe('declaration');
+    expect(app.eligibility!.identityDoneAt).toBeTruthy();
+    const pdf = { name: 'fatura.pdf', size: 300_000 };
+    await expect(api.submitDeclaration(email, { file: null, declared: true })).rejects.toThrow('yükleyiniz');
+    await expect(api.submitDeclaration(email, { file: { name: 'fatura.docx', size: 1 }, declared: true })).rejects.toThrow('PDF, JPG veya PNG');
+    await expect(api.submitDeclaration(email, { file: { name: 'fatura.pdf', size: 11 * 1024 * 1024 }, declared: true })).rejects.toThrow('10 MB');
+    await expect(api.submitDeclaration(email, { file: pdf, declared: false })).rejects.toThrow('beyanı onaylayınız');
+    app = await api.submitDeclaration(email, { file: pdf, declared: true });
+    expect(app.stage).toBe('screening');
+    expect(app.eligibility!.address!.fileName).toBe('fatura.pdf');
+    expect(app.eligibility!.declaredAt).toBe(app.eligibility!.screeningStartedAt);
+    expect(app.logs.slice(-2).map((l) => l.who)).toEqual(['u', 'u']);
+    expect(app.docs.length).toBe(0);
+    app = await api.completeScreening(email);
     expect(app.stage).toBe('manual');
     expect(app.docs.length).toBe(3);
     await api.proceedToPayment(email);
@@ -146,6 +246,22 @@ describe('MockApi flow', () => {
     expect(again.app.id).toBe(first.app.id);
   });
 
+  it('starts at the deck upload and moves an application saved at the removed profile form there', async () => {
+    const email = 'ayse@novalab.io';
+    expect((await verifiedFounder(email)).stage).toBe('verified');
+    // An application saved before 2026-11-20, waiting on D-1e with a statement and its comparison.
+    const db = JSON.parse(localStorage.getItem('dsp.db.v1')!);
+    Object.assign(db.apps[email], { stage: 'profile', profile: { brand: 'Novalab' }, crossCheck: [] });
+    localStorage.setItem('dsp.db.v1', JSON.stringify(db));
+    const { app } = await api.login(email, 'Nova-Lab-2026!');
+    expect(app!.stage).toBe('verified');
+    expect('profile' in app!).toBe(false);
+    expect('crossCheck' in app!).toBe(false);
+    await api.uploadDeck(email, { name: 'novalab-deck.pdf', size: 1000 });
+    await api.completeScan(email);
+    expect((await api.submitReview(email)).stage).toBe('eligibility');
+  });
+
   it('reads the downloadable sample deck exactly as written on its slides', async () => {
     const email = 'ayse@novalab.io';
     await verifiedFounder(email);
@@ -154,14 +270,26 @@ describe('MockApi flow', () => {
     expect(app.company.nace).toEqual(['62.01', '63.11', '62.02']);
     expect(app.founder.nationality).toBe('Almanya');
     expect(app.contact.phone).toBe('+49 151 2345 6789');
-    expect(app.deck!.pages).toBe(9);
+    expect(app.deck!.pages).toBe(16);
     expect(Object.values(app.marks)).not.toContain('check');
+  });
+
+  it('starts the formation only after the founder confirmed the signing', async () => {
+    const { account } = await api.seed('signed');
+    await expect(api.startSetup(account.email, false)).rejects.toThrow('imzalanmasını onaylayınız');
+    const app = await api.startSetup(account.email, true);
+    expect(app.stage).toBe('setup');
+    expect(app.setup!.signConsentAt).toBe(app.setup!.startedAt);
+    expect(app.logs.slice(-2).map((l) => l.text)).toEqual(['Kuruluş belgelerinin e-imza ile imzalanması onaylandı', 'Kuruluş başlatıldı']);
+    // T.C. citizens choose their e-signature first and then confirm on the same screen.
+    const resident = await api.seed('signing', 'resident');
+    expect((await api.signResident(resident.account.email, 'existing')).stage).toBe('signed');
   });
 
   it('refuses actions that do not belong to the current stage', async () => {
     const email = 'ayse@novalab.io';
     await verifiedFounder(email);
-    await expect(api.startSetup(email)).rejects.toThrow('adımında');
+    await expect(api.startSetup(email, true)).rejects.toThrow('adımında');
   });
 
   it('seeds the demo founder at any stage, including the finished company', async () => {

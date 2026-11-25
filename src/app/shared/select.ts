@@ -79,14 +79,15 @@ let uid = 0;
   `,
   styles: `
     :host { position: relative; display: block; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+    /* Same box as the wizard's text fields (.wz-input): 42 px, 10 px corners, the same border and type. */
     .field {
-      width: 100%; height: 44px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 0 12px;
-      border: 1px solid var(--bd-D6DEEE); border-radius: 9px; background: var(--bg-FFFFFF); cursor: pointer; text-align: left;
-      font: 500 15px/20px 'IBM Plex Sans', sans-serif; color: var(--fg-061262); transition: border-color .15s, box-shadow .15s;
+      width: 100%; height: 42px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 0 12px;
+      border: 1px solid var(--bd-C9D2E3); border-radius: 10px; background: var(--bg-FFFFFF); cursor: pointer; text-align: left;
+      font: 400 14.5px/20px 'IBM Plex Sans', sans-serif; color: var(--fg-1F2A44); transition: border-color .15s;
     }
     .field.compact { height: 36px; border-radius: 8px; font-size: 13px; padding: 0 10px; }
-    .field:hover:not(:disabled) { border-color: var(--bd-C9D2E3); }
-    .field.open, .field:focus-visible { border-color: var(--bd-061262); box-shadow: 0 0 0 3px rgba(6, 18, 98, .14); outline: 0; }
+    .field:hover:not(:disabled) { border-color: var(--bd-5B6478); }
+    .field.open, .field:focus-visible { border-color: var(--bd-061262); outline: 0; }
     .field:disabled { opacity: .6; cursor: default; }
     .text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .placeholder { color: var(--fg-8A93A6); font-weight: 400; }
@@ -94,8 +95,8 @@ let uid = 0;
     .field.open .chev { transform: rotate(180deg); }
     .list {
       position: fixed; z-index: 1200; box-sizing: border-box; margin: 0; padding: 4px; list-style: none; overflow: auto; outline: 0;
-      background: var(--bg-FFFFFF); border: 1px solid var(--bd-E5E7EB); border-radius: 12px;
-      box-shadow: 0 18px 44px -18px rgba(6, 18, 98, .4); animation: in .14s cubic-bezier(.2, .8, .2, 1) both;
+      background: var(--bg-FFFFFF); border: 1px solid var(--bd-C9D2E3); border-radius: 12px;
+      animation: in .14s cubic-bezier(.2, .8, .2, 1) both;
     }
     li { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; cursor: pointer; }
     li.active { background: var(--bg-F1F4FA); }

@@ -5,17 +5,12 @@
 @let curLabel = vals().curLabel;
 @let curSub = vals().curSub;
 @if (full) {
-<ol aria-label="Başvuru adımları" style="list-style:none;margin:0;background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:14px;padding:14px 20px;display:flex;align-items:center;font-family:'IBM Plex Sans',system-ui,sans-serif">
+<ol class="steps" aria-label="Başvuru adımları">
   @for (s of steps; track $index) {
-    <li [attr.aria-current]="s.aria" [attr.style]="`display:flex;align-items:center;gap:10px;flex:${s.flex};min-width:0`">
-      @if (s.done) {<span style="width:28px;height:28px;border-radius:50%;background:var(--bg-15803D);color:var(--fg-FFFFFF);display:grid;place-items:center;flex:none"><app-icon name="check" size="15px" [stroke]="2.6" /></span>}
-      @if (s.current) {<span style="width:28px;height:28px;border-radius:50%;background:var(--bg-061262);color:var(--fg-FFFFFF);display:grid;place-items:center;flex:none;font:600 13px/1 'IBM Plex Sans',sans-serif;box-shadow:0 0 0 4px var(--bd-DCE6FF)">{{ s.n }}</span>}
-      @if (s.upcoming) {<span style="width:28px;height:28px;border-radius:50%;background:var(--bg-FFFFFF);border:1.5px solid var(--bd-C9D2E3);color:var(--fg-5B6478);display:grid;place-items:center;flex:none;box-sizing:border-box;font:600 13px/1 'IBM Plex Sans',sans-serif">{{ s.n }}</span>}
-      <span style="display:flex;flex-direction:column;min-width:0">
-        <span style="font:600 10.5px/14px 'IBM Plex Sans',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-5B6478)">{{ s.state }}</span>
-        <span [attr.style]="`font:600 14px/20px 'IBM Plex Sans',sans-serif;color:${s.labelColor};white-space:nowrap`">{{ s.label }}<span style="color:var(--fg-061262);font-weight:500"> {{ s.sub }}</span></span>
-      </span>
-      @if (s.line) {<span aria-hidden="true" [attr.style]="`flex:1;height:2px;min-width:16px;margin:0 14px 0 6px;border-radius:2px;background:${s.lineColor}`"></span>}
+    <li [attr.aria-current]="s.aria" [class.done]="s.done" [class.cur]="s.current">
+      <span class="bar" [class.parts]="s.parts" aria-hidden="true">@for (on of s.parts ?? []; track $index) {<i [class.on]="on"></i>}</span>
+      <span class="lbl">@if (s.done) {<app-icon name="check" size="11px" [stroke]="3" /><span class="sr">Tamamlandı: </span>} @else {<span>{{ s.n }}.</span>}{{ s.label }}</span>
+      @if (s.cap) {<span class="cap">{{ s.cap }}<span class="sr">{{ s.partText }}</span></span>}
     </li>
   }
 </ol>

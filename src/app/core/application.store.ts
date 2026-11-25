@@ -4,14 +4,16 @@ import { DemoSettings } from './demo-settings';
 import { pdfBytes, zipBytes } from './files';
 import { dateTime, initials } from './format';
 import { ApiError, MockApi, ReviewPatch } from './mock-api';
-import { Account, Application, DocItem, FounderType, LogEntry, Stage, stepOf } from './models';
+import { Account, Application, DocItem, FounderType, LogEntry, PhoneLinkStatus, Stage, stepOf } from './models';
 import {
   callView,
   DURATION,
-  eligibilityEvents,
-  eligibilityView,
+  identityEvents,
+  identityView,
   progress,
   scanView,
+  screeningEvents,
+  screeningView,
   setupEvents,
   setupView,
 } from './timeline';
@@ -35,6 +37,10 @@ export function routeFor(stage: Stage | null, founderType: FounderType = 'foreig
       return '/deck/name-rejected';
     case 'eligibility':
       return '/eligibility';
+    case 'declaration':
+      return '/eligibility/declaration';
+    case 'screening':
+      return '/eligibility/screening';
     case 'eligible':
       return '/eligibility/result';
     case 'manual':
@@ -107,11 +113,20 @@ export class ApplicationStore {
     return scanView(a, p);
   });
 
-  readonly eligibility = computed(() => {
+  /** Step 2's camera check; null until the founder has started it. */
+  readonly identity = computed(() => {
     const a = this.app();
     if (!a?.eligibility) return null;
-    const p = a.stage === 'eligibility' ? progress(a.eligibility.startedAt, this.dur(DURATION.eligibility), this.now()) : 1;
-    return eligibilityView(p);
+    const p = a.stage === 'eligibility' ? progress(a.eligibility.startedAt, this.dur(DURATION.identity), this.now()) : 1;
+    return identityView(p);
+  });
+
+  /** Step 2's list search; null before the declaration is confirmed. */
+  readonly screening = computed(() => {
+    const a = this.app();
+    if (!a?.eligibility?.screeningStartedAt) return null;
+    const p = a.stage === 'screening' ? progress(a.eligibility.screeningStartedAt, this.dur(DURATION.screening), this.now()) : 1;
+    return screeningView(p);
   });
 
   readonly call = computed(() => {
@@ -150,10 +165,22 @@ export class ApplicationStore {
       if (!a) return;
       const done =
         (a.stage === 'scanning' && this.scan()?.p === 1) ||
-        (a.stage === 'eligibility' && this.eligibility()?.p === 1) ||
+        (a.stage === 'eligibility' && this.identity()?.p === 1) ||
+        (a.stage === 'screening' && this.screening()?.p === 1) ||
         (a.stage === 'calling' && this.call()?.p === 1) ||
         (a.stage === 'setup' && this.setup()?.p === 1);
       if (done) untracked(() => this.complete(a.stage));
+    });
+    // The same for a check that runs on the phone page.
+    let finishing = false;
+    effect(() => {
+      if (this.phoneCheck()?.p !== 1 || finishing) return;
+      finishing = true;
+      untracked(() => void this.finishByPhone().finally(() => (finishing = false)));
+    });
+    // Another tab or device moved the application on (the phone page starts the identity check): pick it up.
+    addEventListener('storage', (e) => {
+      if (e.key === 'dsp.db.v1') this.restore();
     });
   }
 
@@ -198,17 +225,58 @@ export class ApplicationStore {
   updateReview = (patch: ReviewPatch, edited: string[]) => this.update(() => this.api.updateReview(this.email(), patch, edited));
   submitReview = () => this.update(() => this.api.submitReview(this.email()));
   chooseTitle = (title: string) => this.update(() => this.api.chooseTitle(this.email(), title));
+  /** D-2a: the founder read the pre-information, ticked the consent and starts the identity check. */
+  startEligibility = (consent: boolean) => this.update(() => this.api.startEligibility(this.email(), consent));
+  /** D-2d: the address document and the confirmed declaration; the list search starts. */
+  submitDeclaration = (input: { file: { name: string; size: number } | null; declared: boolean }) =>
+    this.update(() => this.api.submitDeclaration(this.email(), input));
+  /** D-2a "Telefonla devam et": make (or renew) the link the QR code carries. */
+  createPhoneLink = () => this.update(() => this.api.createPhoneLink(this.email()));
   backToReview = () => this.update(() => this.api.backToReview(this.email()));
   proceedToPayment = () => this.update(() => this.api.proceedToPayment(this.email()));
   pay = (card: { holder: string; number: string; expiry: string; cvv: string }) => this.update(() => this.api.pay(this.email(), card));
   resendOtp = () => this.update(() => this.api.resendOtp(this.email()));
   cancel3ds = () => this.update(() => this.api.cancel3ds(this.email()));
   confirm3ds = (code: string) => this.update(() => this.api.confirm3ds(this.email(), code));
+  /** D-4a pre-information: the consent tick and "Devam et". */
+  acceptCallTerms = (consent: boolean) => this.update(() => this.api.acceptCallTerms(this.email(), consent));
   startCall = () => this.update(() => this.api.startCall(this.email()));
   endCall = () => this.update(() => this.api.endCall(this.email()));
   signResident = (method: 'existing' | 'edevlet') => this.update(() => this.api.signResident(this.email(), method));
-  startSetup = () => this.update(() => this.api.startSetup(this.email()));
+  /** D-4c: the founder confirmed that the documents are signed with their e-signature, and starts the formation. */
+  startSetup = (confirmed: boolean) => this.update(() => this.api.startSetup(this.email(), confirmed));
   ask = (q: string) => this.api.ask(q);
+
+  // ------------------------------------------------- identity check on the phone (D-2a-m)
+  // The phone page works from its link alone: it has no session and none of the signals above.
+
+  private phoneToken = '';
+  /** Where the phone page's link stands; null while it is being looked up. */
+  readonly phone = signal<PhoneLinkStatus | null>(null);
+  /** The running check as the phone page shows it. */
+  readonly phoneCheck = computed(() => {
+    const s = this.phone();
+    return s?.state === 'running' ? identityView(progress(s.startedAt, this.dur(DURATION.identity), this.now())) : null;
+  });
+
+  async openPhoneLink(token: string) {
+    this.phoneToken = token;
+    this.phone.set(null);
+    this.phone.set(await this.api.phoneLinkStatus(token));
+  }
+
+  startByPhone = (consent: boolean) => this.run(async () => this.phone.set(await this.api.startEligibilityByPhone(this.phoneToken, consent)));
+
+  private async finishByPhone() {
+    const token = this.phoneToken;
+    try {
+      this.phone.set(await this.api.completeIdentityByPhone(token));
+    } catch (e) {
+      // The computer's page may have finished it first.
+      if (!(e instanceof ApiError)) throw e;
+      this.phone.set(await this.api.phoneLinkStatus(token));
+    }
+  }
 
   /** Demo panel: create the demo founder at a given stage and sign in as them. */
   async seed(stage: Stage, founderType: FounderType = 'foreign') {
@@ -236,7 +304,7 @@ export class ApplicationStore {
       `Belge grubu: ${d.group}`,
       `Olusturulma: ${dateTime(d.at)}`,
       '',
-      'Bu belge Dijital Sirket Platformu prototipinde uretilmis ornek bir dosyadir.',
+      'Bu belge Terminal Sirket prototipinde uretilmis ornek bir dosyadir.',
     ]);
   }
 
@@ -256,7 +324,8 @@ export class ApplicationStore {
     try {
       const fn = {
         scanning: () => this.api.completeScan(email),
-        eligibility: () => this.api.completeEligibility(email),
+        eligibility: () => this.api.completeIdentity(email),
+        screening: () => this.api.completeScreening(email),
         calling: () => this.api.completeCall(email),
         setup: () => this.api.completeSetup(email),
       }[stage as 'scanning'];
@@ -273,8 +342,10 @@ export class ApplicationStore {
   private liveEvents(a: Application): { logs: LogEntry[]; docs: DocItem[] } {
     const now = this.now();
     if (a.stage === 'eligibility' && a.eligibility) {
-      const ev = eligibilityEvents(a, this.dur(DURATION.eligibility));
-      return { logs: ev.logs.filter((l) => Date.parse(l.at) <= now), docs: [] };
+      return { logs: identityEvents(a, this.dur(DURATION.identity)).filter((l) => Date.parse(l.at) <= now), docs: [] };
+    }
+    if (a.stage === 'screening' && a.eligibility) {
+      return { logs: screeningEvents(a, this.dur(DURATION.screening)).logs.filter((l) => Date.parse(l.at) <= now), docs: [] };
     }
     if (a.stage === 'setup' && a.setup) {
       return setupEvents(a, this.setup()?.p ?? 0, this.dur(DURATION.setup));
