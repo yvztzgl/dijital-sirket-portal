@@ -35,7 +35,7 @@ describe('HttpApi', () => {
 
   it('has no demo tools and rejects a call that is not connected yet', async () => {
     expect(api.demo).toBeNull();
-    const error = await api.pay().catch((e: unknown) => e);
+    const error = await api.startSetup().catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).message).toBe('Bu işlem henüz sunucuya bağlanmadı.');
     expect((error as ApiError).code).toBe('not_connected');
@@ -637,5 +637,146 @@ describe('HttpApi step 2', () => {
     (await next('GET', '/api/application/status')).flush(CAPTURED.closed, { status: 404, statusText: 'Not Found' });
     expect(((await failed) as ApiError).code).toBe('no_application');
     backend.expectNone((r) => r.method === 'POST');
+  });
+});
+
+describe('HttpApi second factor and step 3', () => {
+  let api: HttpApi;
+  let backend: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(withInterceptors([markApiWrites])), provideHttpClientTesting()],
+    });
+    api = TestBed.inject(HttpApi);
+    backend = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => backend.verify());
+
+  async function next(method: string, url: string) {
+    await new Promise((resolve) => setTimeout(resolve));
+    const req = backend.expectOne(url);
+    expect(req.request.method).toBe(method);
+    return req;
+  }
+
+  async function read(view: ApplicationWire, changedAt = 't1') {
+    (await next('GET', '/api/application/status')).flush({ stage: view.stage, changedAt });
+    (await next('GET', '/api/application')).flush(view);
+  }
+
+  async function signedInAt(view: ApplicationWire) {
+    const pending = api.restore();
+    (await next('GET', '/api/me')).flush({ ...ME, firstName: 'Deneme', lastName: 'Kurucu', email: 'kurucu@example.test' });
+    await read(view);
+    await pending;
+  }
+
+  const empty = (status: number) => [null, { status, statusText: 'x' }] as const;
+  const problem = (p: { status: number }) => [p, { status: p.status, statusText: 'x' }] as const;
+  const CARD = { holder: ' Deneme Kurucu ', number: '4242 4242 4242 4242', expiry: '12/30', cvv: '987' };
+
+  it('asks for a step-up code with an empty body and sends the code in the body only', async () => {
+    const send = api.sendStepUpCode();
+    const post = await next('POST', '/api/auth/step-up');
+    expect(post.request.body).toBeNull();
+    expect(post.request.headers.get('X-DSP-Request')).toBe('1');
+    post.flush(...empty(202));
+    await send;
+
+    const verify = api.verifyStepUpCode('482913');
+    const check = await next('POST', '/api/auth/step-up/verify');
+    expect(check.request.urlWithParams).toBe('/api/auth/step-up/verify');
+    expect(check.request.body).toEqual({ code: '482913' });
+    check.flush(...empty(204));
+    await verify;
+  });
+
+  it('passes on a wrong step-up code with its field, and a refused action as step_up_required', async () => {
+    const wrong = api.verifyStepUpCode('000000').catch((e: unknown) => e);
+    (await next('POST', '/api/auth/step-up/verify')).flush(...problem(CAPTURED.stepUpWrongCode));
+    expect(((await wrong) as ApiError).fields).toEqual({ code: ['Kod hatalı veya süresi dolmuş.'] });
+
+    await signedInAt(CAPTURED.paymentOpen);
+    const refused = api.pay(CARD).catch((e: unknown) => e);
+    (await next('POST', '/api/application/payment')).flush(...problem(CAPTURED.stepUpRequired));
+    expect(await refused).toMatchObject({ code: 'step_up_required', status: 403 });
+  });
+
+  it('pays with exactly { holder, cardToken }: the card number, expiry and CVV are sent nowhere and kept nowhere', async () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    await signedInAt(CAPTURED.paymentOpen);
+    const pending = api.pay(CARD);
+    const post = await next('POST', '/api/application/payment');
+    expect(post.request.body).toEqual({ holder: 'Deneme Kurucu', cardToken: 'tok_test_4242' });
+    expect(Object.keys(post.request.body)).toEqual(['holder', 'cardToken']);
+    const sent = JSON.stringify(post.request.body) + post.request.urlWithParams + JSON.stringify(post.request.headers.keys().map((k) => post.request.headers.get(k)));
+    for (const secret of ['4242 4242 4242 4242', '4242424242424242', '12/30', '987']) expect(sent).not.toContain(secret);
+    post.flush(...empty(204));
+    await read(CAPTURED.payment3dsPending);
+    const app = await pending;
+    expect(app.stage).toBe('threeDs');
+    // Only the holder and the last four digits are remembered, for D-3b.
+    expect(app.payment).toEqual({ holder: 'DENEME KURUCU', last4: '4242', amount: 12_750 });
+    expect(api['card']).toEqual({ applicationId: CAPTURED.payment3dsPending.id, holder: 'DENEME KURUCU', last4: '4242' });
+    const everything = JSON.stringify(app) + JSON.stringify(api['card']) + JSON.stringify(api['view']);
+    for (const secret of ['4242 4242 4242 4242', '4242424242424242', '12/30', '987']) expect(everything).not.toContain(secret);
+    expect(setItem).not.toHaveBeenCalled();
+    setItem.mockRestore();
+  });
+
+  it('forgets the card after a reload: the API never returns it', async () => {
+    await signedInAt(CAPTURED.paymentOpen);
+    const pending = api.pay(CARD);
+    (await next('POST', '/api/application/payment')).flush(...empty(204));
+    await read(CAPTURED.payment3dsPending);
+    await pending;
+    // A reload is a new page: a new HttpApi with nothing in memory.
+    const reloaded = TestBed.runInInjectionContext(() => new HttpApi());
+    const restore = reloaded.restore();
+    (await next('GET', '/api/me')).flush(ME);
+    await read(CAPTURED.payment3dsPending);
+    expect((await restore)!.app!.payment).toEqual({ holder: '', last4: '', amount: 12_750 });
+  });
+
+  it('passes on a declined card as the API words it', async () => {
+    await signedInAt(CAPTURED.paymentOpen);
+    const refused = api.pay({ ...CARD, number: '4000 0000 0000 0002' }).catch((e: unknown) => e);
+    const post = await next('POST', '/api/application/payment');
+    expect(post.request.body).toEqual({ holder: 'Deneme Kurucu', cardToken: 'tok_test_0002' });
+    post.flush(...problem(CAPTURED.cardDeclined));
+    expect(await refused).toMatchObject({ code: 'card_declined', message: 'Kartınızdan ödeme alınamadı. Lütfen başka bir kart deneyiniz.' });
+  });
+
+  it('confirms, resends and cancels 3-D Secure, reading the application after each', async () => {
+    await signedInAt(CAPTURED.payment3dsPending);
+    const wrong = api.confirm3ds('000000').catch((e: unknown) => e);
+    const first = await next('POST', '/api/application/payment/3ds');
+    expect(first.request.body).toEqual({ code: '000000' });
+    first.flush(...problem(CAPTURED.threeDsWrongCode));
+    expect(await wrong).toMatchObject({ code: '3ds_failed', message: 'Doğrulama kodu hatalı.' });
+
+    let pending = api.resendOtp();
+    const resend = await next('POST', '/api/application/payment/3ds/resend');
+    expect(resend.request.body).toBeNull();
+    expect(resend.request.headers.get('X-DSP-Request')).toBe('1');
+    resend.flush(...empty(204));
+    await read(CAPTURED.payment3dsPending, 't2');
+    expect((await pending).stage).toBe('threeDs');
+
+    pending = api.cancel3ds();
+    (await next('POST', '/api/application/payment/3ds/cancel')).flush(...empty(204));
+    await read(CAPTURED.paymentCancelled, 't3');
+    const cancelled = await pending;
+    expect(cancelled.stage).toBe('payment');
+    expect(cancelled.payment).toBeUndefined();
+
+    pending = api.confirm3ds(' 123456 ');
+    const ok = await next('POST', '/api/application/payment/3ds');
+    expect(ok.request.body).toEqual({ code: '123456' });
+    ok.flush(...empty(204));
+    await read(CAPTURED.paymentCaptured, 't4');
+    expect((await pending).stage).toBe('signing');
   });
 });

@@ -1,0 +1,7 @@
+{
+  "type": "https://httpstatuses.io/422",
+  "title": "Kartınızdan ödeme alınamadı. Lütfen başka bir kart deneyiniz.",
+  "status": 422,
+  "code": "card_declined",
+  "requestId": "01a2127b-bd0e-7b7d-b93e-6eae6283d3d5"
+}

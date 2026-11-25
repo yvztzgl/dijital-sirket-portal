@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ApplicationStore } from '../core/application.store';
 import { SCREEN_GROUPS, SCREENS } from '../screens/screens';
 import { DemoNav } from './demo-nav';
 
@@ -32,6 +33,20 @@ import { DemoNav } from './demo-nav';
           </ul>
         </section>
       }
+      <section class="group">
+        <h2>Pencereler</h2>
+        <ul>
+          <li>
+            <!-- The mock never asks for a second factor by itself; this opens the dialog with no action behind it. -->
+            <a href="#" (click)="$event.preventDefault(); store.previewStepUp()">
+              <span class="tag">D-SU</span>
+              <span class="title">İkinci doğrulama</span>
+              <span class="desc">Ödeme, e-imza görüşmesi ve kuruluşun başlatılması öncesinde API, son 15 dakikada e-postayla gelen kodun girilmesini ister. Kod gelince işlem kendiliğinden tekrarlanır. Demoda kod gelen kutusunda görünür.</span>
+              <span class="path">pencere</span>
+            </a>
+          </li>
+        </ul>
+      </section>
     </main>
   `,
   styles: `
@@ -55,4 +70,5 @@ export class ScreenIndex {
   protected readonly groups = SCREEN_GROUPS;
   protected readonly screens = SCREENS;
   protected readonly nav = inject(DemoNav);
+  protected readonly store = inject(ApplicationStore);
 }

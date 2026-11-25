@@ -60,6 +60,18 @@ export abstract class Api {
   /** The set-new-password screen: the token from the e-mailed link and the new password. Does not sign in. */
   abstract confirmPasswordReset(token: string, password: string): Promise<void>;
 
+  // second factor ("step-up")
+  // The API refuses the payment, the start of the e-signature call, the resident's signing and the
+  // start of the formation with 403 `step_up_required` unless this session passed an e-mailed code
+  // in the last 15 minutes. `ApplicationStore.run` then asks for the code and repeats the action
+  // once (docs/api-client.md). The mock demands no second factor; its two methods exist only so the
+  // dialog can be shown from the `/screens` demo index.
+
+  /** E-mails a six-digit code. Within 60 s of the last one the server silently sends nothing. 409 `no_email`. */
+  abstract sendStepUpCode(): Promise<void>;
+  /** Refused with the field `code` when the code is wrong or expired. */
+  abstract verifyStepUpCode(code: string): Promise<void>;
+
   // Everything below acts on the signed-in founder's application. Without a session they reject
   // with an ApiError whose code is `unauthenticated`.
 
@@ -119,6 +131,11 @@ export abstract class Api {
   abstract completeIdentityByPhone(token: string): Promise<PhoneLinkStatus>;
 
   // step 3 · payment
+  /**
+   * D-3a. The card fields are the portal's own form, checked in the browser. The mock takes them as
+   * they are; the HTTP client sends only the holder and a card token, never the number, expiry or
+   * CVV (see `HttpApi.pay`).
+   */
   abstract pay(card: { holder: string; number: string; expiry: string; cvv: string }): Promise<Application>;
   abstract resendOtp(): Promise<Application>;
   abstract cancel3ds(): Promise<Application>;

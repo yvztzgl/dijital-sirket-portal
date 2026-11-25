@@ -317,9 +317,14 @@ export class UygunlukData {
   protected readonly card = signal({ holder: '', number: '', expiry: '', cvv: '' });
   protected readonly cardTried = signal(false);
   protected readonly feesOpen = signal(false);
-  protected readonly fees = FEES.map((f) => ({ label: f.label, amount: tl(f.amount) }));
-  protected readonly total = computed(() => tl(this.store.app()?.payment?.amount ?? FEES.reduce((s, f) => s + f.amount, 0)));
-  protected readonly totalNumber = computed(() => this.total().replace(' TL', ''));
+  /**
+   * The fee lines and the total. In HTTP mode they are the API's (`Application.fees`, from
+   * `payment.fees`, and the payment's own amount once started); the mock has no `fees` and uses the
+   * portal's `FEES`.
+   */
+  private readonly feeList = computed(() => this.store.app()?.fees ?? FEES);
+  protected readonly fees = computed(() => this.feeList().map((f) => ({ label: f.label, amount: tl(f.amount) })));
+  protected readonly total = computed(() => tl(this.store.app()?.payment?.amount ?? this.feeList().reduce((s, f) => s + f.amount, 0)));
   protected readonly capital = computed(() => tl0(this.store.app()?.company.capital ?? 250_000));
 
   protected setCard(key: 'holder' | 'number' | 'expiry' | 'cvv', e: Event) {
@@ -343,6 +348,10 @@ export class UygunlukData {
 
   protected readonly cardError = computed(() => (this.cardTried() ? validateCard(this.card()) : null));
 
+  /**
+   * "Test kartını doldur" only fills this form, in both modes. In HTTP mode the development payment
+   * provider then gets `tok_test_4242` (see HttpApi.pay); nothing else is different.
+   */
   protected useTestCard() {
     this.card.set({ holder: this.store.fullName().toLocaleUpperCase('tr-TR'), number: '4242 4242 4242 4242', expiry: '12/30', cvv: '123' });
   }
@@ -357,7 +366,14 @@ export class UygunlukData {
 
   protected readonly otp = signal('');
   protected readonly payment = computed(() => this.store.app()?.payment);
-  protected readonly maskedCard = computed(() => maskCard(this.payment()?.last4 ?? '0000'));
+  /**
+   * Empty in HTTP mode after a reload: the API never returns the card's last digits, and the portal
+   * keeps them only in memory (HttpApi). D-3b then leaves the card row out.
+   */
+  protected readonly maskedCard = computed(() => {
+    const last4 = this.payment()?.last4;
+    return this.demoMode ? maskCard(last4 ?? '0000') : last4 ? maskCard(last4) : '';
+  });
   protected readonly maskedPhone = computed(() => maskPhone(this.store.app()?.contact.phone || '+00 0000'));
   protected readonly txTime = computed(() => (this.payment()?.otpSentAt ? dateTime(this.payment()!.otpSentAt!) : ''));
   protected readonly otpLeft = computed(() => {
@@ -365,7 +381,10 @@ export class UygunlukData {
     return sent ? Math.max(0, OTP_TTL - (this.store.now() - Date.parse(sent))) : 0;
   });
   protected readonly otpLeftLabel = computed(() => clock(this.otpLeft()));
-  protected readonly sms = computed(() => this.inbox.messages().find((m) => m.kind === 'sms') ?? null);
+  /** The mock's SMS, mirrored beside the bank's page. HTTP mode has no code to show: the bank sends it. */
+  protected readonly sms = computed(() => (this.demoMode ? (this.inbox.messages().find((m) => m.kind === 'sms') ?? null) : null));
+  /** HTTP mode: "Kodu tekrar gönder" was answered (nothing on screen changes otherwise). */
+  protected readonly otpResent = signal(false);
 
   protected confirm(code = this.otp()) {
     if (!/^\d{6}$/.test(code)) {
@@ -375,9 +394,11 @@ export class UygunlukData {
     void this.store.confirm3ds(code);
   }
 
-  protected resendOtp() {
+  protected async resendOtp() {
     this.otp.set('');
-    void this.store.resendOtp();
+    this.otpResent.set(false);
+    const ok = await this.store.resendOtp();
+    if (!this.demoMode) this.otpResent.set(ok);
   }
 
   protected cancel3ds() {

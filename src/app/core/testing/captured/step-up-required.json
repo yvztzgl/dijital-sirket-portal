@@ -1,0 +1,7 @@
+{
+  "type": "https://httpstatuses.io/403",
+  "title": "Bu işlem için e-posta adresinize gönderilen kodu girmeniz gerekir.",
+  "status": 403,
+  "code": "step_up_required",
+  "requestId": "01a2127b-ba30-7e4d-b1ed-ebb673ca2998"
+}

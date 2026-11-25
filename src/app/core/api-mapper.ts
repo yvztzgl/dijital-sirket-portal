@@ -42,6 +42,12 @@ const SAME_STAGES: string[] = [
 export interface MapOptions {
   /** The founder pressed "Ödemeye geç" on the result screen in this page's life (HttpApi keeps it in memory). */
   resultSeen?: boolean;
+  /**
+   * The card holder and the card's last four digits as typed on this page for this application.
+   * The API returns neither (its `last4` is always null), so HttpApi keeps them in memory for the
+   * session; after a reload the screens show no card.
+   */
+  card?: { holder: string; last4: string };
 }
 
 /**
@@ -106,9 +112,7 @@ export function toApplication(view: ApplicationWire, account: Account, options: 
     crossCheck: view.crossCheck.map(toCrossCheck),
     titleCheck: toTitleCheck(view.titleCheck),
     eligibility: toEligibility(view),
-    payment: view.payment.status
-      ? { holder: '', last4: view.payment.last4 ?? '', amount: view.payment.amountMinor / 100, paidAt: view.payment.paidAt ?? undefined }
-      : undefined,
+    payment: toPayment(view.payment, options.card),
     fees: view.payment.fees.map((f) => ({ code: f.code, label: f.label, amount: f.amountMinor / 100 })),
     callConsentAt: view.callConsentAt ?? undefined,
     signature: view.signature
@@ -128,7 +132,8 @@ export function toApplication(view: ApplicationWire, account: Account, options: 
 /**
  * The portal's result screen (D-2b, stage `eligible`) as a one-time acknowledgement. The API has no
  * such stage: a cleared list search goes straight to `payment`. The screen is shown while the API
- * is at `payment` with the result `eligible`, no payment has been started, the founder has not yet
+ * is at `payment` with the result `eligible`, no payment has ever been started (`payment.status` is
+ * null; after a cancelled 3-D Secure it is `failed`, so a reload goes to D-3a), the founder has not yet
  * pressed "Ödemeye geç" (`resultSeen`), and the application did not come through manual review
  * (after staff approve, the portal goes straight on to the payment, which the API's own timeline
  * line "Başvurunuz incelendi; ödeme adımına geçebilirsiniz" announces).
@@ -141,6 +146,23 @@ function showsResult(view: ApplicationWire, options: MapOptions): boolean {
     !options.resultSeen &&
     !view.logs.some((l) => l.text === LOG_TEXTS.reviewApproved)
   );
+}
+
+/**
+ * The payment as the portal's screens know it: present while a payment is waiting for 3-D Secure
+ * (`3ds_pending`, API stage `threeDs`) or once it is captured (`paidAt` set, stage `signing`).
+ * A cancelled or failed payment (`failed`) is no payment at all for the screens: the API is back at
+ * `payment` and D-3a asks for a card again, as the mock does after "İptal". Amounts are in kuruş on
+ * the wire and in TL in the portal. Holder and last four digits are not in the view (see `MapOptions.card`).
+ */
+function toPayment(p: ApplicationWire['payment'], card: MapOptions['card']): Application['payment'] {
+  if (p.status !== '3ds_pending' && p.status !== 'captured') return undefined;
+  return {
+    holder: card?.holder ?? '',
+    last4: p.last4 ?? card?.last4 ?? '',
+    amount: p.amountMinor / 100,
+    ...(p.status === 'captured' && p.paidAt ? { paidAt: p.paidAt } : {}),
+  };
 }
 
 /**

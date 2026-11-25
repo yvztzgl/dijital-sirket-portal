@@ -11,13 +11,22 @@
       <dl>
         <div><dt>İşyeri</dt><dd>Terminal Şirket</dd></div>
         <div><dt>Tutar</dt><dd class="strong">{{ total() }}</dd></div>
-        <div><dt>Kart</dt><dd>{{ maskedCard() }}</dd></div>
-        <div><dt>Tarih</dt><dd>{{ txTime() }}</dd></div>
+        <!-- HTTP mode: the card row only while this page remembers the last digits; no time (the API gives none). -->
+        @if (maskedCard()) {<div><dt>Kart</dt><dd>{{ maskedCard() }}</dd></div>}
+        @if (txTime()) {<div><dt>Tarih</dt><dd>{{ txTime() }}</dd></div>}
       </dl>
       <div class="code">
-        <span class="lab">{{ maskedPhone() }} numarasına gönderilen 6 haneli kodu giriniz</span>
+        @if (demoMode) {
+          <span class="lab">{{ maskedPhone() }} numarasına gönderilen 6 haneli kodu giriniz</span>
+        } @else {
+          <!-- The bank sends the code; the portal does not know where to, nor for how long it is valid. -->
+          <span class="lab">Bankanızın gönderdiği 6 haneli doğrulama kodunu giriniz</span>
+        }
         <div class="otp"><app-otp-input variant="bank" [(value)]="otp" (complete)="confirm($event)" /></div>
-        <div class="left"><span>Kalan süre <b>{{ otpLeftLabel() }}</b></span><button type="button" (click)="resendOtp()">Kodu tekrar gönder</button></div>
+        <div class="left">
+          @if (demoMode) {<span>Kalan süre <b>{{ otpLeftLabel() }}</b></span>} @else {<span>{{ otpResent() ? 'Yeni kod istendi.' : '' }}</span>}
+          <button type="button" (click)="resendOtp()">Kodu tekrar gönder</button>
+        </div>
       </div>
       <app-form-error />
       <div class="acts">

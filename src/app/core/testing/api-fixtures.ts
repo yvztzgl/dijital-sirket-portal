@@ -24,6 +24,14 @@ import phoneRunning from './captured/phone-running.json';
 import residentDeclaration from './captured/resident-declaration.json';
 import reviewApproved from './captured/review-approved.json';
 import screening from './captured/screening.json';
+import cardDeclined from './captured/card-declined.json';
+import payment3dsPending from './captured/payment-3ds-pending.json';
+import paymentCancelled from './captured/payment-cancelled.json';
+import paymentCaptured from './captured/payment-captured.json';
+import paymentOpen from './captured/payment-open.json';
+import stepUpRequired from './captured/step-up-required.json';
+import stepUpWrongCode from './captured/step-up-wrong-code.json';
+import threeDsWrongCode from './captured/threeds-wrong-code.json';
 
 /**
  * Literal API answers for the specs, in the shape `GET /api/me` and `GET /api/application` send
@@ -165,7 +173,34 @@ export const CAPTURED = {
   phoneDone: phoneDone as PhoneStatusWire,
   /** `GET /api/reference/wizard`. */
   reference: reference as WizardReference,
+  // Step 3 (captured 2026-11-25; founder E, see tools/api-capture/capture.sh). The card is only ever
+  // the development token (tok_test_4242, tok_test_0002); no card number exists in any of these.
+  /** Founder E at `payment` after a clear list search, before any payment. */
+  paymentOpen: paymentOpen as ApplicationWire,
+  /** `POST /payment` without a recent second factor: 403. */
+  stepUpRequired: stepUpRequired as ProblemWire,
+  /** `POST /auth/step-up/verify` with a wrong code: 400, the sentence under `errors.code`. */
+  stepUpWrongCode: stepUpWrongCode as ProblemWire,
+  /** `POST /payment` with `tok_test_0002`: 422 `card_declined`. */
+  cardDeclined: cardDeclined as ProblemWire,
+  /** After `POST /payment` with `tok_test_4242`: stage `threeDs`, `payment.status: "3ds_pending"`. */
+  payment3dsPending: payment3dsPending as ApplicationWire,
+  /** `POST /payment/3ds` with a wrong code: 422 with the provider's code; the payment stays open. */
+  threeDsWrongCode: threeDsWrongCode as ProblemWire,
+  /** After `POST /payment/3ds/cancel`: back at `payment`, the payment `failed`. */
+  paymentCancelled: paymentCancelled as ApplicationWire,
+  /** Paid again (no new code within 15 minutes), 123456: stage `signing`, `captured`. */
+  paymentCaptured: paymentCaptured as ApplicationWire,
 };
+
+/** An error body as the API sends it (`application/problem+json`). */
+export interface ProblemWire {
+  title: string;
+  status: number;
+  code: string;
+  requestId: string;
+  errors?: Record<string, string[]>;
+}
 
 /**
  * Reading the deck failed for good: the API puts the stage back at `verified` with

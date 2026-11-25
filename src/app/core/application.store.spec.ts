@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { Api, ApplicationStatus, Session } from './api';
 import { ApiError } from './api-error';
-import { ApplicationStore } from './application.store';
+import { ApplicationStore, STEP_UP_CANCELLED } from './application.store';
 import { Account, Application } from './models';
 
 /**
@@ -398,5 +398,167 @@ describe('ApplicationStore in step 2 (HTTP mode)', () => {
       TestBed.tick();
     }
     expect(api.calls.filter((c) => c === 'completeIdentityByPhone')).toHaveLength(1);
+  });
+});
+
+describe('ApplicationStore second factor (step-up)', () => {
+  const stepUpRequired = () => new ApiError('Bu işlem için e-posta adresinize gönderilen kodu girmeniz gerekir.', { code: 'step_up_required', status: 403 });
+  const wrongCode = () =>
+    new ApiError('Kod hatalı veya süresi dolmuş.', { code: 'validation_failed', status: 400, fields: { code: ['Kod hatalı veya süresi dolmuş.'] } });
+  const AT_PAYMENT = { ...SESSION.app!, stage: 'payment' } as Application;
+  const AT_3DS = { ...SESSION.app!, stage: 'threeDs' } as Application;
+  const CARD = { holder: 'AYŞE KAYA', number: '4242 4242 4242 4242', expiry: '12/30', cvv: '123' };
+
+  function setUp(calls: Partial<Record<keyof Api, unknown>>) {
+    localStorage.clear();
+    const api = fakeApi({ restore: async () => ({ account: ACCOUNT, app: AT_PAYMENT }), ...calls });
+    TestBed.configureTestingModule({ providers: [provideRouter([{ path: '**', children: [] }]), { provide: Api, useValue: api }] });
+    return TestBed.inject(ApplicationStore);
+  }
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('refused: asks for the code once, and after a good code repeats the action exactly once by itself', async () => {
+    const pay = vi.fn().mockRejectedValueOnce(stepUpRequired()).mockResolvedValueOnce(AT_3DS);
+    const send = vi.fn(async () => undefined);
+    const verify = vi.fn(async () => undefined);
+    const store = setUp({ pay, sendStepUpCode: send, verifyStepUpCode: verify });
+    await store.restored;
+
+    const result = store.pay(CARD);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(pay).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(store.stepUp()).toEqual({ sentAt: Date.now(), working: false, error: null });
+    expect(store.busy()).toBe(true);
+    expect(store.error()).toBeNull();
+
+    await store.verifyStepUpCode('482913');
+    expect(await result).toBe(true);
+    expect(verify).toHaveBeenCalledExactlyOnceWith('482913');
+    expect(pay).toHaveBeenCalledTimes(2);
+    expect(pay).toHaveBeenLastCalledWith(CARD);
+    expect(store.stepUp()).toBeNull();
+    expect(store.stage()).toBe('threeDs');
+    expect(store.error()).toBeNull();
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(pay).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it('closing the dialog ends the action with a plain message, and nothing else is sent', async () => {
+    const pay = vi.fn().mockRejectedValue(stepUpRequired());
+    const send = vi.fn(async () => undefined);
+    const verify = vi.fn(async () => undefined);
+    const store = setUp({ pay, sendStepUpCode: send, verifyStepUpCode: verify });
+    await store.restored;
+
+    const result = store.pay(CARD);
+    await vi.advanceTimersByTimeAsync(0);
+    store.cancelStepUp();
+    expect(await result).toBe(false);
+    expect(store.error()).toBe(STEP_UP_CANCELLED);
+    expect(store.stepUp()).toBeNull();
+    expect(store.busy()).toBe(false);
+    expect(store.stage()).toBe('payment');
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(pay).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(verify).not.toHaveBeenCalled();
+  });
+
+  it('a wrong code: the server\'s sentence in the dialog, the action waits; the right code then goes through', async () => {
+    const pay = vi.fn().mockRejectedValueOnce(stepUpRequired()).mockResolvedValueOnce(AT_3DS);
+    const verify = vi.fn().mockRejectedValueOnce(wrongCode()).mockResolvedValueOnce(undefined);
+    const store = setUp({ pay, sendStepUpCode: async () => undefined, verifyStepUpCode: verify });
+    await store.restored;
+
+    const result = store.pay(CARD);
+    await vi.advanceTimersByTimeAsync(0);
+    await store.verifyStepUpCode('000000');
+    expect(store.stepUp()).toMatchObject({ working: false, error: 'Kod hatalı veya süresi dolmuş.' });
+    expect(pay).toHaveBeenCalledTimes(1);
+
+    await store.verifyStepUpCode('12345');
+    expect(store.stepUp()!.error).toBe('Altı haneli kodu yazınız.');
+    expect(verify).toHaveBeenCalledTimes(1);
+
+    await store.verifyStepUpCode('482913');
+    expect(await result).toBe(true);
+    expect(pay).toHaveBeenCalledTimes(2);
+  });
+
+  it('a second refusal after the retry is shown, not asked again: no loop', async () => {
+    const pay = vi.fn().mockRejectedValue(stepUpRequired());
+    const send = vi.fn(async () => undefined);
+    const store = setUp({ pay, sendStepUpCode: send, verifyStepUpCode: async () => undefined });
+    await store.restored;
+
+    const result = store.pay(CARD);
+    await vi.advanceTimersByTimeAsync(0);
+    await store.verifyStepUpCode('482913');
+    expect(await result).toBe(false);
+    expect(pay).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(store.stepUp()).toBeNull();
+    expect(store.error()).toBe('Bu işlem için e-posta adresinize gönderilen kodu girmeniz gerekir.');
+  });
+
+  it('another code only after 60 s; no e-mail address and too many tries shown as worded', async () => {
+    const noEmail = new ApiError('Hesabınızda kayıtlı bir e-posta adresi yok.', { code: 'no_email', status: 409 });
+    const tooMany = new ApiError('Çok fazla deneme yapıldı. Lütfen bir dakika sonra yeniden deneyiniz.', { code: 'http_429', status: 429 });
+    const send = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(tooMany).mockRejectedValueOnce(noEmail);
+    const store = setUp({ pay: vi.fn().mockRejectedValue(stepUpRequired()), sendStepUpCode: send, verifyStepUpCode: async () => undefined });
+    await store.restored;
+
+    void store.pay(CARD);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(send).toHaveBeenCalledTimes(1);
+    await store.sendStepUpCode();
+    await vi.advanceTimersByTimeAsync(59_000);
+    await store.sendStepUpCode();
+    expect(send).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await store.sendStepUpCode();
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(store.stepUp()!.error).toBe('Çok fazla deneme yapıldı. Lütfen bir dakika sonra yeniden deneyiniz.');
+    // A failed send does not restart the wait: the last code was sent over a minute ago.
+    await store.sendStepUpCode();
+    expect(send).toHaveBeenCalledTimes(3);
+    expect(store.stepUp()!.error).toBe('Hesabınızda kayıtlı bir e-posta adresi yok.');
+    store.cancelStepUp();
+  });
+
+  it('two actions refused at once share one dialog and one code', async () => {
+    const send = vi.fn(async () => undefined);
+    const cancel3ds = vi.fn().mockRejectedValueOnce(stepUpRequired()).mockResolvedValueOnce(AT_PAYMENT);
+    const pay = vi.fn().mockRejectedValueOnce(stepUpRequired()).mockResolvedValueOnce(AT_3DS);
+    const store = setUp({ pay, cancel3ds, sendStepUpCode: send, verifyStepUpCode: async () => undefined });
+    await store.restored;
+    const first = store.pay(CARD);
+    const second = store.cancel3ds();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(send).toHaveBeenCalledTimes(1);
+    await store.verifyStepUpCode('482913');
+    expect([await first, await second]).toEqual([true, true]);
+    expect(pay).toHaveBeenCalledTimes(2);
+    expect(cancel3ds).toHaveBeenCalledTimes(2);
+  });
+
+  it('a lost session closes the dialog and signs out', async () => {
+    const store = setUp({
+      pay: vi.fn().mockRejectedValue(stepUpRequired()),
+      sendStepUpCode: async () => undefined,
+      verifyStepUpCode: () => Promise.reject(unauthenticated()),
+    });
+    await store.restored;
+    const result = store.pay(CARD);
+    await vi.advanceTimersByTimeAsync(0);
+    await store.verifyStepUpCode('482913');
+    expect(await result).toBe(false);
+    expect(store.stepUp()).toBeNull();
+    expect(store.signedIn()).toBe(false);
   });
 });

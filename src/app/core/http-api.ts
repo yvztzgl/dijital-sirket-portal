@@ -13,7 +13,8 @@ import { Account, Application, CrossKey, DeckConsents, PhoneLinkStatus, Profile,
  * Connected so far: sign-in (register, code, login, logout, password reset, e-Devlet), reading
  * the session back after a reload, step 1 (profile, deck, review, cross-checks, title, the
  * reference data, and polling the status read while the server works) and step 2 (identity check
- * on the computer or on the phone, declaration, the result, manual review). The session is an
+ * on the computer or on the phone, declaration, the result, manual review), the second factor
+ * ("step-up") and step 3 (payment with 3-D Secure). The session is an
  * HttpOnly cookie the server sets; this class never sees it, and nothing about the founder is kept
  * in the browser's storage (only in this object's memory, until sign-out or reload).
  *
@@ -63,6 +64,12 @@ export class HttpApi implements Api {
    * shows once more, which asks nothing of the server (see `proceedToPayment`).
    */
   private readonly resultSeen = new Set<string>();
+  /**
+   * The card holder and the last four digits of the card number typed for this application, so D-3b
+   * can show "**** **** **** 4242": the API returns neither. Memory only, for this page's life; the
+   * number itself, the expiry and the CVV are never kept anywhere (see `pay`).
+   */
+  private card: { applicationId: string; holder: string; last4: string } | null = null;
 
   // auth
 
@@ -100,6 +107,16 @@ export class HttpApi implements Api {
   /** 204; does not sign in, and ends every session of the account. 422 `link_invalid`. */
   async confirmPasswordReset(token: string, password: string): Promise<void> {
     await this.request('POST', '/api/auth/password-reset/confirm', { token, password });
+  }
+
+  /** 202 always (silently nothing within 60 s of the last code); 409 `no_email`. Rate limited like sign-in. */
+  async sendStepUpCode(): Promise<void> {
+    await this.request('POST', '/api/auth/step-up');
+  }
+
+  /** 204: this session may pay, sign and start the formation for 15 minutes. A wrong code: 400 with `errors.code`. */
+  async verifyStepUpCode(code: string): Promise<void> {
+    await this.request('POST', '/api/auth/step-up/verify', { code });
   }
 
   /**
@@ -163,6 +180,7 @@ export class HttpApi implements Api {
     this.referenceData = null;
     this.phoneLink = null;
     this.resultSeen.clear();
+    this.card = null;
   }
 
   /** The light read: stage and change time, nothing decrypted on the server. */
@@ -190,7 +208,8 @@ export class HttpApi implements Api {
     const view = this.view!;
     // The QR code is no longer shown once a check is open or the identity step is over.
     if (view.stage !== 'eligibility' || view.eligibility?.running || view.eligibility?.identityDone) this.phoneLink = null;
-    const app = toApplication(view, this.account!, { resultSeen: this.resultSeen.has(view.id) });
+    const card = this.card?.applicationId === view.id ? { holder: this.card.holder, last4: this.card.last4 } : undefined;
+    const app = toApplication(view, this.account!, { resultSeen: this.resultSeen.has(view.id), card });
     return this.phoneLink ? { ...app, phoneLink: this.phoneLink } : app;
   }
 
@@ -362,10 +381,45 @@ export class HttpApi implements Api {
   }
 
   // step 3 · payment
-  pay(): Promise<Application> { return notConnected(); }
-  resendOtp(): Promise<Application> { return notConnected(); }
-  cancel3ds(): Promise<Application> { return notConnected(); }
-  confirm3ds(): Promise<Application> { return notConnected(); }
+
+  /**
+   * D-3a: 204, stage `threeDs`. The body is exactly `{ holder, cardToken }`: the card number, its
+   * expiry and the CVV are never sent to the API and are kept nowhere here (only the last four
+   * digits, in memory, for D-3b). 403 `step_up_required` (the store asks for the e-mailed code and
+   * repeats the call); 400 `holder` / `cardToken`; 409 `payment_open`, `wrong_stage`; 422 `card_declined`.
+   */
+  async pay(card: { holder: string; number: string; expiry: string; cvv: string }): Promise<Application> {
+    const holder = card.holder.trim();
+    const last4 = card.number.replace(/\D/g, '').slice(-4);
+    // DEVELOPMENT STAND-IN. The token must come from the payment provider: with a real provider the
+    // card fields are the provider's own hosted fields (its iframe or page), the card data goes from
+    // the browser straight to the provider, and the provider hands the portal a token for it. This
+    // portal's own card form must NOT be used with a real provider. Here the API's development
+    // provider (FakePaymentProvider) accepts `tok_test_` + four digits (`tok_test_0002` is declined),
+    // so the token is made from the last four digits typed, and the number itself goes nowhere.
+    const cardToken = `tok_test_${last4}`;
+    await this.request('POST', '/api/application/payment', { holder, cardToken });
+    if (this.view) this.card = { applicationId: this.view.id, holder: holder.toLocaleUpperCase('tr-TR'), last4 };
+    return this.fresh();
+  }
+
+  /** 204, stage `signing`. A wrong code: 422 with the provider's code (development: `3ds_failed`), the payment stays open. */
+  async confirm3ds(code: string): Promise<Application> {
+    await this.request('POST', '/api/application/payment/3ds', { code: code.trim() });
+    return this.fresh();
+  }
+
+  /** 204: the provider is asked to send the 3-D Secure code again. 409 `no_open_payment`. */
+  async resendOtp(): Promise<Application> {
+    await this.request('POST', '/api/application/payment/3ds/resend');
+    return this.fresh();
+  }
+
+  /** 204, back to `payment` (the payment is recorded as failed). 409 `no_open_payment`. */
+  async cancel3ds(): Promise<Application> {
+    await this.request('POST', '/api/application/payment/3ds/cancel');
+    return this.fresh();
+  }
 
   // step 4 · e-signature
   acceptCallTerms(): Promise<Application> { return notConnected(); }

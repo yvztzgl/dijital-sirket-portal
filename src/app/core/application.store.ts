@@ -95,6 +95,22 @@ export function waitsForServer(app: Application | null): boolean {
  */
 export const PHONE_POLL_MS = 6_000;
 
+/** The API sends no new second-factor code within 60 s of the last one, so the dialog's resend waits as long. */
+export const STEP_UP_RESEND_MS = 60_000;
+
+/** The original action's message when the founder closes the second-factor dialog without a code. */
+export const STEP_UP_CANCELLED = 'İşlem yapılmadı. Devam etmek için e-posta adresinize gönderilen kodu girmeniz gerekir.';
+
+/** What the second-factor dialog shows; `ApplicationStore.stepUp` is null while it is closed. */
+export interface StepUpState {
+  /** When the last code was sent (ms since epoch), for the resend cooldown; null until the first send answered. */
+  sentAt: number | null;
+  /** A code is being sent or checked. */
+  working: boolean;
+  /** The last refusal, worded as the server worded it (a wrong code, no e-mail address, too many tries). */
+  error: string | null;
+}
+
 /**
  * Single source of truth for the signed-in founder and their application. Screens read signals
  * from here and call its actions; it talks to the API (`Api`: the mock or the HTTP client,
@@ -138,6 +154,11 @@ export class ApplicationStore {
    * Nothing creates a new application in this state; signing out and in again does (an API gap).
    */
   readonly closed = signal(false);
+  /**
+   * The second-factor dialog (`StepUpDialog`, rendered once by the app shell); null while closed.
+   * Opened by `run()` when the API refuses an action with `step_up_required`; see `withSecondFactor`.
+   */
+  readonly stepUp = signal<StepUpState | null>(null);
 
   // ------------------------------------------------------------------------------ derived
 
@@ -442,6 +463,10 @@ export class ApplicationStore {
     }
   }
   proceedToPayment = () => this.update(() => this.api.proceedToPayment());
+  /**
+   * D-3a. The card lives only in this call (and in a repeat after the second-factor dialog); it is
+   * not kept in any signal. HTTP mode sends only the holder and a token (`HttpApi.pay`).
+   */
   pay = (card: { holder: string; number: string; expiry: string; cvv: string }) => this.update(() => this.api.pay(card));
   resendOtp = () => this.update(() => this.api.resendOtp());
   cancel3ds = () => this.update(() => this.api.cancel3ds());
@@ -631,6 +656,8 @@ export class ApplicationStore {
     this.account.set(session?.account ?? null);
     this.app.set(session?.app ?? null);
     this.closed.set(!!session?.closed);
+    // A code asked for belongs to the session that was refused.
+    if (this.stepUp()) this.closeStepUp(false);
     // Read again for the next session (HTTP mode reads it once per session).
     this.reference.set(null);
     if (session) {
@@ -690,8 +717,9 @@ export class ApplicationStore {
         this.app.set(await fn());
       } catch (e) {
         // 409 wrong_stage: this screen was out of date (another tab, or the server moved on). Show
-        // where the application really is; the refusal's sentence stays on screen.
-        if (e instanceof ApiError && e.code === 'wrong_stage') void this.refresh();
+        // where the application really is; the refusal's sentence stays on screen. The same for the
+        // payment's 409s: a payment was opened, or closed, in another tab.
+        if (e instanceof ApiError && OUT_OF_DATE.includes(e.code ?? '')) void this.refresh();
         throw e;
       }
     });
@@ -707,13 +735,16 @@ export class ApplicationStore {
     }
   }
 
-  /** Runs an action with busy/error state. Resolves true on success. */
+  /**
+   * Runs an action with busy/error state. Resolves true on success. A refusal for want of a second
+   * factor is answered here, once for every action (`withSecondFactor`).
+   */
   private async run(fn: () => Promise<unknown>): Promise<boolean> {
     this.busy.set(true);
     this.error.set(null);
     this.fieldErrors.set({});
     try {
-      await fn();
+      await this.withSecondFactor(fn);
       return true;
     } catch (e) {
       // Closed: the closed screen says it all, no error under a button.
@@ -727,7 +758,105 @@ export class ApplicationStore {
       this.busy.set(false);
     }
   }
+
+  // ---------------------------------------------------------------- second factor ("step-up")
+
+  /**
+   * Runs `fn`. When the API refuses it with `step_up_required` (403: this session has not passed an
+   * e-mailed code in the last 15 minutes), the dialog asks for the code; once the code is accepted,
+   * `fn` runs once more, by itself. Only once: a second refusal of any kind, `step_up_required`
+   * included, is thrown like any other refusal, so this can never loop. When the founder closes the
+   * dialog the action ends with `STEP_UP_CANCELLED` and nothing else is sent.
+   */
+  private async withSecondFactor(fn: () => Promise<unknown>) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (!(e instanceof ApiError) || e.code !== 'step_up_required') throw e;
+      if (!(await this.askSecondFactor())) throw new ApiError(STEP_UP_CANCELLED, { code: 'step_up_cancelled' });
+      return await fn();
+    }
+  }
+
+  /** The open dialog's answer: true once a code was accepted, false when it was closed. */
+  private stepUpAnswer: Promise<boolean> | null = null;
+  private resolveStepUp: ((passed: boolean) => void) | null = null;
+
+  /**
+   * Opens the dialog and sends the first code. An action refused while the dialog is already open
+   * waits for the same answer instead of opening a second one.
+   */
+  private askSecondFactor(): Promise<boolean> {
+    if (this.stepUpAnswer) return this.stepUpAnswer;
+    this.stepUp.set({ sentAt: null, working: false, error: null });
+    this.stepUpAnswer = new Promise<boolean>((resolve) => (this.resolveStepUp = resolve));
+    void this.sendStepUpCode();
+    return this.stepUpAnswer;
+  }
+
+  /**
+   * The dialog's first code and its "Kodu yeniden gönder". Not again within `STEP_UP_RESEND_MS` of the
+   * last code: the server would silently send nothing, and the founder would wait for a code that never comes.
+   */
+  async sendStepUpCode() {
+    const s = this.stepUp();
+    if (!s || s.working || (s.sentAt !== null && Date.now() - s.sentAt < STEP_UP_RESEND_MS)) return;
+    this.stepUp.set({ ...s, working: true, error: null });
+    try {
+      await this.api.sendStepUpCode();
+      this.patchStepUp({ sentAt: Date.now(), working: false });
+    } catch (e) {
+      if (this.sessionLost(e)) return;
+      // 409 no_email and 429 are shown as the API (or toApiError) words them.
+      this.patchStepUp({ working: false, error: e instanceof ApiError ? shownMessage(e) : 'Kod gönderilemedi. Lütfen yeniden deneyiniz.' });
+      if (!(e instanceof ApiError)) console.error(e);
+    }
+  }
+
+  /** The dialog's six digits. On success the dialog closes and the refused action runs again (`withSecondFactor`). */
+  async verifyStepUpCode(code: string) {
+    const s = this.stepUp();
+    if (!s || s.working) return;
+    if (!/^\d{6}$/.test(code)) return this.stepUp.set({ ...s, error: 'Altı haneli kodu yazınız.' });
+    this.stepUp.set({ ...s, working: true, error: null });
+    try {
+      await this.api.verifyStepUpCode(code);
+      this.closeStepUp(true);
+    } catch (e) {
+      if (this.sessionLost(e)) return;
+      // A wrong code: the API's general title, and the useful sentence under `code` (shownMessage).
+      this.patchStepUp({ working: false, error: e instanceof ApiError ? shownMessage(e) : 'Kod doğrulanamadı. Lütfen yeniden deneyiniz.' });
+      if (!(e instanceof ApiError)) console.error(e);
+    }
+  }
+
+  /** The founder closed the dialog: the refused action ends without being sent again. */
+  cancelStepUp() {
+    this.closeStepUp(false);
+  }
+
+  /** Demo index only (mock mode): opens the dialog with no action behind it. The mock never asks for it by itself. */
+  previewStepUp() {
+    this.demoTools();
+    void this.askSecondFactor();
+  }
+
+  private patchStepUp(change: Partial<StepUpState>) {
+    const s = this.stepUp();
+    if (s) this.stepUp.set({ ...s, ...change });
+  }
+
+  private closeStepUp(passed: boolean) {
+    const resolve = this.resolveStepUp;
+    this.resolveStepUp = null;
+    this.stepUpAnswer = null;
+    this.stepUp.set(null);
+    resolve?.(passed);
+  }
 }
+
+/** Refusals that mean the screen was out of date; the store reads the application again (`update`). */
+const OUT_OF_DATE = ['wrong_stage', 'payment_open', 'no_open_payment'];
 
 /**
  * What the founder reads for a refusal. A `validation_failed` answer from the API carries a

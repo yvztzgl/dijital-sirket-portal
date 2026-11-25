@@ -74,7 +74,7 @@ describe('api-mapper', () => {
         ...REVIEW_APPLICATION,
         stage: 'signed',
         titleCheck: { status: 'conflict', candidate: 'Lumora Veri Analitiği', reason: 'Benzer unvan kayıtlı.' },
-        payment: { ...REVIEW_APPLICATION.payment, status: 'paid', last4: '4242', paidAt: '2026-11-25T10:00:00+00:00' },
+        payment: { ...REVIEW_APPLICATION.payment, status: 'captured', last4: '4242', paidAt: '2026-11-25T10:00:00+00:00' },
         signature: { kind: 'daily', serial: 'ESHS-2611-AAAA', issuedAt: '2026-11-25T10:10:00+00:00', validUntil: '2026-11-26T10:10:00+00:00' },
         callConsentAt: '2026-11-25T10:05:00+00:00',
       },
@@ -299,7 +299,7 @@ describe('api-mapper on captured API answers, step 2', () => {
     expect(app.eligibility!.score).toBeUndefined();
     expect(map('eligible', true).stage).toBe('payment');
     // Once a payment has been started the result screen is over, seen or not.
-    const paying = { ...CAPTURED.eligible, payment: { ...CAPTURED.eligible.payment, status: '3ds_pending' } };
+    const paying = { ...CAPTURED.eligible, payment: { ...CAPTURED.eligible.payment, status: '3ds_pending' as const } };
     expect(toApplication(paying, account).stage).toBe('payment');
   });
 
@@ -324,5 +324,52 @@ describe('api-mapper on captured API answers, step 2', () => {
     expect(CAPTURED.phoneRunning.state).toBe('running');
     expect(CAPTURED.phoneDone.state).toBe('done');
     expect(CAPTURED.closed).toMatchObject({ status: 404, code: 'no_application' });
+  });
+});
+
+describe('api-mapper on captured API answers, step 3', () => {
+  const account = toAccount({ firstName: 'Deneme', lastName: 'Kurucu', email: 'kurucu@example.test', founderType: 'foreign', verified: true });
+  const map = (key: keyof typeof CAPTURED, options = {}) => toApplication(CAPTURED[key] as never, account, options);
+  const FEE_LINES = [
+    { code: 'tescil_ilan_harci', label: 'Ticaret sicili tescil ve ilan harçları', amount: 4850 },
+    { code: 'noter_eimza', label: 'Noter onayı ve e-İmza (ESHS)', amount: 2400 },
+    { code: 'sanal_ofis_yil1', label: 'Sanal ofis · ilk yıl', amount: 3600 },
+    { code: 'platform', label: 'Platform hizmet bedeli', amount: 1900 },
+  ];
+
+  it('before any payment: the result screen once, then the payment form; fees from the API in TL', () => {
+    expect(map('paymentOpen').stage).toBe('eligible');
+    const app = map('paymentOpen', { resultSeen: true });
+    expect(app.stage).toBe('payment');
+    expect(app.payment).toBeUndefined();
+    expect(app.fees).toEqual(FEE_LINES);
+  });
+
+  it('3-D Secure open: stage threeDs, the amount in TL, no card unless this page typed one', () => {
+    const app = map('payment3dsPending');
+    expect(app.stage).toBe('threeDs');
+    expect(app.payment).toEqual({ holder: '', last4: '', amount: 12_750 });
+    expect(map('payment3dsPending', { card: { holder: 'DENEME KURUCU', last4: '4242' } }).payment).toEqual({ holder: 'DENEME KURUCU', last4: '4242', amount: 12_750 });
+  });
+
+  it('cancelled: back at the payment form with no payment, and the result screen does not come back', () => {
+    const app = map('paymentCancelled');
+    expect(CAPTURED.paymentCancelled.payment.status).toBe('failed');
+    expect(app.stage).toBe('payment');
+    expect(app.payment).toBeUndefined();
+  });
+
+  it('captured: on to the e-signature with the payment time', () => {
+    const app = map('paymentCaptured');
+    expect(app.stage).toBe('signing');
+    expect(app.payment).toEqual({ holder: '', last4: '', amount: 12_750, paidAt: CAPTURED.paymentCaptured.payment.paidAt });
+    expect(app.logs.some((l) => l.text === 'Ödeme alındı · 12.750 TL')).toBe(true);
+  });
+
+  it('the refusals the payment screens show, as the API words them', () => {
+    expect(CAPTURED.stepUpRequired).toMatchObject({ status: 403, code: 'step_up_required', title: 'Bu işlem için e-posta adresinize gönderilen kodu girmeniz gerekir.' });
+    expect(CAPTURED.stepUpWrongCode).toMatchObject({ status: 400, code: 'validation_failed', errors: { code: ['Kod hatalı veya süresi dolmuş.'] } });
+    expect(CAPTURED.cardDeclined).toMatchObject({ status: 422, code: 'card_declined', title: 'Kartınızdan ödeme alınamadı. Lütfen başka bir kart deneyiniz.' });
+    expect(CAPTURED.threeDsWrongCode).toMatchObject({ status: 422, code: '3ds_failed', title: 'Doğrulama kodu hatalı.' });
   });
 });

@@ -9,7 +9,7 @@
       <h2 class="wz-card-h">Ücrete dahil olanlar</h2>
       <p class="for">{{ store.fullTitle() }}</p>
       <dl>
-        @for (f of fees; track f.label) {<div><dt>{{ f.label }}</dt><dd>{{ f.amount }}</dd></div>}
+        @for (f of fees(); track f.label) {<div><dt>{{ f.label }}</dt><dd>{{ f.amount }}</dd></div>}
       </dl>
       <div class="total"><span>Toplam</span><strong>{{ total() }}</strong></div>
     </section>
@@ -31,7 +31,8 @@
       </div>
       <app-form-error [message]="cardError()" />
       <button type="submit" class="wz-btn" [disabled]="store.busy()">{{ store.busy() ? 'Bankanıza bağlanılıyor…' : total() + ' öde' }}</button>
-      <button type="button" class="wz-link test" (click)="useTestCard()">Test kartını doldur</button>
+      <!-- Only fills the form (both modes). HTTP mode says so: the card still goes nowhere but the development token (HttpApi.pay). -->
+      <button type="button" class="wz-link test" (click)="useTestCard()">{{ demoMode ? 'Test kartını doldur' : 'Test kartını doldur (yalnızca formu doldurur)' }}</button>
     </form>
   </div>
 

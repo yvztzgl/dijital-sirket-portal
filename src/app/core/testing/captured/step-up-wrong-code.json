@@ -1,0 +1,12 @@
+{
+  "type": "https://httpstatuses.io/400",
+  "title": "Kod hatalı veya süresi dolmuş.",
+  "status": 400,
+  "code": "validation_failed",
+  "requestId": "01a2127b-bab6-7b84-9b0c-a33d09fbc27c",
+  "errors": {
+    "code": [
+      "Kod hatalı veya süresi dolmuş."
+    ]
+  }
+}

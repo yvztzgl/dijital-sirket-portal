@@ -108,7 +108,9 @@ export interface PaymentWire {
   /** In kuruş. */
   amountMinor: number;
   fees: { code: string; label: string; amountMinor: number }[];
-  status: string | null;
+  /** The latest payment: `3ds_pending`, `captured`, or `failed` (3-D Secure cancelled); null before any. */
+  status: '3ds_pending' | 'captured' | 'failed' | 'initiated' | null;
+  /** Always null today: the API never receives the card number. */
   last4: string | null;
   paidAt: string | null;
 }

@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Captures the real API's answers for steps 1 and 2 of the wizard into src/app/core/testing/captured/,
+# Captures the real API's answers for steps 1 to 3 of the wizard into src/app/core/testing/captured/,
 # where api-mapper.spec.ts reads them. Run it against a running stack (in ../dijital-sirket-api:
 # dev/up.sh, then dev/run.sh with the Worker and the BackOffice).
 #
-#   tools/api-capture/capture.sh          both steps
+#   tools/api-capture/capture.sh          all steps
 #   tools/api-capture/capture.sh step1    step 1 only (one founder)
 #   tools/api-capture/capture.sh step2    step 2 only (four founders; step 1's files are left as they are)
+#   tools/api-capture/capture.sh step3    step 3 only (one founder; the other files are left as they are)
 #
 # Step 1, one founder:
 #   profile → verified → scanning → review (difference open) → review (decided, fields filled)
@@ -18,6 +19,13 @@
 #      staff approve → payment
 #   C  foreign, third-party funds: as B to manual review, staff reject → the read answers 404
 #   D  resident (e-Devlet): straight to the declaration after the reserved title
+#
+# Step 3, one founder (E, foreign, own funds, steps 1 and 2 walked without saving):
+#   payment refused without a second factor (403 step_up_required) → step-up code sent, a wrong code
+#   refused, the right code (from the development outbox, ../dijital-sirket-api/dev/last-code.sh) →
+#   a declined card (tok_test_0002) → payment started (threeDs) → a wrong 3-D Secure code → resend →
+#   cancel (back to payment) → paid again without a new code (within 15 minutes) → 123456 → signing.
+#   The card is only ever the development token: tok_test_ + four digits (no card number exists here).
 #
 # Staff are played by ../dijital-sirket-api/dev/staff.sh (`staff.sh -a <reference no> title|review …`).
 #
@@ -188,6 +196,46 @@ if [ "$WHAT" = all ] || [ "$WHAT" = step1 ]; then
   reserve_title
   save title-reserved
   echo "step 1 done ($REF)"
+fi
+
+# step_two_quick: identity on the computer, declaration, list search, until the API is at `payment`. Saves nothing.
+step_two_quick() {
+  write 204 "POST identity/start {consent:true}" POST '{"consent":true}' /api/application/identity/start
+  call 202 "POST identity/complete" -X POST -H 'X-DSP-Request: 1' "$API/api/application/identity/complete"
+  wait_stage declaration 20
+  declare_address
+  wait_stage payment 30
+}
+
+# keep_problem <name>: an error body as it came (problem+json; no personal data in it).
+keep_problem() { jq . "$BODY" > "$OUT/$1.json"; }
+
+if [ "$WHAT" = all ] || [ "$WHAT" = step3 ]; then
+  echo "step 3 · E: second factor and payment"
+  DEST="$WORK"; new_founder foreign; step_one own-abroad no; reserve_title; step_two_quick; DEST="$OUT"
+  save payment-open
+  CARD='{"holder":"DENEME KURUCU","cardToken":"tok_test_4242"}'
+  write 403 "POST payment (no second factor) → step-up-required.json" POST "$CARD" /api/application/payment
+  keep_problem step-up-required
+  call 202 "POST auth/step-up" -X POST -H 'X-DSP-Request: 1' "$API/api/auth/step-up"
+  write 400 "POST auth/step-up/verify (wrong) → step-up-wrong-code.json" POST '{"code":"000000"}' /api/auth/step-up/verify
+  keep_problem step-up-wrong-code
+  sleep 0.5
+  code=$( (cd "$API_REPO" && dev/last-code.sh -q "$EMAIL") ) || { echo "  [!] no step-up code in the outbox"; exit 1; }
+  write 204 "POST auth/step-up/verify (code from the outbox)" POST "{\"code\":\"$code\"}" /api/auth/step-up/verify
+  write 422 "POST payment tok_test_0002 → card-declined.json" POST '{"holder":"DENEME KURUCU","cardToken":"tok_test_0002"}' /api/application/payment
+  keep_problem card-declined
+  write 204 "POST payment tok_test_4242" POST "$CARD" /api/application/payment
+  save payment-3ds-pending
+  write 422 "POST payment/3ds (wrong) → threeds-wrong-code.json" POST '{"code":"000000"}' /api/application/payment/3ds
+  keep_problem threeds-wrong-code
+  call 204 "POST payment/3ds/resend" -X POST -H 'X-DSP-Request: 1' "$API/api/application/payment/3ds/resend"
+  call 204 "POST payment/3ds/cancel" -X POST -H 'X-DSP-Request: 1' "$API/api/application/payment/3ds/cancel"
+  save payment-cancelled
+  write 204 "POST payment again (no new code)" POST "$CARD" /api/application/payment
+  write 204 "POST payment/3ds 123456" POST '{"code":"123456"}' /api/application/payment/3ds
+  save payment-captured
+  echo "step 3 done"
 fi
 
 [ "$WHAT" = all ] || [ "$WHAT" = step2 ] || exit 0

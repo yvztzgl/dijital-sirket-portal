@@ -865,6 +865,32 @@ export class MockApi implements Api {
     this.signIn(null);
   }
 
+  // ------------------------------------------------------------- second factor (demo only)
+  // The mock demands no second factor: none of its actions refuses with `step_up_required`. Which
+  // actions need one is still the owner's decision, and the mock is what the product is shown with.
+  // These two exist only so the dialog can be opened from the `/screens` index; the code goes to
+  // the Inbox like the mock's other e-mails.
+
+  private stepUpCode: string | null = null;
+
+  async sendStepUpCode() {
+    await this.wait(400);
+    this.stepUpCode = String(Math.floor(100000 + Math.random() * 900000));
+    this.inbox.send({
+      kind: 'mail',
+      from: 'no-reply@dijitalsirket.gov.tr',
+      title: 'İşlem doğrulama kodunuz',
+      body: `İşleminizi onaylamak için kodunuz: ${this.stepUpCode}. 10 dakika geçerlidir.`,
+      code: this.stepUpCode,
+    });
+  }
+
+  async verifyStepUpCode(code: string) {
+    await this.wait(500);
+    if (!this.stepUpCode || code !== this.stepUpCode) throw new ApiError('Kod hatalı veya süresi dolmuş.', { code: 'code_invalid' });
+    this.stepUpCode = null;
+  }
+
   // ---------------------------------------------------------------------------- internals
 
   private codes = new Map<string, string>();
