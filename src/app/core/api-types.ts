@@ -2,7 +2,7 @@
  * The API's JSON as it arrives (camelCase), before api-mapper.ts turns it into the portal's model.
  * Written from the API's records in `dijital-sirket-api/src/DijitalSirket.Api/Models/` (2026-11-25).
  * The deck step (deck, CV, evaluation) follows the contract agreed for the outside evaluation (STB) on
- * 2026-11-25, written before the API had it; see docs/api-client.md.
+ * 2026-11-25, checked against the API as built the same day; see docs/api-client.md.
  * Times are ISO 8601 strings with an offset. Values the API documents as a fixed set are typed as
  * that set; the mapper still checks them, because a newer API may send a value this file does not know.
  */

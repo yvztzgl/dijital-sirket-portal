@@ -20,8 +20,7 @@ screens ─► ApplicationStore ─► Api (abstract class, used as the injectio
 | `src/app/core/http-api.ts` | `HttpApi implements Api`, the `request()` helper, `toApiError()`, the `markApiWrites` interceptor. |
 | `src/app/core/api-types.ts` | The API's JSON as it arrives (`MeWire`, `ApplicationWire`, …), written from the API's `Models/` records. |
 | `src/app/core/api-mapper.ts` | `toAccount(me)`, `toApplication(view, account)`, `toStage`: wire → portal model. Pure functions. |
-| `src/app/core/testing/api-fixtures.ts` | Literal API answers the specs use: hand-written ones, and `CAPTURED` (below). |
-| `src/app/core/testing/hand-written/*.json` | **Hand-written until recaptured**: the deck step with the outside evaluation (evaluating, more information needed, failed, the company form with defaults and after edits, the status read), written from the contract of 2026-11-25 before the API had it. `HAND` in api-fixtures.ts. |
+| `src/app/core/testing/api-fixtures.ts` | Literal API answers the specs use: a few built by hand, and `CAPTURED` (below). |
 | `src/app/core/evaluation-reference.json` | The outside evaluation service's dictionary saved on 2026-11-25 (17 activity groups, 216 activities, 4 business models, 8 revenue models, 4 product types) and the upload limits, in the shape of `GET /api/reference/evaluation`. The mock's answer and the specs' fixture; not in the http bundle. |
 | `src/app/core/testing/captured/*.json` | `GET /api/application` as the running API answered it at each stage of steps 1 to 5 (the deck-reader stages `scanning`, `review-open`, `review-decided` were removed with the reader on 2026-11-25; the later files still carry its `crossCheck` and deck fields, which the mapper ignores), plus the status read, the reference data, the phone routes, the closed application's 404 and the refusals of steps 3 and 4 (2026-11-25). Made-up founders, e-mail addresses and the phone token replaced; the card is only ever a development token; no T.C. kimlik no. |
 | `tools/api-capture/capture.sh` | Re-captures those files against a running stack (`capture.sh [step1\|step2\|step3\|step45\|all]`; needs `../dijital-sirket-api/dev/staff.sh` for the title, review and set-up steps and `dev/last-code.sh` for the second factor). |
@@ -102,19 +101,41 @@ deck **and a CV**, answers five questions, and an outside evaluation service (ST
 profile and the account. The text of step 1 below that speaks of `scanning`, deck fields and
 cross-checks describes the state before this piece.
 
-**Written against the contract, before the API had it.** The API agent built the API side in
-parallel; nothing here has been run against it yet. Points where the portal had to choose (to be
-reconciled with the API):
+**Written against the contract, then checked against the API** (joined check below). The choices the
+portal made before the API existed, all confirmed by the API as built:
 
 - the deck's multipart part stays `file` (the name of the first deck upload); the CV is `cv`;
 - `activityGroupId` and `activityId` are sent only when chosen; each multiple choice is one repeated
   field per id (`businessModelIds=1`, `businessModelIds=2`);
 - the summary's length is counted after trimming;
-- the consent refusal's sentence (`DECK_CONSENT_ERROR`) is the portal's own wording; the API's may differ;
+- the consent refusal's sentence (`DECK_CONSENT_ERROR`) is the portal's own wording; the API answers a
+  missing consent alone as `errors.consent`, before any other field, with its own sentence (shown in the
+  banner; the screen does not send without both ticks anyway);
 - `evaluationQuestions` is polled like `manual` (slowest pace), in case the server moves on by itself;
 - after the evaluation `trade_name` and `nace_codes` may arrive as absent or as an empty value with any
   mark: an empty value gets no mark on screen;
 - the document type of the CV in `documents` is taken to be `cv` ("Özgeçmiş").
+
+Also as built: an oversize file is refused alone (`errors.deck` or `errors.cv`); an upload while an
+evaluation is queued, running, has questions or is done answers 409 `wrong_stage` (the store re-reads);
+`review` is `{}` until the evaluation is done, and then has no `trade_name` / `nace_codes` keys.
+
+### Joined check (2026-11-25, HTTP mode on port 4330 against the API worktree on 5150)
+
+- Founder 1 (registered by e-mail): code → D-1e (demo values) → D-1a with a real 3-page PDF deck and a
+  1-page PDF CV (attached by page script), the five answers and both ticks → D-1b "Sunumunuz
+  değerlendiriliyor" (status reads only) → about 10 s later D-1c with "Ön bilgilerinizden" on Kurucu,
+  Uyruk, Sermaye kaynağı, E-posta, Telefon and Adres (country), title and Faaliyet "—" → title typed,
+  62.01 added from "Faaliyet alanınıza uygun" → "Onayla ve devam et" → D-1f (`titleChecking`).
+- Founder 2 (e-Devlet, test T.C. no): profile → D-1a with a deck named `sunum-questions.pdf` → D-1b →
+  D-1g "Değerlendirme için ek bilgi gerekiyor"; polling went on with status reads only.
+- Found and fixed: D-1c's title field saved on both Enter and `change`, which Chrome fires together on
+  Enter, so the same PATCH went twice and the second got 409 ("Bu işlem zaten yapılmış."). It now saves
+  on `change` only. The register screen's step list still said "AI bilgilerinizi okur".
+- Console: only the expected 401 (`/api/me` before sign-in) and 404 (`no_application` before it is
+  created), and the 409 above before the fix.
+- Not walked: `failed` / `rejected` notices on D-1a against the API (captured and mapped instead), a
+  refused upload's field errors from the API, the oversize refusal, a reload during the evaluation.
 
 ### Requests
 
@@ -254,7 +275,7 @@ Polling           GET  /api/application/status  → {stage, changedAt}
 | D-1e | Save | connected | |
 | D-1e | Sector and funding choices | from `Api.reference()` | exactly what the API accepts |
 | D-1e | "Demo: örnek bilgileri doldur" | still shown (fills the form only) | not gated before; left as it was |
-| D-1a | Upload (deck, CV, answers) | connected (piece 9, not yet run against the API) | |
+| D-1a | Upload (deck, CV, answers) | connected (piece 9; walked against the API's stand-in evaluator) | |
 | D-1a | "Ön bilgileri düzenle" | shown only while no deck exists (both modes) | the API refuses a profile after any deck, also after an evaluation that ended badly |
 | D-1a | notice after an ended evaluation | shown when `evaluation.status` is `failed`, `rejected` or `cancelled` at `verified` | |
 | D-1c | Title, NACE, founder, contact, funding editors | connected; only changed fields sent | API refuses empty changes and empty values |
@@ -925,9 +946,9 @@ Everything the portal shows against the real API that is not the API's, or that 
 - **Capital:** the API sends none; the portal shows its constant (250 000 TL) where needed (D-1c), and
   D-5b leaves out the blocked-capital line.
 - **Deck evaluation (piece 9):** the founder sees no findings (none reach the portal) and cannot answer
-  follow-up questions: `evaluationQuestions` is a stop screen with no form. The deck step was built from
-  the contract and **not yet run against the API**; its fixtures are hand-written. The mock's evaluation is
-  a 6-second timer whose end the demo panel chooses.
+  follow-up questions: `evaluationQuestions` is a stop screen with no form. The API's evaluator is a
+  development stand-in that decides by the deck's file name; no real STB call was made. The mock's
+  evaluation is a 6-second timer whose end the demo panel chooses.
 - **Title suggestions (D-1d):** the portal's own (`titleAlternatives`).
 - **Timeline codes:** the view carries Turkish texts only; the mapper reads times from them (`LOG_TEXTS`).
 - **Rejected founder:** the next sign-in creates a new application (the API cannot tell "closed").
@@ -993,10 +1014,9 @@ in piece 3.)
   and store tests on hand-built fixtures (`IDENTITY_FAILED`, `IDENTITY_FAILED_TWICE`).
 - Step 2: the view has no codes for its timeline lines; the mapper reads times from their Turkish text.
 - The rejected founder's next sign-in creates a new application (API gap above).
-- The deck step with the outside evaluation (piece 9) was not run against the API; it waits for the
-  API agent's side, then `capture.sh step1` (which already sends the new upload and waits up to 15
-  minutes for `review`) replaces the hand-written fixtures. `questions`, `failed`, `rejected` cannot be
-  caused from the script and stay hand-written.
+- The deck step's answers are captured from the API's stand-in evaluator (`capture.sh step1`, which also
+  makes the `questions` and `failed` endings by the deck's file name); `cancelled` cannot be caused and
+  is not covered.
 - Registering an address that already has an account: the API answers 202 and tells the owner by
   e-mail; the mock still says "Bu e-posta adresiyle bir hesap zaten var." (kept because its spec
   expects it). To align when the owner decides.
