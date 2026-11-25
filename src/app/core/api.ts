@@ -81,14 +81,39 @@ export abstract class Api {
   abstract resolveCrossCheck(key: CrossKey, choice: 'stated' | 'read'): Promise<Application>;
 
   // step 2 · eligibility
+  /**
+   * D-2a "Doğrulamayı başlat" with the founder's own consent tick. Also the retry after a failed check
+   * (HTTP: `eligibility.identityError`). Cancels an unused phone link.
+   */
   abstract startEligibility(consent: boolean): Promise<Application>;
+  /**
+   * The camera check on this computer ended. There is no identity vendor yet: the camera is the
+   * portal's own animation in both modes, and this call tells the server it is over. The mock moves
+   * on at once; the API's Worker decides and the store polls for its answer.
+   */
   abstract completeIdentity(): Promise<Application>;
-  abstract submitDeclaration(input: { file: { name: string; size: number } | null; declared: boolean }): Promise<Application>;
+  /** D-2d: the address document itself (the mock reads only its name and size) and the declaration tick. */
+  abstract submitDeclaration(input: { file: File | null; declared: boolean }): Promise<Application>;
+  /**
+   * D-2a "Telefonla devam et": a new link for the QR code, on `Application.phoneLink`. The API gives
+   * the token only in this answer; HTTP mode keeps it in memory while the QR code is shown.
+   */
   abstract createPhoneLink(): Promise<Application>;
+  /**
+   * The founder left the QR view ("Bu bilgisayarla devam et"): forget the link's token. HTTP mode
+   * answers the application without it; the mock keeps its link (it lives in its own data) and answers null.
+   */
+  abstract forgetPhoneLink(): Application | null;
+  /** From manual review: reopen the deck data. Mock only; the API has no such route (open decision 12). */
   abstract backToReview(): Promise<Application>;
+  /**
+   * Leaves the result screen (D-2b), or in the mock also manual review, for the payment. The API has
+   * no such route: in HTTP mode it only marks the result as seen, in memory.
+   */
   abstract proceedToPayment(): Promise<Application>;
 
-  // step 2 · identity check on the phone; works from the link's token alone, without a session
+  // step 2 · identity check on the phone; works from the link's token alone, without a session.
+  // The token travels in the X-DSP-Phone-Token header, never in a URL.
   abstract phoneLinkStatus(token: string): Promise<PhoneLinkStatus>;
   abstract startEligibilityByPhone(token: string, consent: boolean): Promise<PhoneLinkStatus>;
   abstract completeIdentityByPhone(token: string): Promise<PhoneLinkStatus>;
@@ -117,6 +142,12 @@ export abstract class Api {
 export interface Session {
   account: Account;
   app: Application | null;
+  /**
+   * HTTP mode, after a reload: the founder has no open application (staff closed it under manual
+   * review; the API answers 404 and cannot say why). `app` is then null and the portal shows the
+   * closed state instead of creating a new application. Only an explicit sign-in creates one.
+   */
+  closed?: boolean;
 }
 
 /** The light status read (`GET /api/application/status`): no personal data, cheap to repeat. */

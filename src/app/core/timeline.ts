@@ -60,8 +60,9 @@ export function identityView(p: number) {
   return { p, passportRead, liveness, identityDone: p >= 1 };
 }
 
+/** The mock's lines for the camera check (the mock always sets `startedAt`; HTTP mode does not call this). */
 export function identityEvents(app: Application, d = DURATION.identity): LogEntry[] {
-  const s = app.eligibility!.startedAt;
+  const s = app.eligibility!.startedAt!;
   return [
     { at: at(s, d, 0.25), text: 'Pasaport MRZ doğrulandı', who: 's' },
     { at: at(s, d, 1), text: `Canlılık kontrolü · eşleşme ${String(app.eligibility!.score).replace('.', ',')}`, who: 's' },
@@ -75,7 +76,7 @@ export function screeningView(p: number) {
 
 export function screeningEvents(app: Application, d = DURATION.screening): { logs: LogEntry[]; docs: DocItem[]; listTimes: string[] } {
   // Applications finished before the step was split (2026-11-17) have no separate screening start.
-  const s = app.eligibility!.screeningStartedAt ?? app.eligibility!.startedAt;
+  const s = (app.eligibility!.screeningStartedAt ?? app.eligibility!.startedAt)!;
   const listTimes = SCREENING_LISTS.map((_, i) => at(s, d, (i + 1) / 5));
   const manual = app.eligibility!.result === 'manual';
   const logs: LogEntry[] = [

@@ -15,11 +15,16 @@
       }
       <li>
         <span class="ok" aria-hidden="true"><app-icon name="check" size="13px" [stroke]="3" /></span>
-        <span class="t"><b>Uygunluk taraması</b><small>5 / 5 liste tarandı, eşleşme bulunmadı</small></span>
-        <button type="button" class="wz-link" (click)="listsOpen.set(!listsOpen())" [attr.aria-expanded]="listsOpen()">{{ listsOpen() ? 'Listeleri gizle' : 'Listeleri göster' }}</button>
+        @if (store.serverDecides) {
+          <!-- The API reports the list search as one result, not per list. -->
+          <span class="t"><b>Uygunluk taraması</b><small>Yaptırım ve PEP taraması tamamlandı</small></span>
+        } @else {
+          <span class="t"><b>Uygunluk taraması</b><small>5 / 5 liste tarandı, eşleşme bulunmadı</small></span>
+          <button type="button" class="wz-link" (click)="listsOpen.set(!listsOpen())" [attr.aria-expanded]="listsOpen()">{{ listsOpen() ? 'Listeleri gizle' : 'Listeleri göster' }}</button>
+        }
       </li>
     </ul>
-    @if (listsOpen()) {
+    @if (!store.serverDecides && listsOpen()) {
       <ol class="lists">
         @for (l of lists(); track l.n) {<li><span>{{ l.n }}</span><time>{{ l.t }}</time><em>Eşleşme bulunmadı</em></li>}
       </ol>
@@ -29,5 +34,9 @@
   <div class="wz-actions">
     <button type="button" class="wz-btn" (click)="toPayment()" [disabled]="store.busy()">Ödemeye geç</button>
   </div>
-  <p class="wz-foot"><app-icon name="file" size="13px" [stroke]="2" />Tarama raporu belgelerinize eklendi; kontroller {{ finishedAt() }} itibarıyla tamamlandı.</p>
+  @if (store.serverDecides) {
+    @if (finishedAt()) {<p class="wz-foot"><app-icon name="info" size="13px" [stroke]="2" />Kontroller {{ finishedAt() }} itibarıyla tamamlandı.</p>}
+  } @else {
+    <p class="wz-foot"><app-icon name="file" size="13px" [stroke]="2" />Tarama raporu belgelerinize eklendi; kontroller {{ finishedAt() }} itibarıyla tamamlandı.</p>
+  }
 </app-step-page>

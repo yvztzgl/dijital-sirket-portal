@@ -1,31 +1,70 @@
 <app-step-page [step]="2" ctx="manual" label="D-2c Manuel inceleme">
-  <div class="wz-head">
-    <span class="wz-chip wz-chip--warn"><app-icon name="alert" size="13px" [stroke]="2.2" />Manuel inceleme gerekli</span>
-    <h1 class="wz-h1">Başvurunuz incelemeye alındı</h1>
-    <p class="wz-lead">Başvurunuz reddedilmedi. Uyum ekibi dosyanızı en geç 2 iş günü içinde inceler; bu sürede ödeme ve imza adımlarına devam edebilirsiniz.</p>
-  </div>
-
-  <section class="wz-card wz-checks" role="status">
-    <div class="why">
-      <h2>İnceleme nedenleri</h2>
-      <ol>
-        @for (r of manualReasons(); track r.n) {<li><span>{{ r.t }}</span>@if (r.p !== '—') {<em>Sunum, {{ r.p }}</em>}</li>}
-      </ol>
+  @if (store.serverDecides) {
+    <!--
+      HTTP mode: a status page. People decide, it may take days, and the API offers the founder nothing
+      to do meanwhile: no payment while under review, no way back to the review (open decision 12). No
+      reasons are shown: the API never tells the founder why (no tipping-off). The page polls slowly and
+      moves on by itself when staff approve; a rejection closes the application (the closed screen).
+    -->
+    <div class="wz-head">
+      <span class="wz-chip wz-chip--info"><app-icon name="clock" size="13px" [stroke]="2.2" />İnceleniyor</span>
+      <h1 class="wz-h1">Başvurunuz incelemeye alındı</h1>
+      <p class="wz-lead">Başvurunuz reddedilmedi. Başvurunuz uzman personel tarafından incelenmektedir; inceleme birkaç iş günü sürebilir.</p>
     </div>
-    <ul>
-      @for (s of manualStages(); track s.t) {
-        <li>
-          <span class="ok" aria-hidden="true"><app-icon name="check" size="13px" [stroke]="3" /></span>
-          <span class="t"><b>{{ s.t }}</b><small>{{ s.s }}</small></span>
-        </li>
-      }
-    </ul>
-  </section>
 
-  <app-form-error />
-  <div class="wz-actions">
-    <button type="button" class="wz-link" (click)="fixDeck()" [disabled]="store.busy()">Sunum bilgilerini düzelt</button>
-    <button type="button" class="wz-btn" (click)="continueManual()" [disabled]="store.busy()">İnceleme kaydıyla devam et</button>
-  </div>
-  <p class="wz-foot"><app-icon name="info" size="13px" [stroke]="2" />Kuruluş, inceleme olumlu sonuçlandığında kurumlara iletilir.</p>
+    <section class="wz-card wz-checks" role="status" aria-live="polite">
+      <ul>
+        @for (s of manualStages(); track s.t) {
+          <li>
+            <span class="ok" aria-hidden="true"><app-icon name="check" size="13px" [stroke]="3" /></span>
+            <span class="t"><b>{{ s.t }}</b><small>{{ s.s }}</small></span>
+          </li>
+        }
+        <li>
+          <span class="wait" aria-hidden="true"><app-icon name="clock" size="13px" [stroke]="2.4" /></span>
+          <span class="t"><b class="pending">Başvuru incelemesi</b><small>İnceleme sürüyor</small></span>
+        </li>
+        <li>
+          <span class="next" aria-hidden="true"></span>
+          <span class="t"><b>Ödeme</b><small>İnceleme olumlu sonuçlandığında 3. adım açılır.</small></span>
+        </li>
+      </ul>
+      <p class="note">
+        <b>Bu sayfada beklemeniz gerekmez.</b>
+        <span>Sayfayı kapatabilirsiniz; yeniden giriş yaptığınızda başvurunuz kaldığı yerden devam eder. Sayfa açıksa karar verildiğinde kendiliğinden güncellenir.</span>
+      </p>
+    </section>
+
+    <p class="wz-foot"><app-icon name="info" size="13px" [stroke]="2" />İnceleme sürerken ödeme yapılamaz ve başvuru bilgileri değiştirilemez.</p>
+  } @else {
+    <div class="wz-head">
+      <span class="wz-chip wz-chip--warn"><app-icon name="alert" size="13px" [stroke]="2.2" />Manuel inceleme gerekli</span>
+      <h1 class="wz-h1">Başvurunuz incelemeye alındı</h1>
+      <p class="wz-lead">Başvurunuz reddedilmedi. Uyum ekibi dosyanızı en geç 2 iş günü içinde inceler; bu sürede ödeme ve imza adımlarına devam edebilirsiniz.</p>
+    </div>
+
+    <section class="wz-card wz-checks" role="status">
+      <div class="why">
+        <h2>İnceleme nedenleri</h2>
+        <ol>
+          @for (r of manualReasons(); track r.n) {<li><span>{{ r.t }}</span>@if (r.p !== '—') {<em>Sunum, {{ r.p }}</em>}</li>}
+        </ol>
+      </div>
+      <ul>
+        @for (s of manualStages(); track s.t) {
+          <li>
+            <span class="ok" aria-hidden="true"><app-icon name="check" size="13px" [stroke]="3" /></span>
+            <span class="t"><b>{{ s.t }}</b><small>{{ s.s }}</small></span>
+          </li>
+        }
+      </ul>
+    </section>
+
+    <app-form-error />
+    <div class="wz-actions">
+      <button type="button" class="wz-link" (click)="fixDeck()" [disabled]="store.busy()">Sunum bilgilerini düzelt</button>
+      <button type="button" class="wz-btn" (click)="continueManual()" [disabled]="store.busy()">İnceleme kaydıyla devam et</button>
+    </div>
+    <p class="wz-foot"><app-icon name="info" size="13px" [stroke]="2" />Kuruluş, inceleme olumlu sonuçlandığında kurumlara iletilir.</p>
+  }
 </app-step-page>

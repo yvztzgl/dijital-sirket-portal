@@ -1,5 +1,7 @@
 import { computed, inject, signal } from '@angular/core';
+import { Api } from '../../core/api';
 import { ApplicationStore } from '../../core/application.store';
+import { pdfBytes } from '../../core/files';
 import { Assistant } from '../../core/assistant';
 import { followFlow } from '../../core/follow';
 import { clock, dateTime, dec1, hm, maskCard, maskPhone, tl, tl0 } from '../../core/format';
@@ -22,15 +24,22 @@ export const KYC_RULES = {
 
 const PROMPTS = ['Başınızı çeviriniz', 'Göz kırpınız', 'Gülümseyiniz'];
 
-/** What the camera area shows at this moment of the check; the same on the computer and on the phone page. */
-export function cameraView(e: ReturnType<typeof identityView>) {
+/**
+ * What the camera area shows at this moment of the check; the same on the computer and on the phone
+ * page. The camera is the portal's own animation in both modes (no identity vendor yet). When it
+ * ends, the mock has decided already; with the server (`serverDecides`) the API's Worker decides
+ * after it, so the end says the result is awaited, not that the identity was verified.
+ */
+export function cameraView(e: ReturnType<typeof identityView>, serverDecides = false) {
   const face = e.passportRead && !e.identityDone;
+  const doneTitle = serverDecides ? 'Doğrulama sonucu bekleniyor' : 'Kimliğiniz doğrulandı';
   return {
-    title: !e.passportRead ? 'Pasaportunuzu kameraya gösteriniz' : face ? 'Yüzünüzü çerçevenin içinde tutunuz' : 'Kimliğiniz doğrulandı',
+    title: !e.passportRead ? 'Pasaportunuzu kameraya gösteriniz' : face ? 'Yüzünüzü çerçevenin içinde tutunuz' : doneTitle,
     view: (!e.passportRead ? 'passport' : face ? 'face' : 'wait') as 'passport' | 'face' | 'wait',
     prompt: e.liveness < 0 ? 'Yüzünüzü çerçeveye yerleştiriniz' : (PROMPTS[e.liveness] ?? ''),
     chips: PROMPTS.map((t, i) => ({ t, done: e.liveness > i, cur: e.liveness === i })),
-    wait: 'Bir sonraki aşamaya geçiliyor.',
+    waitTitle: doneTitle,
+    wait: serverDecides ? 'Sonuç birkaç saniye içinde gösterilir.' : 'Bir sonraki aşamaya geçiliyor.',
   };
 }
 
@@ -42,6 +51,8 @@ const fileSize = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.r
  */
 export class UygunlukData {
   protected readonly store = inject(ApplicationStore);
+  /** Mock mode only: demo helpers (a sample address document, the phone page opened in a tab). */
+  protected readonly demoMode = !!inject(Api).demo;
   private readonly inbox = inject(Inbox);
   private readonly assistant = inject(Assistant);
 
@@ -68,7 +79,7 @@ export class UygunlukData {
     const e = this.store.identity();
     const f = this.store.app()?.founder;
     if (!e) return null;
-    const cam = cameraView(e);
+    const cam = cameraView(e, this.store.serverDecides);
     const phone = this.store.app()?.eligibility?.via === 'phone';
     const mrzName = (x = '') => x.toLocaleUpperCase('en-US').replace(/[^A-Z]/g, '');
     return {
@@ -86,16 +97,26 @@ export class UygunlukData {
   /** D-2a pre-information: the consent tick. The button stays off until it is set; the API checks it too. */
   protected readonly consent = signal(false);
 
+  /**
+   * HTTP mode: the last camera check ended without a verified identity (the API's
+   * `eligibility.identityError`). The pre-information view says so and offers to start again; after
+   * the second failure the API moves the application to manual review.
+   */
+  protected readonly identityFailed = computed(() => !this.kyc() && this.store.app()?.eligibility?.identityError === 'identity_failed');
+
   protected readonly rules = KYC_RULES;
 
   /** D-2a "Telefonla devam et": the QR view is showing instead of the pre-information. */
   protected readonly phoneMode = signal(false);
-  /** The link behind the QR code, with the time it has left. */
+  /**
+   * The link behind the QR code, with the time it has left. The token is in the fragment (after
+   * `#`): browsers do not send it to servers, so it is neither in request lines nor in server logs.
+   */
   protected readonly phoneLink = computed(() => {
     const l = this.store.app()?.phoneLink;
     if (!l) return null;
     const left = Date.parse(l.expiresAt) - this.store.now();
-    const path = `/eligibility/phone/${l.token}`;
+    const path = `/eligibility/phone#${l.token}`;
     return { url: location.origin + path, path, expired: left <= 0, left: clock(left) };
   });
 
@@ -112,6 +133,7 @@ export class UygunlukData {
   protected useComputer() {
     this.store.clearError();
     this.phoneMode.set(false);
+    this.store.leavePhoneLink();
   }
 
   /** D-2a pre-information: "Doğrulamayı başlat". Until then `kyc()` is null and nothing runs. */
@@ -127,7 +149,7 @@ export class UygunlukData {
   // ------------------------------------------------------------------- D-2d declaration
 
   /** The address document chosen on this screen; it is sent when the declaration is confirmed. */
-  protected readonly addrFile = signal<{ name: string; size: number } | null>(null);
+  protected readonly addrFile = signal<File | null>(null);
   protected readonly addrError = signal<string | null>(null);
   protected readonly addrDragging = signal(false);
   protected readonly declared = signal(false);
@@ -162,18 +184,19 @@ export class UygunlukData {
     this.addrDragging.set(true);
   }
 
-  /** The same two checks the API makes, so the founder hears about a wrong file at once. */
-  private takeAddr(f: { name: string; size: number }) {
+  /** The same two checks the API makes, so the founder hears about a wrong file at once (the API also checks the bytes). */
+  private takeAddr(f: File) {
     this.store.clearError();
     if (!/\.(pdf|jpe?g|png)$/i.test(f.name)) return this.addrError.set('Adres belgesi PDF, JPG veya PNG biçiminde olmalıdır.');
     if (f.size > ADDRESS_DOC_MAX) return this.addrError.set('Dosya 10 MB’tan büyüktür. Daha küçük bir dosya yükleyiniz.');
     this.addrError.set(null);
-    this.addrFile.set({ name: f.name, size: f.size });
+    this.addrFile.set(f);
   }
 
-  /** Demo help, like "Test kartını doldur" on the payment screen. */
+  /** Demo help (mock mode only), like "Test kartını doldur" on the payment screen: a one-page placeholder PDF. */
   protected useSampleAddr() {
-    this.takeAddr({ name: 'adres-belgesi.pdf', size: 412_000 });
+    const bytes = pdfBytes('Adres belgesi (ornek)', ['Bu dosya Terminal Sirket demosunda uretilmis ornek bir belgedir.']);
+    this.takeAddr(new File([bytes as BlobPart], 'adres-belgesi.pdf', { type: 'application/pdf' }));
   }
 
   protected submitDeclaration() {
@@ -184,36 +207,59 @@ export class UygunlukData {
 
   private readonly events = computed(() => {
     const a = this.store.app();
-    return a?.eligibility ? screeningEvents(a, DURATION.screening / this.store.speed()) : null;
+    // The mock's simulated list times; the server reports none.
+    return a?.eligibility && !this.store.serverDecides ? screeningEvents(a, DURATION.screening / this.store.speed()) : null;
   });
 
   private readonly listTime = (iso?: string) => (iso ? hm(iso).concat(':', new Date(iso).getSeconds().toString().padStart(2, '0')) : '');
 
+  /**
+   * D-2e. The mock ticks the lists off one by one with simulated times. With the server only the end
+   * is known (the API reports no per-list result), so every list shows as being searched and the bar
+   * moves without reaching the end until the server's next stage.
+   */
   protected readonly scr = computed(() => {
     const s = this.store.screening();
+    if (this.store.serverDecides) {
+      return { done: null, percent: Math.round((s?.p ?? 0) * 100), lists: SCREENING_LISTS.map((n) => ({ n, st: 'now', t: '' })) };
+    }
     const times = this.events()?.listTimes ?? [];
     const done = s?.listsDone ?? 0;
     return {
       done,
+      percent: done * 20,
       lists: SCREENING_LISTS.map((n, i) => ({ n, st: i < done ? 'ok' : i === done ? 'now' : '', t: i < done ? this.listTime(times[i]) : '' })),
     };
   });
 
   // ---------------------------------------------------------------------- D-2b eligible
 
+  /**
+   * The finished parts of step 2. The mock's score and MRZ line are left out when the server
+   * decides: the API sends neither, and nothing is shown that it did not say.
+   */
   protected readonly doneStages = computed(() => {
     const a = this.store.app();
     if (!a?.eligibility) return [];
     const doc = a.eligibility.address?.fileName;
+    const score = a.eligibility.score;
     return [
-      { t: 'Kimlik doğrulama', s: `Pasaport MRZ doğrulandı · canlılık eşleşmesi ${dec1(a.eligibility.score)}`, d: this.passportLine() },
+      {
+        t: 'Kimlik doğrulama',
+        s: score === undefined ? 'Kimliğiniz doğrulandı' : `Pasaport MRZ doğrulandı · canlılık eşleşmesi ${dec1(score)}`,
+        d: this.store.serverDecides ? '' : this.passportLine(),
+      },
       { t: 'Beyan', s: `${doc ? `Adres belgesi: ${doc}` : 'Adres belgesi alındı'} · fon kaynağı: ${FUNDING_LABELS[a.funding].toLocaleLowerCase('tr-TR')}`, d: `${a.contact.address}, ${a.contact.postalCode} ${a.contact.country}` },
     ];
   });
 
+  /**
+   * D-2c's list. With the server the list search is only said to be finished: under manual review the
+   * founder is not told what it found (the API keeps that from the founder's side on purpose).
+   */
   protected readonly manualStages = computed(() => [
     ...this.doneStages(),
-    { t: 'Yaptırım ve PEP taraması', s: '5/5 liste tarandı · eşleşme bulunmadı', d: '' },
+    { t: 'Yaptırım ve PEP taraması', s: this.store.serverDecides ? 'Tarama tamamlandı' : '5/5 liste tarandı · eşleşme bulunmadı', d: '' },
   ]);
 
   protected readonly listsOpen = signal(true);
@@ -230,6 +276,10 @@ export class UygunlukData {
 
   // ------------------------------------------------------------------- D-2c manual review
 
+  /**
+   * The mock's demo reasons. In HTTP mode D-2c shows none: the API never tells the founder why an
+   * application is under review (no tipping-off), and the portal does not guess.
+   */
   protected readonly manualReasons = computed(() => {
     const a = this.store.app();
     if (a?.funding === 'third-party') {

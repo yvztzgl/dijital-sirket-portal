@@ -25,8 +25,8 @@ export function toAccount(me: MeWire): Account {
 
 /**
  * The API's stage → the portal's. The names are the same; the portal's `eligible` does not exist on
- * the API (it moves straight to `payment`). An unknown stage is an error: guessing one would put
- * the founder on the wrong screen.
+ * the API (it moves straight to `payment`; `toApplication` shows the result screen once, see
+ * `showsResult`). An unknown stage is an error: guessing one would put the founder on the wrong screen.
  */
 export function toStage(stage: StageWire): Stage {
   if (SAME_STAGES.includes(stage)) return stage as Stage;
@@ -38,11 +38,17 @@ const SAME_STAGES: string[] = [
   'payment', 'threeDs', 'signing', 'calling', 'signed', 'setup', 'done',
 ];
 
+/** What the HTTP client knows beside the view and passes to `toApplication`. */
+export interface MapOptions {
+  /** The founder pressed "Ödemeye geç" on the result screen in this page's life (HttpApi keeps it in memory). */
+  resultSeen?: boolean;
+}
+
 /**
  * `GET /api/application` → the portal's application. `account` supplies the founder's name and
  * e-mail until the review has its own values (the mock does the same for a new application).
  */
-export function toApplication(view: ApplicationWire, account: Account): Application {
+export function toApplication(view: ApplicationWire, account: Account, options: MapOptions = {}): Application {
   const review = (key: ReviewKey) => view.review[key]?.value.trim() ?? '';
   const tradeName = review('trade_name');
   // The title being checked or already reserved is the reservation's (D-1d may have chosen another
@@ -59,7 +65,7 @@ export function toApplication(view: ApplicationWire, account: Account): Applicat
     // The reference number is what the founder sees and quotes ("DS-…"); the API's uuid is not needed by any screen.
     id: view.referenceNo,
     createdAt: view.createdAt,
-    stage: toStage(view.stage),
+    stage: showsResult(view, options) ? 'eligible' : toStage(view.stage),
     founderType: view.founderType === 'resident' ? 'resident' : 'foreign',
     founder: {
       firstName: review('given_name') || account.firstName,
@@ -99,6 +105,7 @@ export function toApplication(view: ApplicationWire, account: Account): Applicat
       : undefined,
     crossCheck: view.crossCheck.map(toCrossCheck),
     titleCheck: toTitleCheck(view.titleCheck),
+    eligibility: toEligibility(view),
     payment: view.payment.status
       ? { holder: '', last4: view.payment.last4 ?? '', amount: view.payment.amountMinor / 100, paidAt: view.payment.paidAt ?? undefined }
       : undefined,
@@ -113,10 +120,78 @@ export function toApplication(view: ApplicationWire, account: Account): Applicat
           validUntil: view.signature.validUntil,
         }
       : undefined,
-    docs: view.documents.map((d) => ({ group: '', name: d.type, sizeKb: d.sizeKb, at: d.at })),
+    docs: view.documents.map((d) => ({ ...(DOC_NAMES[d.type] ?? { group: '', name: d.type }), sizeKb: d.sizeKb, at: d.at })),
     logs: view.logs.map(toLog),
   };
 }
+
+/**
+ * The portal's result screen (D-2b, stage `eligible`) as a one-time acknowledgement. The API has no
+ * such stage: a cleared list search goes straight to `payment`. The screen is shown while the API
+ * is at `payment` with the result `eligible`, no payment has been started, the founder has not yet
+ * pressed "Ödemeye geç" (`resultSeen`), and the application did not come through manual review
+ * (after staff approve, the portal goes straight on to the payment, which the API's own timeline
+ * line "Başvurunuz incelendi; ödeme adımına geçebilirsiniz" announces).
+ */
+function showsResult(view: ApplicationWire, options: MapOptions): boolean {
+  return (
+    view.stage === 'payment' &&
+    view.eligibility?.result === 'eligible' &&
+    !view.payment.status &&
+    !options.resultSeen &&
+    !view.logs.some((l) => l.text === LOG_TEXTS.reviewApproved)
+  );
+}
+
+/**
+ * The API's timeline lines (Wizard.ActivityTexts on the API) that step 2 reads times from. The view
+ * carries no codes for them, only the Turkish text; api-mapper.spec.ts checks them against captured
+ * answers, so a changed wording on the API shows up there.
+ */
+export const LOG_TEXTS = {
+  identityStarted: 'Kimlik doğrulama başlatıldı',
+  identityStartedByPhone: 'Kimlik doğrulama telefondan başlatıldı',
+  screeningDone: 'Yaptırım ve PEP taraması tamamlandı',
+  reviewApproved: 'Başvurunuz incelendi; ödeme adımına geçebilirsiniz',
+};
+
+/** The newest timeline line with one of these texts. */
+function latestLog(view: ApplicationWire, texts: string[]) {
+  return view.logs.filter((l) => texts.includes(l.text)).reduce<ApplicationWire['logs'][number] | undefined>((a, b) => (!a || b.at > a.at ? b : a), undefined);
+}
+
+/**
+ * Step 2 as the API reports it. Nothing is made up: there is no score (the mock's liveness score
+ * has no counterpart; D-2b leaves it out), no address file name, and `result` stays empty until the
+ * list search has finished. Times the view does not carry as fields come from its timeline:
+ * - `startedAt`, `via`: the newest "Kimlik doğrulama (telefondan) başlatıldı" line, only while a
+ *   check is open (`running`); the camera animation runs from it, and `via: 'phone'` makes the
+ *   computer follow the phone instead of finishing the check itself;
+ * - `screeningStartedAt`: the declaration's time (the API queues the list search in the same request);
+ * - `finishedAt`: the "Yaptırım ve PEP taraması tamamlandı" line.
+ */
+function toEligibility(view: ApplicationWire): Application['eligibility'] {
+  const e = view.eligibility;
+  if (!e) return undefined;
+  const started = e.running ? latestLog(view, [LOG_TEXTS.identityStarted, LOG_TEXTS.identityStartedByPhone]) : undefined;
+  const finished = latestLog(view, [LOG_TEXTS.screeningDone]);
+  return {
+    ...(started ? { startedAt: started.at } : {}),
+    ...(started?.text === LOG_TEXTS.identityStartedByPhone ? { via: 'phone' as const } : {}),
+    ...(e.consentAt ? { consentAt: e.consentAt } : {}),
+    running: e.running,
+    ...(e.identityError === 'identity_failed' ? { identityError: 'identity_failed' as const } : {}),
+    ...(e.declaredAt ? { declaredAt: e.declaredAt, screeningStartedAt: e.declaredAt } : {}),
+    ...(e.result ? { result: e.result } : {}),
+    ...(e.result && finished ? { finishedAt: finished.at } : {}),
+  };
+}
+
+/** The document types the API names in `documents`, as the portal's documents list groups and names them. */
+const DOC_NAMES: Record<string, { group: string; name: string }> = {
+  deck: { group: '1 · Başvuru & Uygunluk', name: 'Sunum' },
+  address_proof: { group: '1 · Başvuru & Uygunluk', name: 'Adres belgesi' },
+};
 
 function toProfile(p: NonNullable<ApplicationWire['profile']>): Profile {
   return {

@@ -8,9 +8,9 @@
   <section class="wz-card wz-scr">
     <header>
       <h2 class="wz-card-h">Taranan listeler</h2>
-      <span aria-live="polite">{{ s.done }} / 5</span>
+      @if (s.done !== null) {<span aria-live="polite">{{ s.done }} / 5</span>}
     </header>
-    <div class="bar" aria-hidden="true"><i [style.width.%]="s.done * 20"></i></div>
+    <div class="bar" aria-hidden="true"><i [style.width.%]="s.percent"></i></div>
     <ol>
       @for (l of s.lists; track l.n) {
         <li [class.ok]="l.st === 'ok'" [class.now]="l.st === 'now'">

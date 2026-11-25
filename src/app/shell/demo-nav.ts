@@ -33,7 +33,8 @@ export class DemoNav {
         this.jumping.set(false);
       }
       const token = this.store.app()?.phoneLink?.token;
-      if (token) await this.router.navigateByUrl(`/eligibility/phone/${token}`);
+      // The token goes in the fragment, as on the QR code (d2m).
+      if (token) await this.router.navigateByUrl(`/eligibility/phone#${token}`);
       return;
     }
     const reachable =

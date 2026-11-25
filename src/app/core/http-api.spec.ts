@@ -5,7 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError } from './api-error';
 import { HttpApi, markApiWrites } from './http-api';
 import { ApplicationWire } from './api-types';
-import { CAPTURED, ME, NEW_APPLICATION } from './testing/api-fixtures';
+import { CAPTURED, IDENTITY_FAILED, ME, NEW_APPLICATION } from './testing/api-fixtures';
 
 describe('HttpApi', () => {
   let api: HttpApi;
@@ -35,7 +35,7 @@ describe('HttpApi', () => {
 
   it('has no demo tools and rejects a call that is not connected yet', async () => {
     expect(api.demo).toBeNull();
-    const error = await api.startEligibility().catch((e: unknown) => e);
+    const error = await api.pay().catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).message).toBe('Bu işlem henüz sunucuya bağlanmadı.');
     expect((error as ApiError).code).toBe('not_connected');
@@ -449,5 +449,193 @@ describe('HttpApi step 1', () => {
     const again = api.reference();
     (await next('GET', '/api/reference/wizard')).flush(CAPTURED.reference);
     expect((await again).naceCodes).toHaveLength(10);
+  });
+});
+
+describe('HttpApi step 2', () => {
+  let api: HttpApi;
+  let backend: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(withInterceptors([markApiWrites])), provideHttpClientTesting()],
+    });
+    api = TestBed.inject(HttpApi);
+    backend = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => backend.verify());
+
+  async function next(method: string, url: string) {
+    await new Promise((resolve) => setTimeout(resolve));
+    const req = backend.expectOne(url);
+    expect(req.request.method).toBe(method);
+    return req;
+  }
+
+  async function read(view: ApplicationWire, changedAt = 't1') {
+    (await next('GET', '/api/application/status')).flush({ stage: view.stage, changedAt });
+    (await next('GET', '/api/application')).flush(view);
+  }
+
+  async function signedInAt(view: ApplicationWire) {
+    const pending = api.restore();
+    (await next('GET', '/api/me')).flush({ ...ME, firstName: 'Deneme', lastName: 'Kurucu', email: 'kurucu@example.test' });
+    await read(view);
+    await pending;
+  }
+
+  const empty = (status: number) => [null, { status, statusText: 'x' }] as const;
+
+  it('starts the check with the consent as ticked, completes it, and reads the application after each', async () => {
+    await signedInAt(CAPTURED.titleReserved);
+    let pending = api.startEligibility(true);
+    const start = await next('POST', '/api/application/identity/start');
+    expect(start.request.body).toEqual({ consent: true });
+    expect(start.request.headers.get('X-DSP-Request')).toBe('1');
+    start.flush(...empty(204));
+    await read(CAPTURED.identityRunning);
+    expect((await pending).eligibility!.running).toBe(true);
+
+    pending = api.completeIdentity();
+    const complete = await next('POST', '/api/application/identity/complete');
+    expect(complete.request.body).toBeNull();
+    complete.flush(...empty(202));
+    await read(CAPTURED.declaration);
+    expect((await pending).stage).toBe('declaration');
+  });
+
+  it('sends an unticked consent as false and passes on the refusal', async () => {
+    await signedInAt(CAPTURED.titleReserved);
+    const refused = api.startEligibility(false).catch((e: unknown) => e);
+    const start = await next('POST', '/api/application/identity/start');
+    expect(start.request.body).toEqual({ consent: false });
+    start.flush({ title: 'x', status: 400, code: 'validation_failed', requestId: 'r', errors: { consent: ['Devam etmek için açık rıza metnini onaylayınız.'] } }, { status: 400, statusText: 'x' });
+    expect(((await refused) as ApiError).fields).toEqual({ consent: ['Devam etmek için açık rıza metnini onaylayınız.'] });
+  });
+
+  it('starts again after a failed check', async () => {
+    await signedInAt(IDENTITY_FAILED);
+    const pending = api.startEligibility(true);
+    (await next('POST', '/api/application/identity/start')).flush(...empty(204));
+    await read(CAPTURED.identityRunning);
+    expect((await pending).eligibility).toMatchObject({ running: true });
+  });
+
+  it('keeps the phone link token in memory only, on the application while the QR code is shown', async () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    await signedInAt(CAPTURED.titleReserved);
+    const pending = api.createPhoneLink();
+    const post = await next('POST', '/api/application/phone-link');
+    expect(post.request.headers.get('X-DSP-Request')).toBe('1');
+    post.flush({ token: 'secret-token-1', expiresInSeconds: 600 });
+    await read(CAPTURED.titleReserved);
+    const app = await pending;
+    expect(app.phoneLink!.token).toBe('secret-token-1');
+    expect(Date.parse(app.phoneLink!.expiresAt) - Date.parse(app.phoneLink!.createdAt)).toBe(600_000);
+    // Still there on the next read (the computer polls while the QR code is shown) ...
+    const work = api.work.kind === 'server' ? api.work : null;
+    let again = work!.application();
+    await read(CAPTURED.titleReserved, 't2');
+    expect((await again).phoneLink!.token).toBe('secret-token-1');
+    // ... gone once the phone has started the check,
+    again = work!.application();
+    await read(CAPTURED.identityRunningPhone, 't3');
+    const following = await again;
+    expect(following.phoneLink).toBeUndefined();
+    expect(following.eligibility).toMatchObject({ running: true, via: 'phone' });
+    // and never written to the browser's storage.
+    expect(setItem).not.toHaveBeenCalled();
+    setItem.mockRestore();
+  });
+
+  it('forgets the token when the founder leaves the QR view', async () => {
+    await signedInAt(CAPTURED.titleReserved);
+    const pending = api.createPhoneLink();
+    (await next('POST', '/api/application/phone-link')).flush({ token: 'secret-token-2', expiresInSeconds: 600 });
+    await read(CAPTURED.titleReserved);
+    await pending;
+    expect(api.forgetPhoneLink()!.phoneLink).toBeUndefined();
+  });
+
+  it('calls the phone routes with the token in a header only, and the writes marked', async () => {
+    let status = api.phoneLinkStatus('secret-token-3');
+    let req = await next('GET', '/api/phone/status');
+    expect(req.request.headers.get('X-DSP-Phone-Token')).toBe('secret-token-3');
+    expect(req.request.urlWithParams).toBe('/api/phone/status');
+    req.flush(CAPTURED.phoneReady);
+    expect(await status).toEqual({ state: 'ready', expiresAt: CAPTURED.phoneReady.expiresAt });
+
+    status = api.startEligibilityByPhone('secret-token-3', true);
+    req = await next('POST', '/api/phone/start');
+    expect(req.request.body).toEqual({ consent: true });
+    expect(req.request.headers.get('X-DSP-Phone-Token')).toBe('secret-token-3');
+    expect(req.request.headers.get('X-DSP-Request')).toBe('1');
+    req.flush(...empty(204));
+    (await next('GET', '/api/phone/status')).flush(CAPTURED.phoneRunning);
+    expect(await status).toEqual({ state: 'running', startedAt: CAPTURED.phoneRunning.startedAt });
+
+    status = api.completeIdentityByPhone('secret-token-3');
+    req = await next('POST', '/api/phone/complete');
+    expect(req.request.headers.get('X-DSP-Phone-Token')).toBe('secret-token-3');
+    expect(req.request.headers.get('X-DSP-Request')).toBe('1');
+    req.flush(...empty(202));
+    (await next('GET', '/api/phone/status')).flush(CAPTURED.phoneDone);
+    expect(await status).toEqual({ state: 'done' });
+
+    status = api.phoneLinkStatus('unknown');
+    (await next('GET', '/api/phone/status')).flush({ state: 'invalid', expiresAt: null, startedAt: null });
+    expect(await status).toEqual({ state: 'invalid' });
+  });
+
+  it('sends the declaration as multipart with the real file and the tick as given', async () => {
+    await signedInAt(CAPTURED.declaration);
+    const file = new File(['%PDF-1.4'], 'fatura.pdf', { type: 'application/pdf' });
+    const pending = api.submitDeclaration({ file, declared: true });
+    const post = await next('POST', '/api/application/declaration');
+    const body = post.request.body as FormData;
+    expect((body.get('file') as File).name).toBe('fatura.pdf');
+    expect((body.get('file') as File).size).toBe(file.size);
+    expect(body.get('declared')).toBe('true');
+    expect(post.request.headers.has('Content-Type')).toBe(false);
+    post.flush(...empty(202));
+    await read(CAPTURED.screening);
+    expect((await pending).stage).toBe('screening');
+  });
+
+  it('shows the result once: "Ödemeye geç" sends nothing and moves on to the payment', async () => {
+    await signedInAt(CAPTURED.eligible);
+    const work = api.work.kind === 'server' ? api.work : null;
+    let again = work!.application();
+    await read(CAPTURED.eligible, 't2');
+    expect((await again).stage).toBe('eligible');
+    expect((await api.proceedToPayment()).stage).toBe('payment');
+    backend.expectNone(() => true);
+    again = work!.application();
+    await read(CAPTURED.eligible, 't3');
+    expect((await again).stage).toBe('payment');
+  });
+
+  it('refuses "go on" and "back to review" under manual review', async () => {
+    await signedInAt(CAPTURED.manual);
+    expect(((await api.proceedToPayment().catch((e: unknown) => e)) as ApiError).code).toBe('not_connected');
+    expect(((await api.backToReview().catch((e: unknown) => e)) as ApiError).code).toBe('not_connected');
+  });
+
+  it('creates an application only at an explicit sign-in: a reload of a closed one reports it closed', async () => {
+    const pending = api.restore();
+    (await next('GET', '/api/me')).flush(ME);
+    (await next('GET', '/api/application/status')).flush(CAPTURED.closed, { status: 404, statusText: 'Not Found' });
+    expect(await pending).toEqual({ account: expect.objectContaining({ email: ME.email }), app: null, closed: true });
+    backend.expectNone('/api/application');
+  });
+
+  it('passes on 404 no_application from a poll without creating anything', async () => {
+    await signedInAt(CAPTURED.manual);
+    const work = api.work.kind === 'server' ? api.work : null;
+    const failed = work!.status().catch((e: unknown) => e);
+    (await next('GET', '/api/application/status')).flush(CAPTURED.closed, { status: 404, statusText: 'Not Found' });
+    expect(((await failed) as ApiError).code).toBe('no_application');
+    backend.expectNone((r) => r.method === 'POST');
   });
 });

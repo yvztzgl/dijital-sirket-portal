@@ -1,4 +1,4 @@
-import { ApplicationWire, MeWire } from '../api-types';
+import { ApplicationWire, MeWire, PhoneStatusWire } from '../api-types';
 import { WizardReference } from '../models';
 import profile from './captured/profile.json';
 import reference from './captured/reference.json';
@@ -11,6 +11,19 @@ import titleChecking from './captured/title-checking.json';
 import titleConflict from './captured/title-conflict.json';
 import titleReserved from './captured/title-reserved.json';
 import verified from './captured/verified.json';
+import closed from './captured/closed.json';
+import declaration from './captured/declaration.json';
+import eligible from './captured/eligible.json';
+import identityRunningPhone from './captured/identity-running-phone.json';
+import identityRunning from './captured/identity-running.json';
+import manual from './captured/manual.json';
+import phoneDone from './captured/phone-done.json';
+import phoneLink from './captured/phone-link.json';
+import phoneReady from './captured/phone-ready.json';
+import phoneRunning from './captured/phone-running.json';
+import residentDeclaration from './captured/resident-declaration.json';
+import reviewApproved from './captured/review-approved.json';
+import screening from './captured/screening.json';
 
 /**
  * Literal API answers for the specs, in the shape `GET /api/me` and `GET /api/application` send
@@ -125,6 +138,31 @@ export const CAPTURED = {
   titleReserved: titleReserved as ApplicationWire,
   /** `GET /api/application/status` while the title was being checked. */
   status: status as { stage: 'titleChecking'; changedAt: string },
+  // Step 2 (captured 2026-11-25; each from a founder of its own, see tools/api-capture/capture.sh)
+  /** Founder A: a check started on the phone page, seen from the computer. */
+  identityRunningPhone: identityRunningPhone as ApplicationWire,
+  /** Founder A after the phone finished and the Worker passed the identity. */
+  declaration: declaration as ApplicationWire,
+  /** Founder A right after the declaration: the list search runs. */
+  screening: screening as ApplicationWire,
+  /** Founder A after a clear list search: the API is at `payment` with the result `eligible`. */
+  eligible: eligible as ApplicationWire,
+  /** Founder B (third-party funds): a check started on the computer. */
+  identityRunning: identityRunning as ApplicationWire,
+  /** Founder B after the list search: under manual review. */
+  manual: manual as ApplicationWire,
+  /** Founder B after staff approved (dev/staff.sh review approve). */
+  reviewApproved: reviewApproved as ApplicationWire,
+  /** Founder D, resident (e-Devlet): straight to the declaration after the reserved title. */
+  residentDeclaration: residentDeclaration as ApplicationWire,
+  /** Founder C after staff rejected: `GET /api/application` answers this 404. */
+  closed: closed as { title: string; status: 404; code: 'no_application' },
+  /** `POST /api/application/phone-link` (200); the token is replaced with "<token>". */
+  phoneLink: phoneLink as { token: string; expiresInSeconds: number },
+  /** `GET /api/phone/status` with the link's token: before the start, while it runs, after the Worker decided. */
+  phoneReady: phoneReady as PhoneStatusWire,
+  phoneRunning: phoneRunning as PhoneStatusWire,
+  phoneDone: phoneDone as PhoneStatusWire,
   /** `GET /api/reference/wizard`. */
   reference: reference as WizardReference,
 };
@@ -135,3 +173,21 @@ export const CAPTURED = {
  * only after five failures): the captured scanning answer with those two values changed.
  */
 export const DECK_FAILED: ApplicationWire = { ...CAPTURED.scanning, stage: 'verified', deck: { ...CAPTURED.scanning.deck!, status: 'failed' } };
+
+/**
+ * A failed camera check, built by hand from the captured `identityRunning` (the development identity
+ * provider always passes, so a failure cannot be captured). What the API's view says then
+ * (ApplicationQueries: the last identity_check is done and no founder person was linked): no check
+ * open, `identityError: "identity_failed"`, and the Worker's timeline line.
+ */
+export const IDENTITY_FAILED: ApplicationWire = {
+  ...CAPTURED.identityRunning,
+  eligibility: { ...CAPTURED.identityRunning.eligibility!, running: false, identityError: 'identity_failed' },
+  logs: [...CAPTURED.identityRunning.logs, { at: '2026-11-25T10:31:20+00:00', text: 'Kimlik doğrulanamadı; lütfen yeniden deneyiniz', who: 's' }],
+};
+
+/**
+ * The second failure (the policy's limit is two): ApplicationStage.Of says `manual` while the
+ * application's status is still `identity`; the view's result stays null and the identity not done.
+ */
+export const IDENTITY_FAILED_TWICE: ApplicationWire = { ...IDENTITY_FAILED, stage: 'manual' };

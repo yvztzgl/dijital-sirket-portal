@@ -88,6 +88,22 @@ export interface EligibilityWire {
   result: 'eligible' | 'manual' | null;
 }
 
+/** `POST /api/application/phone-link` (200). The token is sent only here, once. */
+export interface PhoneLinkWire {
+  token: string;
+  expiresInSeconds: number;
+}
+
+/**
+ * `GET /api/phone/status` (PhoneStatus): what the phone page may learn, a state and times only.
+ * `invalid` also for an unknown, revoked or replaced token; never an error.
+ */
+export interface PhoneStatusWire {
+  state: 'invalid' | 'ready' | 'expired' | 'running' | 'done';
+  expiresAt: string | null;
+  startedAt: string | null;
+}
+
 export interface PaymentWire {
   /** In kuruş. */
   amountMinor: number;

@@ -25,7 +25,10 @@ export type Stage =
   | 'calling'
   | 'signed'
   | 'setup' // agencies being processed
-  | 'done';
+  | 'done'
+  // HTTP mode only: staff rejected the application under manual review and the API closed it (its
+  // read answers 404). Not a wizard stage: not in STAGE_ORDER, never seeded, never sent by the API.
+  | 'closed';
 
 export const STAGE_ORDER: Stage[] = [
   'registered', 'profile', 'verified', 'scanning', 'review', 'titleChecking', 'titleConflict', 'eligibility', 'declaration', 'screening', 'eligible', 'manual',
@@ -48,6 +51,7 @@ export function stepOf(stage: Stage): number {
     case 'screening':
     case 'eligible':
     case 'manual':
+    case 'closed':
       return 2;
     case 'payment':
     case 'threeDs':
@@ -212,15 +216,28 @@ export interface Application {
     alternatives?: string[];
   };
   /**
-   * `consentAt`: when the founder ticked the consent on D-2a's pre-information view (absent on
-   * applications saved before 2026-11-17). `via: 'phone'`: the check was started from the phone page.
+   * Step 2. The mock fills it when the founder starts the check and decides the result at once
+   * (`score`, `result`); the API reports it as the server sees it (api-mapper `toEligibility`), so in
+   * HTTP mode `score` is never set and `result` only once the list search has finished.
+   * `consentAt`: when the founder ticked the consent on D-2a (absent on mock applications saved
+   * before 2026-11-17). `via: 'phone'`: the check was started from the phone page.
    */
   eligibility?: {
-    startedAt: string;
+    /**
+     * When the camera check now open was started; the camera animation runs from it. Absent in HTTP
+     * mode while no check is open (before the first start, after a failed one).
+     */
+    startedAt?: string;
     consentAt?: string;
     via?: 'phone';
-    score: number;
-    result: 'eligible' | 'manual';
+    /** The mock's liveness score. The API sends none. */
+    score?: number;
+    /** `eligible` or `manual`: decided at the start in the mock, after the list search by the API. */
+    result?: 'eligible' | 'manual';
+    /** HTTP mode: a check is open on the server (camera not finished yet, or the Worker deciding). */
+    running?: boolean;
+    /** HTTP mode: the last check ended without a verified identity; the founder may start again. */
+    identityError?: 'identity_failed';
     /** The camera check ended (stage moved to `declaration`). */
     identityDoneAt?: string;
     /** The address document the founder uploaded on the declaration screen. The mock keeps its name and size only. */

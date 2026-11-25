@@ -4,17 +4,18 @@ import { firstValueFrom } from 'rxjs';
 import type { Api, ApplicationStatus, ReviewPatch, ServerWork, Session } from './api';
 import { ApiError } from './api-error';
 import { toAccount, toApplication, toReviewFields, toStage } from './api-mapper';
-import { ApplicationWire, EdevletStartWire, MeWire, StageWire } from './api-types';
+import { ApplicationWire, EdevletStartWire, MeWire, PhoneLinkWire, PhoneStatusWire, StageWire } from './api-types';
 import { Account, Application, CrossKey, DeckConsents, PhoneLinkStatus, Profile, WizardReference } from './models';
 
 /**
  * The real platform API over HTTP, used by the `http` build (see docs/api-client.md).
  *
  * Connected so far: sign-in (register, code, login, logout, password reset, e-Devlet), reading
- * the session back after a reload, and step 1 (profile, deck, review, cross-checks, title, the
- * reference data, and polling the status read while the server works). The session is an HttpOnly
- * cookie the server sets; this class never sees it, and nothing about the founder is kept in the
- * browser's storage (only in this object's memory, until sign-out or reload).
+ * the session back after a reload, step 1 (profile, deck, review, cross-checks, title, the
+ * reference data, and polling the status read while the server works) and step 2 (identity check
+ * on the computer or on the phone, declaration, the result, manual review). The session is an
+ * HttpOnly cookie the server sets; this class never sees it, and nothing about the founder is kept
+ * in the browser's storage (only in this object's memory, until sign-out or reload).
  *
  * Every write answers with an empty body (204 or 202); each write here is followed by a fresh read
  * of the application (`fresh`).
@@ -49,6 +50,19 @@ export class HttpApi implements Api {
   private seenStatus: ApplicationStatus | null = null;
   /** The reference data, read once per session. */
   private referenceData: Promise<WizardReference> | null = null;
+  /**
+   * The phone link's token, which the API gives only in the answer to `POST /phone-link`. Kept in
+   * this object's memory while the QR code is shown (never in storage), put on the mapped
+   * application as `phoneLink`, and dropped when the founder leaves the QR view, when the check has
+   * started (on either device), when the stage moves on, and on sign-out.
+   */
+  private phoneLink: NonNullable<Application['phoneLink']> | null = null;
+  /**
+   * The applications (by the API's id) whose result screen the founder has left with "Ödemeye geç".
+   * Memory only, so nothing is written to the browser's storage; after a reload the result screen
+   * shows once more, which asks nothing of the server (see `proceedToPayment`).
+   */
+  private readonly resultSeen = new Set<string>();
 
   // auth
 
@@ -104,10 +118,13 @@ export class HttpApi implements Api {
     return this.session();
   }
 
-  /** After a reload: the session the browser's cookie still holds, or null (401) when there is none. */
+  /**
+   * After a reload: the session the browser's cookie still holds, or null (401) when there is none.
+   * A founder without an open application is not given a new one here (see `session`).
+   */
   async restore(): Promise<Session | null> {
     try {
-      return await this.session();
+      return await this.session(false);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) return null;
       throw error;
@@ -116,10 +133,13 @@ export class HttpApi implements Api {
 
   /**
    * What every sign-in ends with: who is signed in, then their application. Signing in does not
-   * create one on the API, so a 404 `no_application` is answered by creating it (idempotent) and
-   * reading again.
+   * create one on the API, so after an explicit sign-in (`create`) a 404 `no_application` is
+   * answered by creating it (idempotent) and reading again. Nowhere else: not after a reload and
+   * never while the portal holds an application. The API cannot tell "never had one" from "closed by
+   * staff", so a reload after a rejection shows the closed state (`closed`) rather than silently
+   * starting again; the next sign-in does create a new application (an API gap, docs/api-client.md).
    */
-  private async session(): Promise<Session> {
+  private async session(create = true): Promise<Session> {
     this.forget();
     const account = toAccount(await this.request<MeWire>('GET', '/api/me'));
     this.account = account;
@@ -128,6 +148,7 @@ export class HttpApi implements Api {
       app = await this.fresh();
     } catch (error) {
       if (!(error instanceof ApiError) || error.code !== 'no_application') throw error;
+      if (!create) return { account, app: null, closed: true };
       await this.request('POST', '/api/application');
       app = await this.fresh();
     }
@@ -140,6 +161,8 @@ export class HttpApi implements Api {
     this.view = null;
     this.seenStatus = null;
     this.referenceData = null;
+    this.phoneLink = null;
+    this.resultSeen.clear();
   }
 
   /** The light read: stage and change time, nothing decrypted on the server. */
@@ -159,7 +182,16 @@ export class HttpApi implements Api {
     const account = this.account ?? (this.account = toAccount(await this.request<MeWire>('GET', '/api/me')));
     this.view = view;
     this.seenStatus = status;
-    return toApplication(view, account);
+    return this.mapped();
+  }
+
+  /** The last view, mapped, with what only this object knows: the phone link and whether the result was seen. */
+  private mapped(): Application {
+    const view = this.view!;
+    // The QR code is no longer shown once a check is open or the identity step is over.
+    if (view.stage !== 'eligibility' || view.eligibility?.running || view.eligibility?.identityDone) this.phoneLink = null;
+    const app = toApplication(view, this.account!, { resultSeen: this.resultSeen.has(view.id) });
+    return this.phoneLink ? { ...app, phoneLink: this.phoneLink } : app;
   }
 
   /** `GET /api/reference/wizard`, once per session; read again after a failure. */
@@ -224,15 +256,110 @@ export class HttpApi implements Api {
   }
 
   // step 2 · eligibility
-  startEligibility(): Promise<Application> { return notConnected(); }
-  completeIdentity(): Promise<Application> { return notConnected(); }
-  submitDeclaration(): Promise<Application> { return notConnected(); }
-  createPhoneLink(): Promise<Application> { return notConnected(); }
+
+  /**
+   * 204; idempotent while a check is open, and cancels an unused phone link (so the token is dropped
+   * here too). The consent is sent exactly as ticked; the API refuses `false` (400 `errors.consent`).
+   * 409 `already_verified`; 409 `identity_review` after too many failed checks.
+   */
+  async startEligibility(consent: boolean): Promise<Application> {
+    await this.request('POST', '/api/application/identity/start', { consent: consent === true });
+    this.phoneLink = null;
+    return this.fresh();
+  }
+
+  /**
+   * 202: the camera check on this computer ended. There is no identity vendor yet, so the camera is
+   * the portal's own animation (as in the mock); when it ends the store calls this, and the API's
+   * Worker decides (dev: always a pass). The store then polls until the stage is `declaration`, or
+   * `eligibility` with `identityError`, or `manual` after the second failure.
+   * 409 `identity_not_started` when no check is waiting (finished elsewhere, or already sent).
+   */
+  async completeIdentity(): Promise<Application> {
+    await this.request('POST', '/api/application/identity/complete');
+    return this.fresh();
+  }
+
+  /**
+   * 202, stage `screening`. Multipart: the file itself (PDF, JPG or PNG; 10 MB; the API checks the
+   * bytes) and the tick as given. As with the deck, the browser sets the multipart Content-Type.
+   */
+  async submitDeclaration(input: { file: File | null; declared: boolean }): Promise<Application> {
+    const form = new FormData();
+    if (input.file) form.append('file', input.file, input.file.name);
+    form.append('declared', String(input.declared === true));
+    await this.request('POST', '/api/application/declaration', form);
+    return this.fresh();
+  }
+
+  /**
+   * 200 `{token, expiresInSeconds}` (ten minutes); a new link revokes an unused one. The token is
+   * in this answer only: it is kept in memory (`phoneLink`) and never written anywhere.
+   * 409 `identity_started` while a check is open.
+   */
+  async createPhoneLink(): Promise<Application> {
+    const { token, expiresInSeconds } = await this.request<PhoneLinkWire>('POST', '/api/application/phone-link');
+    const now = Date.now();
+    const link = { token, createdAt: new Date(now).toISOString(), expiresAt: new Date(now + expiresInSeconds * 1000).toISOString() };
+    const app = await this.fresh();
+    // Read after the link was made: unless the read says the step is over, show it.
+    if (app.stage !== 'eligibility' || app.eligibility?.running) return app;
+    this.phoneLink = link;
+    return { ...app, phoneLink: link };
+  }
+
+  /** The founder left the QR view: the token is forgotten. The link itself expires on the server (or a new one revokes it). */
+  forgetPhoneLink(): Application | null {
+    this.phoneLink = null;
+    return this.view && this.account ? this.mapped() : null;
+  }
+
+  /** Not offered in HTTP mode: the API has no route back from manual review (open decision 12). */
   backToReview(): Promise<Application> { return notConnected(); }
-  proceedToPayment(): Promise<Application> { return notConnected(); }
-  phoneLinkStatus(): Promise<PhoneLinkStatus> { return notConnected(); }
-  startEligibilityByPhone(): Promise<PhoneLinkStatus> { return notConnected(); }
-  completeIdentityByPhone(): Promise<PhoneLinkStatus> { return notConnected(); }
+
+  /**
+   * "Ödemeye geç" on the result screen. The API is already at `payment`; leaving the screen is the
+   * founder's acknowledgement only, so nothing is sent: the result is marked seen in memory and the
+   * last view mapped again. Anywhere else (manual review) it is refused like an unconnected call.
+   */
+  async proceedToPayment(): Promise<Application> {
+    if (!this.view || !this.account || this.mapped().stage !== 'eligible') return notConnected();
+    this.resultSeen.add(this.view.id);
+    return this.mapped();
+  }
+
+  // step 2 · the phone page. No session: the token goes in the X-DSP-Phone-Token header only, never
+  // in a URL. These routes share the sign-in rate limit (20 a minute per address), so the phone page
+  // polls slowly (ApplicationStore.PHONE_POLL_MS).
+
+  /** Never an error for a bad token: `invalid`. */
+  async phoneLinkStatus(token: string): Promise<PhoneLinkStatus> {
+    const s = await this.request<PhoneStatusWire>('GET', '/api/phone/status', undefined, phoneHeaders(token));
+    switch (s.state) {
+      case 'ready':
+        return s.expiresAt ? { state: 'ready', expiresAt: s.expiresAt } : { state: 'invalid' };
+      case 'running':
+        // The API always sends `startedAt` with `running` (when the link was used); the fallback only starts the animation now.
+        return { state: 'running', startedAt: s.startedAt ?? new Date().toISOString() };
+      case 'expired':
+      case 'done':
+        return { state: s.state };
+      default:
+        return { state: 'invalid' };
+    }
+  }
+
+  /** 204, then the status. The consent exactly as ticked. 409 `link_expired`; 401 `link_invalid`. */
+  async startEligibilityByPhone(token: string, consent: boolean): Promise<PhoneLinkStatus> {
+    await this.request('POST', '/api/phone/start', { consent: consent === true }, phoneHeaders(token));
+    return this.phoneLinkStatus(token);
+  }
+
+  /** 202 when the phone's camera animation ended (see `completeIdentity`), then the status (`running` until the Worker decides). */
+  async completeIdentityByPhone(token: string): Promise<PhoneLinkStatus> {
+    await this.request('POST', '/api/phone/complete', undefined, phoneHeaders(token));
+    return this.phoneLinkStatus(token);
+  }
 
   // step 3 · payment
   pay(): Promise<Application> { return notConnected(); }
@@ -257,13 +384,18 @@ export class HttpApi implements Api {
    * Every call to the API goes through here: it sends the request and turns an error response
    * into an `ApiError`, so the store can show the server's own sentence. http-api.spec.ts tests it.
    */
-  private async request<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, body?: unknown): Promise<T> {
+  private async request<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
     try {
-      return await firstValueFrom(this.http.request<T>(method, url, { body }));
+      return await firstValueFrom(this.http.request<T>(method, url, { body, headers }));
     } catch (error) {
       throw toApiError(error);
     }
   }
+}
+
+/** The phone link's header. The API's PhoneLinkResolver reads the token from here and nowhere else. */
+function phoneHeaders(token: string): Record<string, string> {
+  return { 'X-DSP-Phone-Token': token };
 }
 
 function notConnected(): Promise<never> {

@@ -35,6 +35,8 @@ export class StatusPoller {
     private readonly tick: () => Promise<void>,
     private readonly page: PageVisibility | null = typeof document === 'undefined' ? null : document,
     private readonly now: () => number = () => Date.now(),
+    /** The wait before each tick, from the time since `start`; the phone page passes a fixed, slower one. */
+    private readonly delay: (elapsedMs: number) => number = pollDelay,
   ) {}
 
   get active() {
@@ -64,7 +66,7 @@ export class StatusPoller {
     clearTimeout(this.timer);
     this.timer = undefined;
     if (!this.running || this.hidden()) return;
-    this.timer = setTimeout(() => void this.run(), pollDelay(this.now() - this.startedAt));
+    this.timer = setTimeout(() => void this.run(), this.delay(this.now() - this.startedAt));
   }
 
   private async run() {

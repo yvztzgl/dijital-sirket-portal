@@ -50,7 +50,7 @@
   <div class="wz-actions">
     <button type="button" class="wz-btn" (click)="submitDeclaration()" [disabled]="!d.ready || store.busy()">{{ store.busy() ? 'Kaydediliyor…' : 'Beyanı onayla' }}</button>
   </div>
-  @if (!d.file) {<button type="button" class="wz-link wz-link--sm" (click)="useSampleAddr()">Demo: örnek belge kullan</button>}
+  @if (demoMode && !d.file) {<button type="button" class="wz-link wz-link--sm" (click)="useSampleAddr()">Demo: örnek belge kullan</button>}
 
   <p class="wz-foot"><app-icon name="lock" size="13px" [stroke]="2" />Belgeniz yalnızca kimlik ve adres doğrulaması için kullanılır.</p>
 </app-step-page>

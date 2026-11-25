@@ -35,7 +35,7 @@
     <app-form-error />
     <div class="wz-actions">
       <button type="button" class="wz-link" (click)="useComputer()">Bu bilgisayarla devam et</button>
-      @if (link && !link.expired) {<a class="wz-link" [href]="link.path" target="_blank" rel="noopener">Demo: telefon sayfasını aç</a>}
+      @if (demoMode && link && !link.expired) {<a class="wz-link" [href]="link.path" target="_blank" rel="noopener">Demo: telefon sayfasını aç</a>}
     </div>
 
     <p class="wz-foot"><app-icon name="lock" size="13px" [stroke]="2" />Kod yalnızca kimlik doğrulama adımını açar; başvurunuzun diğer bilgilerine erişim vermez.</p>
@@ -45,6 +45,11 @@
       <h1 class="wz-h1">Kimlik doğrulamasını başlatınız</h1>
       <p class="wz-lead">Doğrulama, pasaportunuz ve kameranız ile yapılır. Başlamadan önce aşağıdaki bilgileri okuyunuz.</p>
     </div>
+
+    @if (identityFailed()) {
+      <!-- HTTP mode: the API's eligibility.identityError. Starting again is the same consent and button; a second failure goes to manual review. -->
+      <p class="wz-notice" role="alert"><app-icon name="alert" size="16px" [stroke]="2.2" /><span><b>Kimliğiniz doğrulanamadı.</b> Lütfen aşağıdaki bilgileri okuyarak doğrulamayı yeniden başlatınız. Pasaportunuzun okunaklı olduğundan ve ortamın aydınlık olduğundan emin olunuz.</span></p>
+    }
 
     <section class="wz-tiles wz-need" aria-labelledby="kyc-need">
       <h2 id="kyc-need" class="wz-card-h">Doğrulama için gerekenler</h2>
@@ -87,7 +92,7 @@
     @if (k.phone) {
       <div class="wz-onphone" aria-live="polite">
         <span class="ico" [class.ok]="k.view === 'wait'" aria-hidden="true"><app-icon [name]="k.view === 'wait' ? 'check' : 'smartphone'" size="26px" [stroke]="k.view === 'wait' ? 2.6 : 1.8" /></span>
-        <b>{{ k.view === 'wait' ? 'Kimliğiniz doğrulandı' : 'Telefonunuzdaki yönergeleri izleyiniz' }}</b>
+        <b>{{ k.view === 'wait' ? k.waitTitle : 'Telefonunuzdaki yönergeleri izleyiniz' }}</b>
         <small>{{ k.view === 'wait' ? k.wait : 'Bu sayfayı açık bırakınız.' }}</small>
       </div>
     } @else {
@@ -111,12 +116,13 @@
         @if (k.view === 'wait') {
           <div class="okay" aria-live="polite">
             <span aria-hidden="true"><app-icon name="check" size="26px" [stroke]="2.6" /></span>
-            <b>Kimliğiniz doğrulandı</b>
+            <b>{{ k.waitTitle }}</b>
             <small>{{ k.wait }}</small>
           </div>
         }
       </div>
 
+      <app-form-error />
       <div class="wz-actions">
         <button type="button" class="wz-link" (click)="askCamera()">Kamera çalışmıyor</button>
       </div>

@@ -1,5 +1,5 @@
-import { splitNace, toAccount, toApplication, toReviewFields, toStage } from './api-mapper';
-import { CAPTURED, DECK_FAILED, ME, NEW_APPLICATION, REVIEW_APPLICATION } from './testing/api-fixtures';
+import { LOG_TEXTS, splitNace, toAccount, toApplication, toReviewFields, toStage } from './api-mapper';
+import { CAPTURED, DECK_FAILED, IDENTITY_FAILED, IDENTITY_FAILED_TWICE, ME, NEW_APPLICATION, REVIEW_APPLICATION } from './testing/api-fixtures';
 
 describe('api-mapper', () => {
   const account = toAccount(ME);
@@ -226,5 +226,103 @@ describe('api-mapper on captured API answers', () => {
     expect(toReviewFields({ contact: { phone: '' } }, view)).toEqual({ phone: '' });
     // The name shown from the account before the review has one is sent, to become the founder's own.
     expect(toReviewFields({ founder: { firstName: 'Deneme' } }, CAPTURED.scanning)).toEqual({ given_name: 'Deneme' });
+  });
+});
+
+describe('api-mapper on captured API answers, step 2', () => {
+  const account = toAccount({ firstName: 'Deneme', lastName: 'Kurucu', email: 'kurucu@example.test', founderType: 'foreign', verified: true });
+  const map = (key: keyof typeof CAPTURED, resultSeen = false) => toApplication(CAPTURED[key] as never, account, { resultSeen });
+
+  it('before the check: the identity step with nothing started, no score, no result', () => {
+    const app = map('titleReserved');
+    expect(app.stage).toBe('eligibility');
+    expect(app.eligibility).toEqual({ running: false });
+  });
+
+  it('a check started on the computer: running, started at the API\'s timeline line, not via the phone', () => {
+    const app = map('identityRunning');
+    const started = CAPTURED.identityRunning.logs.find((l) => l.text === LOG_TEXTS.identityStarted)!;
+    expect(app.stage).toBe('eligibility');
+    expect(app.eligibility).toEqual({ startedAt: started.at, consentAt: CAPTURED.identityRunning.eligibility!.consentAt, running: true });
+  });
+
+  it('a check started on the phone: the computer sees it running, via the phone', () => {
+    const app = map('identityRunningPhone');
+    const started = CAPTURED.identityRunningPhone.logs.find((l) => l.text === LOG_TEXTS.identityStartedByPhone)!;
+    expect(app.eligibility).toMatchObject({ startedAt: started.at, via: 'phone', running: true });
+  });
+
+  it('a failed check: no check open, the error kept, nothing to animate', () => {
+    const app = toApplication(IDENTITY_FAILED, account);
+    expect(app.stage).toBe('eligibility');
+    expect(app.eligibility).toEqual({ consentAt: IDENTITY_FAILED.eligibility!.consentAt, running: false, identityError: 'identity_failed' });
+    expect(app.eligibility!.startedAt).toBeUndefined();
+  });
+
+  it('the second failure: manual review, without a result or a score', () => {
+    const app = toApplication(IDENTITY_FAILED_TWICE, account);
+    expect(app.stage).toBe('manual');
+    expect(app.eligibility).toMatchObject({ running: false, identityError: 'identity_failed' });
+    expect(app.eligibility!.result).toBeUndefined();
+    expect(app.eligibility!.score).toBeUndefined();
+  });
+
+  it('declaration: the identity passed, nothing declared yet', () => {
+    const app = map('declaration');
+    expect(app.stage).toBe('declaration');
+    expect(app.eligibility).toEqual({ consentAt: CAPTURED.declaration.eligibility!.consentAt, running: false });
+  });
+
+  it('a resident founder goes straight to the declaration, without a consent', () => {
+    const app = toApplication(CAPTURED.residentDeclaration, { ...account, founderType: 'resident' });
+    expect(app.stage).toBe('declaration');
+    expect(app.founderType).toBe('resident');
+    expect(app.eligibility).toEqual({ running: false });
+  });
+
+  it('screening: declared, the list search started at the declaration, the address proof in the documents', () => {
+    const app = map('screening');
+    const declaredAt = CAPTURED.screening.eligibility!.declaredAt!;
+    expect(app.stage).toBe('screening');
+    expect(app.eligibility).toMatchObject({ declaredAt, screeningStartedAt: declaredAt });
+    expect(app.eligibility!.result).toBeUndefined();
+    expect(app.docs.map((d) => d.name)).toEqual(['Sunum', 'Adres belgesi']);
+    expect(app.docs[1].group).toBe('1 · Başvuru & Uygunluk');
+  });
+
+  it('a clear list search: the result screen once, then the payment', () => {
+    const finished = CAPTURED.eligible.logs.find((l) => l.text === LOG_TEXTS.screeningDone)!;
+    expect(CAPTURED.eligible.stage).toBe('payment');
+    const app = map('eligible');
+    expect(app.stage).toBe('eligible');
+    expect(app.eligibility).toMatchObject({ result: 'eligible', finishedAt: finished.at });
+    expect(app.eligibility!.score).toBeUndefined();
+    expect(map('eligible', true).stage).toBe('payment');
+    // Once a payment has been started the result screen is over, seen or not.
+    const paying = { ...CAPTURED.eligible, payment: { ...CAPTURED.eligible.payment, status: '3ds_pending' } };
+    expect(toApplication(paying, account).stage).toBe('payment');
+  });
+
+  it('manual review: the result manual and no reason of any kind', () => {
+    const app = map('manual');
+    expect(app.stage).toBe('manual');
+    expect(app.eligibility).toMatchObject({ result: 'manual', running: false });
+    // The view's eligibility has its seven fields and nothing that says why (the API keeps that from the founder).
+    expect(Object.keys(CAPTURED.manual.eligibility!).sort()).toEqual(['consentAt', 'declaredAt', 'identityDone', 'identityError', 'result', 'running', 'screeningRunning']);
+    expect(JSON.stringify({ ...CAPTURED.manual, titleCheck: null })).not.toMatch(/reason|risk|factor|case/i);
+  });
+
+  it('approved by staff: straight to the payment, without the result screen', () => {
+    expect(map('reviewApproved').stage).toBe('payment');
+    expect(map('reviewApproved').eligibility!.result).toBe('eligible');
+  });
+
+  it('the phone routes: states and times only', () => {
+    expect(CAPTURED.phoneLink).toEqual({ token: '<token>', expiresInSeconds: 600 });
+    expect(Object.keys(CAPTURED.phoneReady).sort()).toEqual(['expiresAt', 'startedAt', 'state']);
+    expect(CAPTURED.phoneReady.state).toBe('ready');
+    expect(CAPTURED.phoneRunning.state).toBe('running');
+    expect(CAPTURED.phoneDone.state).toBe('done');
+    expect(CAPTURED.closed).toMatchObject({ status: 404, code: 'no_application' });
   });
 });

@@ -204,3 +204,199 @@ describe('ApplicationStore while the server works (HTTP mode)', () => {
     expect(store.scan()!.p).toBeLessThanOrEqual(0.95);
   });
 });
+
+describe('ApplicationStore in step 2 (HTTP mode)', () => {
+  const base = { ...SESSION.app!, founder: { firstName: 'Ayşe', lastName: 'Kaya', nationality: '', passportNo: '' } } as Application;
+  const at = (stage: Application['stage'], extra: Partial<Application> = {}) => ({ ...base, stage, ...extra }) as Application;
+
+  /** An Api stand-in in server mode whose answers the test sets. */
+  function serverApi(start: Application | null, extra: Partial<Record<keyof Api, unknown>> = {}) {
+    const api = {
+      demo: null,
+      statusReads: 0,
+      fullReads: 0,
+      current: { stage: start?.stage ?? 'profile', changedAt: 't1' } as ApplicationStatus,
+      next: start,
+      fail: null as ApiError | null,
+      calls: [] as string[],
+      work: {
+        kind: 'server' as const,
+        status: async () => {
+          api.statusReads++;
+          if (api.fail) throw api.fail;
+          return api.current;
+        },
+        application: async () => {
+          api.fullReads++;
+          return api.next;
+        },
+        seen: () => ({ stage: start?.stage ?? 'profile', changedAt: 't1' }),
+      },
+      restore: async () => ({ account: ACCOUNT, app: start }),
+      logout: async () => undefined,
+      completeIdentity: async () => {
+        api.calls.push('completeIdentity');
+        return api.next;
+      },
+      phoneLinkStatus: async (token: string) => {
+        api.calls.push(`phoneLinkStatus:${token}`);
+        return api.phone;
+      },
+      completeIdentityByPhone: async () => {
+        api.calls.push('completeIdentityByPhone');
+        return api.phone;
+      },
+      phone: { state: 'ready', expiresAt: new Date(Date.now() + 600_000).toISOString() } as unknown,
+      ...extra,
+    };
+    return api;
+  }
+
+  function setUp(api: ReturnType<typeof serverApi>) {
+    localStorage.clear();
+    TestBed.configureTestingModule({ providers: [provideRouter([{ path: '**', children: [] }]), { provide: Api, useValue: api }] });
+    return TestBed.inject(ApplicationStore);
+  }
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('does not poll at the identity step before anything is started', async () => {
+    const api = serverApi(at('eligibility', { eligibility: { running: false } }));
+    const store = setUp(api);
+    await store.restored;
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(api.statusReads).toBe(0);
+    expect(store.identity()).toBeNull();
+  });
+
+  it('polls while the QR code is shown, so the computer notices the phone', async () => {
+    const link = { token: 't', createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 600_000).toISOString() };
+    const api = serverApi(at('eligibility', { eligibility: { running: false }, phoneLink: link }));
+    const store = setUp(api);
+    await store.restored;
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(api.statusReads).toBe(2);
+    // The phone started the check: the computer follows it and does not finish it itself.
+    api.current = { stage: 'eligibility', changedAt: 't2' };
+    api.next = at('eligibility', { eligibility: { running: true, via: 'phone', startedAt: new Date(Date.now() - 60_000).toISOString() } });
+    await vi.advanceTimersByTimeAsync(2_000);
+    TestBed.tick();
+    expect(store.app()!.eligibility!.via).toBe('phone');
+    expect(store.identity()!.p).toBe(1);
+    await vi.advanceTimersByTimeAsync(2_000);
+    TestBed.tick();
+    expect(api.calls).not.toContain('completeIdentity');
+  });
+
+  it('reports the end of the camera animation on this computer once, then waits for the server', async () => {
+    const startedAt = new Date().toISOString();
+    const api = serverApi(at('eligibility', { eligibility: { running: true, startedAt } }));
+    const store = setUp(api);
+    await store.restored;
+    TestBed.tick();
+    expect(store.identity()!.p).toBeLessThan(1);
+    await vi.advanceTimersByTimeAsync(7_000);
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(5_000);
+    TestBed.tick();
+    expect(api.calls.filter((c) => c === 'completeIdentity')).toHaveLength(1);
+    // Still running on the server: polled until the Worker decides.
+    expect(api.statusReads).toBeGreaterThan(2);
+    api.current = { stage: 'declaration', changedAt: 't2' };
+    api.next = at('declaration', { eligibility: { running: false } });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(store.stage()).toBe('declaration');
+  });
+
+  it('a failed check: no camera, nothing polled, the error on the application', async () => {
+    const api = serverApi(at('eligibility', { eligibility: { running: false, identityError: 'identity_failed', consentAt: 'x' } }));
+    const store = setUp(api);
+    await store.restored;
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(store.identity()).toBeNull();
+    expect(store.app()!.eligibility!.identityError).toBe('identity_failed');
+    expect(api.statusReads).toBe(0);
+  });
+
+  it('polls under manual review at the slow pace, and moves on when staff approve', async () => {
+    const api = serverApi(at('manual'));
+    const store = setUp(api);
+    await store.restored;
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    const reads = api.statusReads;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(api.statusReads - reads).toBe(4);
+    api.current = { stage: 'payment', changedAt: 't2' };
+    api.next = at('payment');
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(store.stage()).toBe('payment');
+  });
+
+  it('shows the closed state when the application disappears under review, and creates nothing', async () => {
+    const api = serverApi(at('manual'));
+    let restores = 0;
+    api.restore = async () => (restores++, { account: ACCOUNT, app: at('manual') });
+    const store = setUp(api);
+    await store.restored;
+    TestBed.tick();
+    api.fail = new ApiError('Başvuru bulunamadı.', { code: 'no_application', status: 404 });
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(store.stage()).toBe('closed');
+    expect(store.app()).toBeNull();
+    expect(store.signedIn()).toBe(true);
+    TestBed.tick();
+    const reads = api.statusReads;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(api.statusReads).toBe(reads);
+    // Nothing read the session again (the HTTP client creates an application only at a sign-in).
+    expect(restores).toBe(1);
+    await store.logout();
+    expect(store.closed()).toBe(false);
+  });
+
+  it('opens on the closed state after a reload that found no application', async () => {
+    const api = serverApi(null, { restore: async () => ({ account: ACCOUNT, app: null, closed: true }) });
+    const store = setUp(api);
+    await store.restored;
+    expect(store.stage()).toBe('closed');
+    expect(store.resumeRoute()).toBe('/application-closed');
+  });
+
+  it('the phone page asks for its link no faster than every 5 s, and stops once the state is final', async () => {
+    const api = serverApi(null, { restore: async () => null });
+    const store = setUp(api);
+    await store.restored;
+    await store.openPhoneLink('secret');
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(60_000);
+    const statusCalls = () => api.calls.filter((c) => c.startsWith('phoneLinkStatus')).length;
+    // One at opening, then one every 6 s: 11 in the first minute, under the API's 20 a minute.
+    expect(statusCalls()).toBe(11);
+    api.phone = { state: 'done' };
+    await vi.advanceTimersByTimeAsync(6_000);
+    TestBed.tick();
+    const final = statusCalls();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(statusCalls()).toBe(final);
+    expect(store.phone()).toEqual({ state: 'done' });
+  });
+
+  it('the phone page reports the end of its animation once', async () => {
+    const api = serverApi(null, { restore: async () => null });
+    api.phone = { state: 'running', startedAt: new Date().toISOString() };
+    const store = setUp(api);
+    await store.restored;
+    await store.openPhoneLink('secret');
+    TestBed.tick();
+    for (let i = 0; i < 20; i++) {
+      await vi.advanceTimersByTimeAsync(1_000);
+      TestBed.tick();
+    }
+    expect(api.calls.filter((c) => c === 'completeIdentityByPhone')).toHaveLength(1);
+  });
+});

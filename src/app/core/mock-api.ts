@@ -554,7 +554,7 @@ export class MockApi implements Api {
    * The mock keeps only the file's name and size. A real API must store the file encrypted, scan
    * it, and record who confirmed which declaration text.
    */
-  async submitDeclaration(input: { file: { name: string; size: number } | null; declared: boolean }) {
+  async submitDeclaration(input: { file: Pick<File, 'name' | 'size'> | null; declared: boolean }) {
     await this.wait(700);
     return this.mutate(['declaration'], (app) => {
       const f = input.file;
@@ -601,13 +601,18 @@ export class MockApi implements Api {
     });
   }
 
+  /** The mock's link lives in its data (the demo navigator reuses it), so leaving the QR view changes nothing here. */
+  forgetPhoneLink(): Application | null {
+    return null;
+  }
+
   /** The phone page asks where its link stands. Needs no session and reveals nothing about the founder. */
   async phoneLinkStatus(token: string): Promise<PhoneLinkStatus> {
     await this.wait(300);
     const app = this.appByToken(token)?.[1];
     if (!app) return { state: 'invalid' };
     if (app.stage !== 'eligibility') return app.eligibility?.via === 'phone' ? { state: 'done' } : { state: 'invalid' };
-    if (app.eligibility) return app.eligibility.via === 'phone' ? { state: 'running', startedAt: app.eligibility.startedAt } : { state: 'invalid' };
+    if (app.eligibility) return app.eligibility.via === 'phone' ? { state: 'running', startedAt: app.eligibility.startedAt! } : { state: 'invalid' };
     return Date.now() > Date.parse(app.phoneLink!.expiresAt) ? { state: 'expired' } : { state: 'ready', expiresAt: app.phoneLink!.expiresAt };
   }
 
@@ -1222,7 +1227,7 @@ async function backdate(email: string, which: 'identity' | 'screening' | 'setup'
   if (which === 'identity') {
     // Far enough back that the declaration and the list search that follow still come after it.
     app.eligibility!.startedAt = app.eligibility!.consentAt = past(DURATION.identity + DURATION.screening + 4_000);
-    app.logs.slice(-2).forEach((l) => (l.at = app.eligibility!.startedAt));
+    app.logs.slice(-2).forEach((l) => (l.at = app.eligibility!.startedAt!));
   } else if (which === 'screening') {
     const at = past(DURATION.screening);
     Object.assign(app.eligibility!, { declaredAt: at, screeningStartedAt: at, address: { ...app.eligibility!.address!, at } });

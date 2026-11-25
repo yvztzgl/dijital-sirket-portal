@@ -155,8 +155,9 @@ export const screenRoutes: Routes = [
     loadComponent: () => import('./uygunluk/d2e').then((m) => m.ScreenD2e),
   },
   {
-    // Opened on the founder's phone from the QR code on D-2a. Public: the link is its only key.
-    path: 'eligibility/phone/:token',
+    // Opened on the founder's phone from the QR code on D-2a. Public: the link is its only key. The
+    // token is in the URL fragment (`#…`), never in the path, so it is not sent to the server (d2m).
+    path: 'eligibility/phone',
     title: 'Kimlik doğrulama · Terminal Şirket',
     data: { screen: 'd2m' },
     loadComponent: () => import('./uygunluk/d2m').then((m) => m.ScreenD2m),
@@ -174,6 +175,14 @@ export const screenRoutes: Routes = [
     data: { screen: 'd2c' },
     canActivate: [flowGuard],
     loadComponent: () => import('./uygunluk/d2c').then((m) => m.ScreenD2c),
+  },
+  {
+    // HTTP mode only: staff closed the application under manual review. Not in SCREENS: the mock cannot reach it.
+    path: 'application-closed',
+    title: 'Başvuru kapatıldı · Terminal Şirket',
+    data: { screen: 'closed' },
+    canActivate: [flowGuard],
+    loadComponent: () => import('./uygunluk/closed').then((m) => m.ScreenClosed),
   },
   {
     path: 'payment',

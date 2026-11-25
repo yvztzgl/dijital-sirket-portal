@@ -64,15 +64,36 @@ export function routeFor(stage: Stage | null, founderType: FounderType = 'foreig
       return '/setup';
     case 'done':
       return '/setup/complete';
+    case 'closed':
+      return '/application-closed';
   }
 }
 
 /**
  * Stages in which the server (or its staff) works and the founder waits; in HTTP mode the store
- * polls the status read while the application is in one of them. Later pieces add step 2's and
- * step 5's waiting stages.
+ * polls the status read while the application is in one of them (`waitsForServer`). `manual` is
+ * decided by people and can take days; the poll settles at its slowest pace (`pollDelay`). Step 5's
+ * waiting stages come with a later piece.
  */
-export const SERVER_WAITING_STAGES: Stage[] = ['scanning', 'titleChecking'];
+export const SERVER_WAITING_STAGES: Stage[] = ['scanning', 'titleChecking', 'screening', 'manual'];
+
+/**
+ * True while the portal should poll for the server in HTTP mode: a waiting stage, or the identity
+ * step while a check is open on the server (camera not finished, or the Worker deciding) or while
+ * the QR code is shown on this computer (so it notices the phone starting and finishing the check).
+ */
+export function waitsForServer(app: Application | null): boolean {
+  if (!app) return false;
+  if (SERVER_WAITING_STAGES.includes(app.stage)) return true;
+  return app.stage === 'eligibility' && (!!app.eligibility?.running || !!app.phoneLink);
+}
+
+/**
+ * How often the phone page asks for its link's state. The phone routes share the API's sign-in rate
+ * limit (20 requests a minute per address, which a phone on the same network as the computer
+ * shares), so never faster than every 5 s; the page stops asking once the state is final.
+ */
+export const PHONE_POLL_MS = 6_000;
 
 /**
  * Single source of truth for the signed-in founder and their application. Screens read signals
@@ -111,11 +132,19 @@ export class ApplicationStore {
   readonly fieldErrors = signal<Record<string, string[]>>({});
   /** What the profile form and the review screen may offer (`Api.reference`); null until loaded. */
   readonly reference = signal<WizardReference | null>(null);
+  /**
+   * HTTP mode: the signed-in founder's application was closed by staff (the API's read answers 404
+   * `no_application` while the portal held it, or right after a reload). The stage is then `closed`.
+   * Nothing creates a new application in this state; signing out and in again does (an API gap).
+   */
+  readonly closed = signal(false);
 
   // ------------------------------------------------------------------------------ derived
 
   readonly signedIn = computed(() => !!this.account());
-  readonly stage = computed<Stage | null>(() => this.app()?.stage ?? (this.account() ? 'profile' : this.pendingEmail() ? 'registered' : null));
+  readonly stage = computed<Stage | null>(() =>
+    this.closed() && this.account() ? 'closed' : (this.app()?.stage ?? (this.account() ? 'profile' : this.pendingEmail() ? 'registered' : null)),
+  );
   readonly step = computed(() => {
     const s = this.stage();
     return s ? stepOf(s) : 1;
@@ -141,6 +170,11 @@ export class ApplicationStore {
 
   /** True when the server does the background work and the store polls for it (HTTP mode). */
   private readonly serverWork: ServerWork | null = this.api.work.kind === 'server' ? this.api.work : null;
+  /**
+   * HTTP mode: results come from the server, not from the portal's simulation. Screens use it to
+   * leave out what only the mock can say (a liveness score, per-list results, review reasons).
+   */
+  readonly serverDecides = !!this.serverWork;
 
   /**
    * The deck being read. In the mock the reading ends when its simulated time is up. With the
@@ -159,19 +193,33 @@ export class ApplicationStore {
     return scanView(a, p);
   });
 
-  /** Step 2's camera check; null until the founder has started it. */
+  /**
+   * Step 2's camera check; null until the founder has started it, and in HTTP mode whenever no check
+   * is open on the server (before the first start, after a failed one). The camera is the portal's
+   * own animation in both modes (there is no identity vendor yet).
+   */
   readonly identity = computed(() => {
     const a = this.app();
-    if (!a?.eligibility) return null;
-    const p = a.stage === 'eligibility' ? progress(a.eligibility.startedAt, this.dur(DURATION.identity), this.now()) : 1;
+    const e = a?.eligibility;
+    if (!a || !e?.startedAt || (this.serverWork && a.stage === 'eligibility' && !e.running)) return null;
+    const p = a.stage === 'eligibility' ? progress(e.startedAt, this.dur(DURATION.identity), this.now()) : 1;
     return identityView(p);
   });
 
-  /** Step 2's list search; null before the declaration is confirmed. */
+  /**
+   * Step 2's list search; null before the declaration is confirmed. With the server, only the
+   * server's next stage ends it, so the bar slows down and never reaches the end by itself.
+   */
   readonly screening = computed(() => {
     const a = this.app();
     if (!a?.eligibility?.screeningStartedAt) return null;
-    const p = a.stage === 'screening' ? progress(a.eligibility.screeningStartedAt, this.dur(DURATION.screening), this.now()) : 1;
+    const at = a.eligibility.screeningStartedAt;
+    const p =
+      a.stage !== 'screening'
+        ? 1
+        : this.serverWork
+          ? openEndedProgress(at, this.dur(DURATION.screening), this.now())
+          : progress(at, this.dur(DURATION.screening), this.now());
     return screeningView(p);
   });
 
@@ -207,13 +255,13 @@ export class ApplicationStore {
     this.restored = this.restore();
     if (this.serverWork) this.followServer(this.serverWork);
     else this.finishSimulatedSteps();
-    // The same for a check that runs on the phone page.
-    let finishing = false;
+    // The same for a check that runs on the phone page: its animation ended, tell the server once.
     effect(() => {
-      if (this.phoneCheck()?.p !== 1 || finishing) return;
-      finishing = true;
-      untracked(() => void this.finishByPhone().finally(() => (finishing = false)));
+      if (this.phoneCheck()?.p !== 1 || this.phoneFinishSent === this.phoneToken) return;
+      this.phoneFinishSent = this.phoneToken;
+      untracked(() => void this.finishByPhone());
     });
+    this.followPhoneLink();
     // Another tab or device moved the application on (the phone page starts the identity check): pick it up.
     this.api.demo?.onExternalChange(() => void this.restore());
   }
@@ -241,10 +289,33 @@ export class ApplicationStore {
   private followServer(work: ServerWork) {
     const poller = new StatusPoller(() => this.poll(work));
     effect(() => {
-      const waiting = this.signedIn() && SERVER_WAITING_STAGES.includes(this.app()?.stage as Stage);
+      const waiting = this.signedIn() && waitsForServer(this.app());
       untracked(() => (waiting ? poller.start() : poller.stop()));
     });
     inject(DestroyRef).onDestroy(() => poller.stop());
+    // The camera check on this computer: when the portal's animation ends, tell the server once per
+    // check (keyed by its start time) and wait for the Worker's decision (polled). A check started on
+    // the phone is finished by the phone page; this computer only follows it.
+    let sentFor: string | undefined;
+    effect(() => {
+      const a = this.app();
+      const e = a?.eligibility;
+      if (a?.stage !== 'eligibility' || !e?.running || e.via === 'phone' || this.identity()?.p !== 1 || sentFor === e.startedAt) return;
+      sentFor = e.startedAt;
+      untracked(() => void this.completeIdentity());
+    });
+  }
+
+  /** HTTP mode: see `followServer`. A refusal (the check was finished elsewhere) only re-reads the application. */
+  private async completeIdentity() {
+    this.writes++;
+    try {
+      this.app.set(await this.api.completeIdentity());
+    } catch (e) {
+      if (this.sessionLost(e) || this.applicationClosed(e)) return;
+      console.warn('identity complete failed', e instanceof ApiError ? (e.code ?? e.status) : e);
+      void this.refresh();
+    }
   }
 
   /** Counts changes made by the founder's own actions, so that a poll answer that started before one cannot overwrite it. */
@@ -264,7 +335,7 @@ export class ApplicationStore {
       const app = await work.application();
       if (writes === this.writes && this.signedIn()) this.app.set(app);
     } catch (e) {
-      if (this.sessionLost(e)) return;
+      if (this.sessionLost(e) || this.applicationClosed(e)) return;
       // A network hiccup or a restarting server: the next poll tries again.
       console.warn('status poll failed', e instanceof ApiError ? (e.code ?? e.status) : e);
     }
@@ -349,10 +420,14 @@ export class ApplicationStore {
   /** D-2a: the founder read the pre-information, ticked the consent and starts the identity check. */
   startEligibility = (consent: boolean) => this.update(() => this.api.startEligibility(consent));
   /** D-2d: the address document and the confirmed declaration; the list search starts. */
-  submitDeclaration = (input: { file: { name: string; size: number } | null; declared: boolean }) =>
-    this.update(() => this.api.submitDeclaration(input));
+  submitDeclaration = (input: { file: File | null; declared: boolean }) => this.update(() => this.api.submitDeclaration(input));
   /** D-2a "Telefonla devam et": make (or renew) the link the QR code carries. */
   createPhoneLink = () => this.update(() => this.api.createPhoneLink());
+  /** D-2a "Bu bilgisayarla devam et": the QR view closes; HTTP mode forgets the link's token. */
+  leavePhoneLink() {
+    const app = this.api.forgetPhoneLink();
+    if (app && this.signedIn() && !this.closed()) this.app.set(app);
+  }
   /** From manual review (step 2): reopen the deck data. Step 1's "Diğer bilgilere dön" only navigates (D-1d). */
   backToReview = () => this.update(() => this.api.backToReview());
 
@@ -383,7 +458,10 @@ export class ApplicationStore {
   // ------------------------------------------------- identity check on the phone (D-2a-m)
   // The phone page works from its link alone: it has no session and none of the signals above.
 
+  /** The phone page's link token, from the URL fragment; memory only (see d2m). */
   private phoneToken = '';
+  /** The token whose check this page has already reported finished (`completeIdentityByPhone`), so it is sent once. */
+  private phoneFinishSent = '';
   /** Where the phone page's link stands; null while it is being looked up. */
   readonly phone = signal<PhoneLinkStatus | null>(null);
   /** The running check as the phone page shows it. */
@@ -395,19 +473,54 @@ export class ApplicationStore {
   async openPhoneLink(token: string) {
     this.phoneToken = token;
     this.phone.set(null);
-    this.phone.set(await this.api.phoneLinkStatus(token));
+    this.phoneOpened.set(true);
+    try {
+      this.phone.set(await this.api.phoneLinkStatus(token));
+    } catch (e) {
+      // The status read never refuses a token; this is the network or the rate limit. The poll tries again.
+      console.warn('phone link status failed', e instanceof ApiError ? (e.code ?? e.status) : e);
+    }
   }
 
   startByPhone = (consent: boolean) => this.run(async () => this.phone.set(await this.api.startEligibilityByPhone(this.phoneToken, consent)));
+
+  /**
+   * Asks for the phone link's state every `PHONE_POLL_MS` while it can still change (being looked
+   * up, `ready`, `running`), so the page shows a check started or ended on the computer and the
+   * server's decision after the camera; no timers while the tab is hidden; stops at `invalid`,
+   * `expired` and `done`.
+   */
+  private followPhoneLink() {
+    const poller = new StatusPoller(() => this.pollPhone(), undefined, undefined, () => PHONE_POLL_MS);
+    effect(() => {
+      const s = this.phone();
+      const open = !!this.phoneToken && (s === null || s.state === 'ready' || s.state === 'running');
+      untracked(() => (this.phoneOpened() && open ? poller.start() : poller.stop()));
+    });
+    inject(DestroyRef).onDestroy(() => poller.stop());
+  }
+
+  /** Set once the phone page has read its token (`openPhoneLink`); the phone poll runs only on that page. */
+  private readonly phoneOpened = signal(false);
+
+  private async pollPhone() {
+    const token = this.phoneToken;
+    try {
+      const status = await this.api.phoneLinkStatus(token);
+      if (token === this.phoneToken) this.phone.set(status);
+    } catch (e) {
+      console.warn('phone link status failed', e instanceof ApiError ? (e.code ?? e.status) : e);
+    }
+  }
 
   private async finishByPhone() {
     const token = this.phoneToken;
     try {
       this.phone.set(await this.api.completeIdentityByPhone(token));
     } catch (e) {
-      // The computer's page may have finished it first.
+      // The computer's page may have finished it first, or the request was refused (rate limit): read the state.
       if (!(e instanceof ApiError)) throw e;
-      this.phone.set(await this.api.phoneLinkStatus(token));
+      await this.pollPhone();
     }
   }
 
@@ -478,6 +591,9 @@ export class ApplicationStore {
 
   private liveEvents(a: Application): { logs: LogEntry[]; docs: DocItem[] } {
     const now = this.now();
+    // The simulated lines below ("Pasaport MRZ doğrulandı", the list results) are the mock's. With the
+    // server, the timeline and documents are the API's own.
+    if (this.serverWork) return { logs: [], docs: [] };
     if (a.stage === 'eligibility' && a.eligibility) {
       return { logs: identityEvents(a, this.dur(DURATION.identity)).filter((l) => Date.parse(l.at) <= now), docs: [] };
     }
@@ -514,6 +630,7 @@ export class ApplicationStore {
     this.sessionVersion++;
     this.account.set(session?.account ?? null);
     this.app.set(session?.app ?? null);
+    this.closed.set(!!session?.closed);
     // Read again for the next session (HTTP mode reads it once per session).
     this.reference.set(null);
     if (session) {
@@ -538,6 +655,7 @@ export class ApplicationStore {
     if (version !== this.sessionVersion) return;
     this.account.set(session?.account ?? null);
     this.app.set(session?.app ?? null);
+    this.closed.set(!!session?.closed);
   }
 
   /**
@@ -548,6 +666,20 @@ export class ApplicationStore {
     if (!(e instanceof ApiError) || e.code !== 'unauthenticated') return false;
     this.setSession(null);
     void this.router.navigateByUrl('/login').catch(() => undefined);
+    return true;
+  }
+
+  /**
+   * HTTP mode: the API answered 404 `no_application` while the portal held the founder's
+   * application. Staff closed it (manual review rejected); the only route out of manual review that
+   * ends this way. The application is forgotten and the stage becomes `closed`; nothing creates a
+   * new one. True when that was the case.
+   */
+  private applicationClosed(e: unknown): boolean {
+    if (!(e instanceof ApiError) || e.code !== 'no_application' || !this.app()) return false;
+    this.writes++;
+    this.app.set(null);
+    this.closed.set(true);
     return true;
   }
 
@@ -571,7 +703,7 @@ export class ApplicationStore {
       const app = this.serverWork ? await this.serverWork.application() : (await this.api.restore())?.app;
       if (app && this.signedIn()) this.app.set(app);
     } catch (e) {
-      this.sessionLost(e);
+      if (!this.applicationClosed(e)) this.sessionLost(e);
     }
   }
 
@@ -584,6 +716,8 @@ export class ApplicationStore {
       await fn();
       return true;
     } catch (e) {
+      // Closed: the closed screen says it all, no error under a button.
+      if (this.applicationClosed(e)) return false;
       this.sessionLost(e);
       this.error.set(e instanceof ApiError ? shownMessage(e) : e instanceof Error ? e.message : 'Beklenmeyen bir hata oluştu.');
       if (e instanceof ApiError && e.fields) this.fieldErrors.set(e.fields);

@@ -61,7 +61,7 @@
           @if (v.cam?.view === 'wait') {
             <div class="okay" aria-live="polite">
               <span aria-hidden="true"><app-icon name="check" size="26px" [stroke]="2.6" /></span>
-              <b>Kimliğiniz doğrulandı</b>
+              <b>{{ v.cam?.waitTitle }}</b>
               <small>{{ v.cam?.wait }}</small>
             </div>
           }
@@ -73,7 +73,7 @@
         <span class="wz-m-mark ok" aria-hidden="true"><app-icon name="check" size="30px" [stroke]="2.6" /></span>
         <div class="wz-head">
           <h1 class="wz-h1">Doğrulama tamamlandı</h1>
-          <p class="wz-lead">Bilgisayarınızdaki sayfaya dönünüz; başvurunuz oradan devam eder. Bu sayfayı kapatabilirsiniz.</p>
+          <p class="wz-lead">Bilgisayarınızdaki sayfaya dönünüz; sonuç ve başvurunuzun devamı orada gösterilir. Bu sayfayı kapatabilirsiniz.</p>
         </div>
       }
       @case ('expired') {
