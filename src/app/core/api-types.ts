@@ -1,6 +1,8 @@
 /**
  * The API's JSON as it arrives (camelCase), before api-mapper.ts turns it into the portal's model.
  * Written from the API's records in `dijital-sirket-api/src/DijitalSirket.Api/Models/` (2026-11-25).
+ * The deck step (deck, CV, evaluation) follows the contract agreed for the outside evaluation (STB) on
+ * 2026-11-25, written before the API had it; see docs/api-client.md.
  * Times are ISO 8601 strings with an offset. Values the API documents as a fixed set are typed as
  * that set; the mapper still checks them, because a newer API may send a value this file does not know.
  */
@@ -20,7 +22,7 @@ export interface EdevletStartWire {
 }
 
 export type StageWire =
-  | 'profile' | 'verified' | 'scanning' | 'titleChecking' | 'titleConflict' | 'review' | 'eligibility' | 'declaration'
+  | 'profile' | 'verified' | 'evaluating' | 'evaluationQuestions' | 'titleChecking' | 'titleConflict' | 'review' | 'eligibility' | 'declaration'
   | 'screening' | 'manual' | 'payment' | 'threeDs' | 'signing' | 'calling' | 'signed' | 'setup' | 'done';
 
 /** The keys of `ApplicationView.review` (Wizard.FieldLabels on the API). */
@@ -38,38 +40,36 @@ export interface ProfileWire {
   at: string;
 }
 
-export interface DeckFieldWire {
-  key: string;
-  label: string;
-  value: string;
-  page: number | null;
-  /** What the deck reader says of its own reading; the development reader sends `high` or `medium`. */
-  confidence: string;
-}
-
-export interface DeckWire {
+/** The deck or the CV as uploaded. */
+export interface UploadWire {
   fileName: string | null;
   sizeKb: number;
-  pages: number | null;
-  uploadedAt: string;
-  status: 'reading' | 'read' | 'failed';
-  fields: DeckFieldWire[];
 }
 
-export interface CrossCheckWire {
-  key: string;
-  label: string;
-  stated: string;
-  read: string;
-  match: boolean;
-  choice: string | null;
-  at: string | null;
+/** The outside evaluation of the last upload. No findings and no question content reach the founder. */
+export interface EvaluationWire {
+  status: 'queued' | 'running' | 'questions' | 'done' | 'failed' | 'rejected' | 'cancelled';
+  attempt: number;
+  maxAttempts: number;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+/** `GET /api/reference/evaluation`: the outside service's dictionaries and the upload limits. */
+export interface EvaluationReferenceWire {
+  activityGroups: { id: number; label: string }[];
+  activities: { id: number; label: string }[];
+  businessModels: { id: number; label: string }[];
+  revenueModels: { id: number; label: string }[];
+  productTypes: { id: number; label: string }[];
+  limits: { deckMaxMb: number; cvMaxMb: number; deckMinPages: number; deckMaxPages: number; summaryMin: number; summaryMax: number };
 }
 
 export interface ReviewFieldWire {
   label: string;
   value: string;
-  mark: 'ai' | 'edited' | 'entered';
+  /** `profile`: a default from the profile or the account, untouched; `edited` / `entered`: the founder's. */
+  mark: 'profile' | 'edited' | 'entered';
 }
 
 export interface TitleCheckWire {
@@ -142,8 +142,10 @@ export interface ApplicationWire {
   founderType: 'resident' | 'foreign';
   createdAt: string;
   profile: ProfileWire | null;
-  deck: DeckWire | null;
-  crossCheck: CrossCheckWire[];
+  deck: UploadWire | null;
+  cv: UploadWire | null;
+  /** Null before the first upload. */
+  evaluation: EvaluationWire | null;
   review: Partial<Record<ReviewKey, ReviewFieldWire>>;
   titleCheck: TitleCheckWire | null;
   eligibility: EligibilityWire | null;

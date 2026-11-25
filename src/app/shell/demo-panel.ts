@@ -6,7 +6,7 @@ import { Api } from '../core/api';
 import { ApplicationStore } from '../core/application.store';
 import { Assistant } from '../core/assistant';
 import { Confirm } from '../core/confirm';
-import { DemoSettings, Speed } from '../core/demo-settings';
+import { DemoSettings, EvaluationOutcome, Speed } from '../core/demo-settings';
 import { SCREENS } from '../screens/screens';
 import { DemoNav } from './demo-nav';
 
@@ -37,6 +37,8 @@ import { DemoNav } from './demo-nav';
 
       <div class="group">
         <span class="label">Senaryolar</span>
+        <span class="hint">Sunum değerlendirmesi nasıl bitsin?</span>
+        <app-select compact label="Sunum değerlendirmesinin sonucu" [options]="outcomes" [value]="demo.state().evaluationOutcome" (valueChange)="demo.set({ evaluationOutcome: $any($event) })" />
         <label><input type="checkbox" [checked]="demo.state().forceConflict" (change)="demo.set({ forceConflict: !demo.state().forceConflict })" /> İlk unvan sorgusu MERSİS’te reddedilsin</label>
         <label><input type="checkbox" [checked]="demo.state().forceManual" (change)="demo.set({ forceManual: !demo.state().forceManual })" /> Uygunluk manuel incelemeye düşsün</label>
         <span class="hint">Doğal tetikleyiciler: “Acme Bulut Bilişim” unvanı · fon kaynağı “Üçüncü taraf transferi” · kayıtta “T.C. vatandaşı”.</span>
@@ -88,6 +90,13 @@ export class DemoPanel {
     { v: 1, t: '1×' },
     { v: 4, t: '4×' },
     { v: 1000, t: 'Anında' },
+  ];
+  /** How the mock's next deck evaluation ends; a deck outside 3–40 pages ends `rejected` whatever is chosen. */
+  protected readonly outcomes: { value: EvaluationOutcome; label: string }[] = [
+    { value: 'done', label: 'Tamamlansın (şirket formu açılır)' },
+    { value: 'questions', label: 'Ek bilgi istensin' },
+    { value: 'failed', label: 'Tamamlanamasın (hata)' },
+    { value: 'rejected', label: 'Reddedilsin (sunum uygun değil)' },
   ];
   protected readonly screens = SCREENS;
   protected readonly screenOptions = SCREENS.map((s) => ({ value: s.id, label: `${s.code} · ${s.title}`, hint: '/' + s.path }));

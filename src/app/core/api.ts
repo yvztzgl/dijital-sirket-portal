@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { environment } from '../../environments/environment';
-import { Account, Application, CrossKey, DeckConsents, FounderType, FundingSource, PhoneLinkStatus, Profile, Stage, WizardReference } from './models';
+import { Account, Application, DeckConsents, EvaluationAnswers, EvaluationReference, FounderType, FundingSource, PhoneLinkStatus, Profile, Stage, WizardReference } from './models';
 
 /**
  * What the portal needs from the platform backend. The store and Terminal AI inject `Api` and
@@ -24,8 +24,8 @@ export abstract class Api {
   abstract readonly demo: DemoTools | null;
 
   /**
-   * How work that goes on without the founder (reading the deck, the trade-name check, later the
-   * identity check and the formation) reaches the portal: simulated with timers in the mock, done
+   * How work that goes on without the founder (the deck's outside evaluation, the trade-name check,
+   * the identity check and the formation) reaches the portal: simulated with timers in the mock, done
    * by the server and polled for in HTTP mode. See `BackgroundWork`.
    */
   abstract readonly work: BackgroundWork;
@@ -35,6 +35,12 @@ export abstract class Api {
    * Read once per session in HTTP mode; the mock answers with the portal's constants.
    */
   abstract reference(): Promise<WizardReference>;
+
+  /**
+   * What the deck screen (D-1a) may offer and the limits it checks: the outside evaluation service's
+   * dictionaries. Read once per session in HTTP mode; the mock answers with the same saved dictionary.
+   */
+  abstract evaluationReference(): Promise<EvaluationReference>;
 
   // auth
   // Who is signed in is the server's business (a session cookie in HTTP mode, the mock's own memory
@@ -78,19 +84,21 @@ export abstract class Api {
   // step 1 · profile and deck
   /** D-1e: saved while no deck is uploaded (stage `profile` or `verified`); each save replaces the last. */
   abstract submitProfile(input: Omit<Profile, 'at'>): Promise<Application>;
-  /** D-1a: refused without a profile or without both consents. The HTTP client sends the file itself. */
-  abstract uploadDeck(file: File, consents: DeckConsents): Promise<Application>;
+  /**
+   * D-1a: the deck, the CV and the five answers; the outside evaluation starts (`evaluating`).
+   * Refused without a profile, without both consents, and with `validation_failed` naming the fields
+   * (`rules.evaluationErrors`). The HTTP client sends the files themselves.
+   */
+  abstract uploadDeck(files: { deck: File; cv: File }, answers: EvaluationAnswers, consents: DeckConsents): Promise<Application>;
   /**
    * D-1c: changes to the reviewed values. `edited` names the review rows the founder touched (the
    * mock marks them; the API decides the marks itself and ignores it).
    */
   abstract updateReview(patch: ReviewPatch, edited: string[]): Promise<Application>;
-  /** D-1c "Onayla ve devam et": refused while a difference is undecided; then the trade name is checked (`titleChecking`). */
+  /** D-1c "Onayla ve devam et": refused while a required value is missing; then the trade name is checked (`titleChecking`). */
   abstract submitReview(): Promise<Application>;
   /** D-1d: another title after a refused one, without the type suffix; checked again (`titleChecking`). */
   abstract chooseTitle(title: string): Promise<Application>;
-  /** D-1c: which value to keep where the profile and the deck differ. */
-  abstract resolveCrossCheck(key: CrossKey, choice: 'stated' | 'read'): Promise<Application>;
 
   // step 2 · eligibility
   /**

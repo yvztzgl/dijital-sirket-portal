@@ -22,7 +22,7 @@ const ORDER: View[] = ['rules', ...DECK_SLIDES.map((s) => s.no), 'off'];
       <header class="head">
         <div class="ht">
           <h2 id="df-title">Sunum formatı</h2>
-          <p id="df-lead">Başvuru bilgileri form yerine sunumunuzdan okunur. Sunumunuz aşağıdaki {{ slides.length }} sayfayı bu sırayla içermelidir.</p>
+          <p id="df-lead">Sunumunuz değerlendirme için dış bir değerlendirme hizmetine gönderilir. Sunumunuz aşağıdaki {{ slides.length }} sayfayı bu sırayla içermelidir.</p>
         </div>
         <button type="button" class="icon" (click)="closed.emit()" aria-label="Sunum formatını kapat" title="Kapat (Esc)"><app-icon name="x" size="18px" /></button>
       </header>
@@ -107,8 +107,7 @@ const ORDER: View[] = ['rules', ...DECK_SLIDES.map((s) => s.no), 'off'];
 
       <footer class="foot">
         <span class="fv">{{ format.name }} {{ format.version }}</span>
-        <a class="dl" [href]="format.sample.pdf" download="ornek-sunum-lumora-analytics.pdf"><app-icon name="download" size="15px" [stroke]="2" />Örnek sunum (PDF)</a>
-        <a class="dl strong" [href]="format.sample.pptx" download="ornek-sunum-lumora-analytics.pptx"><app-icon name="download" size="15px" [stroke]="2" />Örnek sunum (PPTX)</a>
+        <a class="dl strong" [href]="format.sample.pdf" download="ornek-sunum-lumora-analytics.pdf"><app-icon name="download" size="15px" [stroke]="2" />Örnek sunum (PDF)</a>
       </footer>
     </div>
   `,

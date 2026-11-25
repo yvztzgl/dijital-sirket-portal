@@ -2,8 +2,12 @@ import { effect, Injectable, signal } from '@angular/core';
 
 export type Speed = 1 | 4 | 1000;
 
+/** How the mock's simulated outside evaluation of the next deck ends (the demo deck ends `done`). */
+export type EvaluationOutcome = 'done' | 'questions' | 'failed' | 'rejected';
+
 interface DemoState {
   speed: Speed;
+  evaluationOutcome: EvaluationOutcome;
   forceConflict: boolean;
   forceManual: boolean;
 }
@@ -26,7 +30,7 @@ export class DemoSettings {
 }
 
 function load(): DemoState {
-  const base: DemoState = { speed: 1, forceConflict: false, forceManual: false };
+  const base: DemoState = { speed: 1, evaluationOutcome: 'done', forceConflict: false, forceManual: false };
   try {
     return { ...base, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') };
   } catch {

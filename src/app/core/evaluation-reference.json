@@ -1,0 +1,1016 @@
+{
+ "activityGroups": [
+  {
+   "id": 1,
+   "label": "Yazılım ve BT"
+  },
+  {
+   "id": 2,
+   "label": "Donanım, Elektronik ve Telekomünikasyon"
+  },
+  {
+   "id": 3,
+   "label": "Finans ve Ödeme Hizmetleri"
+  },
+  {
+   "id": 4,
+   "label": "Perakende, E-Ticaret ve Pazaryerleri"
+  },
+  {
+   "id": 5,
+   "label": "Tüketici Ürünleri ve Hizmetleri"
+  },
+  {
+   "id": 6,
+   "label": "Dijital Platformlar, Medya ve Oyun"
+  },
+  {
+   "id": 7,
+   "label": "Sağlık ve Yaşam Bilimleri"
+  },
+  {
+   "id": 8,
+   "label": "Enerji, Çevre ve Şebeke Hizmetleri"
+  },
+  {
+   "id": 9,
+   "label": "Sanayi, Üretim ve Endüstriyel Teknolojiler"
+  },
+  {
+   "id": 10,
+   "label": "Otomotiv ve Mobilite"
+  },
+  {
+   "id": 11,
+   "label": "Taşımacılık ve Lojistik"
+  },
+  {
+   "id": 12,
+   "label": "Havacılık, Uzay ve Savunma"
+  },
+  {
+   "id": 13,
+   "label": "Malzemeler, Tarım ve Doğal Kaynaklar"
+  },
+  {
+   "id": 14,
+   "label": "Gayrimenkul ve İnşaat"
+  },
+  {
+   "id": 15,
+   "label": "Profesyonel Hizmetler ve İşletme Çözümleri"
+  },
+  {
+   "id": 16,
+   "label": "Seyahat, Konaklama ve Eğlence"
+  },
+  {
+   "id": 17,
+   "label": "Eğitim ve İnsan Kaynakları"
+  }
+ ],
+ "activities": [
+  {
+   "id": 1,
+   "label": "Yapay Zekâ Çipleri ve Donanımı"
+  },
+  {
+   "id": 2,
+   "label": "Otonom Yapay Zekâ ve Robotik"
+  },
+  {
+   "id": 3,
+   "label": "Yapay Zekâ Odaklı Yazılım"
+  },
+  {
+   "id": 4,
+   "label": "Sektörel Yapay Zekâ Uygulamaları"
+  },
+  {
+   "id": 5,
+   "label": "Reklam Teknolojisi Yazılımı"
+  },
+  {
+   "id": 6,
+   "label": "İş Zekâsı Yazılımı"
+  },
+  {
+   "id": 7,
+   "label": "İletişim ve İş Birliği Yazılımı"
+  },
+  {
+   "id": 8,
+   "label": "İçerik Yönetimi Yazılımı"
+  },
+  {
+   "id": 9,
+   "label": "Tasarım ve Mühendislik Yazılımı"
+  },
+  {
+   "id": 10,
+   "label": "E-Ticaret Yazılımı"
+  },
+  {
+   "id": 11,
+   "label": "ERP Yazılımı"
+  },
+  {
+   "id": 12,
+   "label": "Finansal Yönetim Yazılımı"
+  },
+  {
+   "id": 13,
+   "label": "Yönetişim, Risk ve Uyum Yazılımı"
+  },
+  {
+   "id": 14,
+   "label": "İnsan Kaynakları Yönetimi Yazılımı"
+  },
+  {
+   "id": 15,
+   "label": "Verimlilik Yazılımı"
+  },
+  {
+   "id": 16,
+   "label": "Satış ve Pazarlama Otomasyonu Yazılımı"
+  },
+  {
+   "id": 17,
+   "label": "Tedarik Zinciri Yönetimi Yazılımı"
+  },
+  {
+   "id": 18,
+   "label": "Video ve Streaming Yazılımı"
+  },
+  {
+   "id": 19,
+   "label": "Veri Merkezleri"
+  },
+  {
+   "id": 20,
+   "label": "Veri Depolama"
+  },
+  {
+   "id": 21,
+   "label": "Bulut Altyapısı"
+  },
+  {
+   "id": 22,
+   "label": "Siber Güvenlik"
+  },
+  {
+   "id": 23,
+   "label": "Veri Altyapısı"
+  },
+  {
+   "id": 24,
+   "label": "Geliştirici Araçları"
+  },
+  {
+   "id": 25,
+   "label": "DevOps"
+  },
+  {
+   "id": 26,
+   "label": "BT Operasyon Yönetimi"
+  },
+  {
+   "id": 27,
+   "label": "Nesnelerin İnterneti"
+  },
+  {
+   "id": 28,
+   "label": "Ağ Donanımı"
+  },
+  {
+   "id": 29,
+   "label": "Uydu İletişimi"
+  },
+  {
+   "id": 30,
+   "label": "Telekomünikasyon Altyapısı"
+  },
+  {
+   "id": 31,
+   "label": "Telekom Hizmet Sağlayıcıları"
+  },
+  {
+   "id": 32,
+   "label": "Ağ Yönetimi"
+  },
+  {
+   "id": 33,
+   "label": "Tüketici Elektroniği"
+  },
+  {
+   "id": 34,
+   "label": "Bilgisayar Donanımı"
+  },
+  {
+   "id": 35,
+   "label": "Elektronik Bileşenler"
+  },
+  {
+   "id": 36,
+   "label": "Bilgisayar Aksesuarları"
+  },
+  {
+   "id": 37,
+   "label": "Sanal ve Artırılmış Gerçeklik"
+  },
+  {
+   "id": 38,
+   "label": "Giyilebilir Teknolojiler"
+  },
+  {
+   "id": 39,
+   "label": "Yarı İletkenler"
+  },
+  {
+   "id": 40,
+   "label": "Varlık Yönetimi"
+  },
+  {
+   "id": 41,
+   "label": "Ticari Bankacılık"
+  },
+  {
+   "id": 42,
+   "label": "Tüketici Finansmanı"
+  },
+  {
+   "id": 43,
+   "label": "Sigorta Aracılığı"
+  },
+  {
+   "id": 44,
+   "label": "Sigorta Şirketleri"
+  },
+  {
+   "id": 45,
+   "label": "Yatırım Bankacılığı"
+  },
+  {
+   "id": 46,
+   "label": "Yatırım Aracılığı"
+  },
+  {
+   "id": 47,
+   "label": "Diğer Finansal Hizmetler"
+  },
+  {
+   "id": 48,
+   "label": "Özel Sermaye ve Girişim Sermayesi"
+  },
+  {
+   "id": 49,
+   "label": "Gayrimenkul Finansmanı"
+  },
+  {
+   "id": 50,
+   "label": "Borsalar"
+  },
+  {
+   "id": 51,
+   "label": "Sermaye Piyasaları Altyapısı"
+  },
+  {
+   "id": 52,
+   "label": "Kripto ve Web3 Platformları"
+  },
+  {
+   "id": 53,
+   "label": "Kripto Madenciliği"
+  },
+  {
+   "id": 54,
+   "label": "Gömülü Finans"
+  },
+  {
+   "id": 55,
+   "label": "Finansal Veri ve Bilgi"
+  },
+  {
+   "id": 56,
+   "label": "Dijital Bankacılık"
+  },
+  {
+   "id": 57,
+   "label": "Dijital Sigortacılık"
+  },
+  {
+   "id": 58,
+   "label": "Online Aracı Kurumlar"
+  },
+  {
+   "id": 59,
+   "label": "Online Kredi"
+  },
+  {
+   "id": 60,
+   "label": "Fiyat Karşılaştırma"
+  },
+  {
+   "id": 61,
+   "label": "Finansal Hizmetler Yazılımı"
+  },
+  {
+   "id": 62,
+   "label": "B2B Ödemeler"
+  },
+  {
+   "id": 63,
+   "label": "Kart Ağları"
+  },
+  {
+   "id": 64,
+   "label": "Para Transferi"
+  },
+  {
+   "id": 65,
+   "label": "Ödeme Altyapısı"
+  },
+  {
+   "id": 66,
+   "label": "Ödeme Hizmeti Sağlayıcıları"
+  },
+  {
+   "id": 67,
+   "label": "POS Ödemeleri"
+  },
+  {
+   "id": 68,
+   "label": "Çok Katlı Mağazalar"
+  },
+  {
+   "id": 69,
+   "label": "Genel Perakende"
+  },
+  {
+   "id": 70,
+   "label": "Eczaneler"
+  },
+  {
+   "id": 71,
+   "label": "İhtisas Mağazaları"
+  },
+  {
+   "id": 72,
+   "label": "Süpermarketler"
+  },
+  {
+   "id": 73,
+   "label": "B2B E-Ticaret"
+  },
+  {
+   "id": 74,
+   "label": "B2C E-Ticaret"
+  },
+  {
+   "id": 75,
+   "label": "B2B Pazaryerleri"
+  },
+  {
+   "id": 76,
+   "label": "İlan Platformları"
+  },
+  {
+   "id": 77,
+   "label": "B2C Pazaryerleri"
+  },
+  {
+   "id": 78,
+   "label": "Yemek Teslimatı"
+  },
+  {
+   "id": 79,
+   "label": "Yatay Pazaryerleri"
+  },
+  {
+   "id": 80,
+   "label": "Lead Generation"
+  },
+  {
+   "id": 81,
+   "label": "Sadakat ve Kupon Platformları"
+  },
+  {
+   "id": 82,
+   "label": "Dikey Pazaryerleri"
+  },
+  {
+   "id": 83,
+   "label": "Toptan Dağıtım"
+  },
+  {
+   "id": 84,
+   "label": "POS ve Perakende Yönetimi Yazılımı"
+  },
+  {
+   "id": 85,
+   "label": "Tüketici Uygulamaları"
+  },
+  {
+   "id": 86,
+   "label": "Online Arkadaşlık"
+  },
+  {
+   "id": 87,
+   "label": "Arama Motorları"
+  },
+  {
+   "id": 88,
+   "label": "Sosyal Ağlar"
+  },
+  {
+   "id": 89,
+   "label": "Alkollü İçecekler"
+  },
+  {
+   "id": 90,
+   "label": "Bebek ve Çocuk Ürünleri"
+  },
+  {
+   "id": 91,
+   "label": "Giyim ve Aksesuar"
+  },
+  {
+   "id": 92,
+   "label": "Gıda ve İçecek"
+  },
+  {
+   "id": 93,
+   "label": "Sağlık ve Güzellik"
+  },
+  {
+   "id": 94,
+   "label": "Ev Ürünleri ve Dekorasyon"
+  },
+  {
+   "id": 95,
+   "label": "Ev Aletleri"
+  },
+  {
+   "id": 96,
+   "label": "Ev Bakım Ürünleri"
+  },
+  {
+   "id": 97,
+   "label": "Lüks Ürünler"
+  },
+  {
+   "id": 98,
+   "label": "Evcil Hayvan Ürünleri ve Bakımı"
+  },
+  {
+   "id": 99,
+   "label": "Spor ve Eğlence"
+  },
+  {
+   "id": 100,
+   "label": "Tütün Ürünleri"
+  },
+  {
+   "id": 101,
+   "label": "Oyuncaklar ve Oyunlar"
+  },
+  {
+   "id": 102,
+   "label": "Ev Hizmetleri"
+  },
+  {
+   "id": 103,
+   "label": "Kişisel Hizmetler"
+  },
+  {
+   "id": 104,
+   "label": "Online İçerik ve Haber"
+  },
+  {
+   "id": 105,
+   "label": "İçerik Üretimi"
+  },
+  {
+   "id": 106,
+   "label": "Etkinlikler"
+  },
+  {
+   "id": 107,
+   "label": "Müzik"
+  },
+  {
+   "id": 108,
+   "label": "Yayıncılık"
+  },
+  {
+   "id": 109,
+   "label": "Radyo Yayıncılığı"
+  },
+  {
+   "id": 110,
+   "label": "Spor"
+  },
+  {
+   "id": 111,
+   "label": "Dijital Yayın Platformları"
+  },
+  {
+   "id": 112,
+   "label": "TV Yayıncılığı"
+  },
+  {
+   "id": 113,
+   "label": "Medya ve Eğlence Yazılımı"
+  },
+  {
+   "id": 114,
+   "label": "E-Spor"
+  },
+  {
+   "id": 115,
+   "label": "Oyun - Konsol ve PC"
+  },
+  {
+   "id": 116,
+   "label": "Oyun - Mobil"
+  },
+  {
+   "id": 117,
+   "label": "Hastaneler ve Klinikler"
+  },
+  {
+   "id": 118,
+   "label": "Laboratuvar Hizmetleri"
+  },
+  {
+   "id": 119,
+   "label": "Uzun Süreli Bakım"
+  },
+  {
+   "id": 120,
+   "label": "Sağlık Planları ve Bakım Yönetimi"
+  },
+  {
+   "id": 121,
+   "label": "Tıbbi Malzemeler"
+  },
+  {
+   "id": 122,
+   "label": "Elektronik Sağlık Kayıtları ve Klinik Yönetimi"
+  },
+  {
+   "id": 123,
+   "label": "Fitness ve Wellness"
+  },
+  {
+   "id": 124,
+   "label": "Sağlık Yan Hakları ve Finansal Çözümler"
+  },
+  {
+   "id": 125,
+   "label": "Sağlık Verisi ve Analitiği"
+  },
+  {
+   "id": 126,
+   "label": "Tıbbi Görüntüleme ve Tanı"
+  },
+  {
+   "id": 127,
+   "label": "Ruh Sağlığı Teknolojileri"
+  },
+  {
+   "id": 128,
+   "label": "Teletıp ve Sanal Sağlık Hizmetleri"
+  },
+  {
+   "id": 129,
+   "label": "Sağlık Yazılımı"
+  },
+  {
+   "id": 130,
+   "label": "Biyoendüstriyel Ürünler"
+  },
+  {
+   "id": 131,
+   "label": "Biyofarmasötikler"
+  },
+  {
+   "id": 132,
+   "label": "Sözleşmeli Araştırma ve Üretim"
+  },
+  {
+   "id": 133,
+   "label": "Tanı ve Genomik"
+  },
+  {
+   "id": 134,
+   "label": "Yaşam Bilimleri Araçları"
+  },
+  {
+   "id": 135,
+   "label": "Tıbbi Cihazlar"
+  },
+  {
+   "id": 136,
+   "label": "Takviye Ürünleri"
+  },
+  {
+   "id": 137,
+   "label": "Bitki Bazlı Gıda"
+  },
+  {
+   "id": 138,
+   "label": "Nükleer Enerji"
+  },
+  {
+   "id": 139,
+   "label": "Petrol ve Gaz"
+  },
+  {
+   "id": 140,
+   "label": "Yenilenebilir Enerji"
+  },
+  {
+   "id": 141,
+   "label": "Enerji Ekipmanları"
+  },
+  {
+   "id": 142,
+   "label": "Enerji Altyapısı"
+  },
+  {
+   "id": 143,
+   "label": "Enerji Üretimi"
+  },
+  {
+   "id": 144,
+   "label": "Enerji Hizmetleri"
+  },
+  {
+   "id": 145,
+   "label": "Enerji Depolama"
+  },
+  {
+   "id": 146,
+   "label": "Enerji ve Şebeke Hizmetleri"
+  },
+  {
+   "id": 147,
+   "label": "Atık ve Çevre Hizmetleri"
+  },
+  {
+   "id": 148,
+   "label": "Enerji ve Şebeke Yazılımı"
+  },
+  {
+   "id": 149,
+   "label": "3D Baskı"
+  },
+  {
+   "id": 150,
+   "label": "Otomasyon ve Robotik"
+  },
+  {
+   "id": 151,
+   "label": "Sensörler ve İzleme"
+  },
+  {
+   "id": 152,
+   "label": "Test ve Ölçüm"
+  },
+  {
+   "id": 153,
+   "label": "Elektrik Parçaları ve Ekipmanları"
+  },
+  {
+   "id": 154,
+   "label": "Endüstriyel Parçalar"
+  },
+  {
+   "id": 155,
+   "label": "Makine"
+  },
+  {
+   "id": 156,
+   "label": "Endüstriyel Yazılım"
+  },
+  {
+   "id": 157,
+   "label": "Otomobil Üreticileri"
+  },
+  {
+   "id": 158,
+   "label": "Otomobil Hizmetleri"
+  },
+  {
+   "id": 159,
+   "label": "Otomotiv Parçaları"
+  },
+  {
+   "id": 160,
+   "label": "Otonom Teknoloji"
+  },
+  {
+   "id": 161,
+   "label": "Elektrikli Araçlar"
+  },
+  {
+   "id": 162,
+   "label": "Mikromobilite"
+  },
+  {
+   "id": 163,
+   "label": "Navigasyon ve Haritalama"
+  },
+  {
+   "id": 164,
+   "label": "Yolculuk Paylaşımı"
+  },
+  {
+   "id": 165,
+   "label": "Otomotiv Yazılımı"
+  },
+  {
+   "id": 166,
+   "label": "Havayolları"
+  },
+  {
+   "id": 167,
+   "label": "Havalimanları ve Havacılık Hizmetleri"
+  },
+  {
+   "id": 168,
+   "label": "Lojistik ve Hava Kargo"
+  },
+  {
+   "id": 169,
+   "label": "Deniz Taşımacılığı"
+  },
+  {
+   "id": 170,
+   "label": "Demiryolu Altyapısı"
+  },
+  {
+   "id": 171,
+   "label": "Demiryolları"
+  },
+  {
+   "id": 172,
+   "label": "Karayolu Altyapısı"
+  },
+  {
+   "id": 173,
+   "label": "Karayolu Taşımacılığı"
+  },
+  {
+   "id": 174,
+   "label": "Taşımacılık ve Lojistik Yazılımı"
+  },
+  {
+   "id": 175,
+   "label": "Havacılık ve Uzay Sistemleri"
+  },
+  {
+   "id": 176,
+   "label": "Savunma Sistemleri"
+  },
+  {
+   "id": 177,
+   "label": "İleri Malzemeler"
+  },
+  {
+   "id": 178,
+   "label": "Tarım"
+  },
+  {
+   "id": 179,
+   "label": "Yapı Malzemeleri"
+  },
+  {
+   "id": 180,
+   "label": "Kimyasallar"
+  },
+  {
+   "id": 181,
+   "label": "Metaller ve Madencilik"
+  },
+  {
+   "id": 182,
+   "label": "Ambalaj ve Konteynerler"
+  },
+  {
+   "id": 183,
+   "label": "Kağıt ve Orman Ürünleri"
+  },
+  {
+   "id": 184,
+   "label": "Tekstil"
+  },
+  {
+   "id": 185,
+   "label": "Yapı Ürünleri"
+  },
+  {
+   "id": 186,
+   "label": "İnşaat ve Mühendislik"
+  },
+  {
+   "id": 187,
+   "label": "Gayrimenkul Geliştirme"
+  },
+  {
+   "id": 188,
+   "label": "Gayrimenkul Hizmetleri"
+  },
+  {
+   "id": 189,
+   "label": "Tesis Yönetimi"
+  },
+  {
+   "id": 190,
+   "label": "Çalışma Alanları"
+  },
+  {
+   "id": 191,
+   "label": "Gayrimenkul Yazılımı"
+  },
+  {
+   "id": 192,
+   "label": "Profesyonel ve Ticari Hizmetler"
+  },
+  {
+   "id": 193,
+   "label": "Leasing ve Kiralama Hizmetleri"
+  },
+  {
+   "id": 194,
+   "label": "Ofis Ekipmanları ve Sarf Malzemeleri"
+  },
+  {
+   "id": 195,
+   "label": "Güvenlik Hizmetleri"
+  },
+  {
+   "id": 196,
+   "label": "Reklam ve Pazarlama"
+  },
+  {
+   "id": 197,
+   "label": "İş Süreçleri Dış Kaynak Hizmetleri"
+  },
+  {
+   "id": 198,
+   "label": "İşletme Danışmanlığı"
+  },
+  {
+   "id": 199,
+   "label": "BT Danışmanlığı"
+  },
+  {
+   "id": 200,
+   "label": "Hukuk Hizmetleri"
+  },
+  {
+   "id": 201,
+   "label": "Matbaacılık"
+  },
+  {
+   "id": 202,
+   "label": "Vergi ve Muhasebe Hizmetleri"
+  },
+  {
+   "id": 203,
+   "label": "Profesyonel Hizmetler Yazılımı"
+  },
+  {
+   "id": 204,
+   "label": "Online Bahis"
+  },
+  {
+   "id": 205,
+   "label": "Online Seyahat"
+  },
+  {
+   "id": 206,
+   "label": "Konaklama"
+  },
+  {
+   "id": 207,
+   "label": "Şans Oyunları"
+  },
+  {
+   "id": 208,
+   "label": "Yaşam Tarzı ve Rekreasyon Hizmetleri"
+  },
+  {
+   "id": 209,
+   "label": "Restoranlar"
+  },
+  {
+   "id": 210,
+   "label": "Seyahat Hizmetleri"
+  },
+  {
+   "id": 211,
+   "label": "Seyahat ve Konaklama Yazılımı"
+  },
+  {
+   "id": 212,
+   "label": "Eğitim Platformları"
+  },
+  {
+   "id": 213,
+   "label": "Eğitim ve Mesleki Eğitim"
+  },
+  {
+   "id": 214,
+   "label": "Eğitim Yazılımı"
+  },
+  {
+   "id": 215,
+   "label": "Online İş ve İşe Alım"
+  },
+  {
+   "id": 216,
+   "label": "İşe Alım ve Personel Temini Hizmetleri"
+  }
+ ],
+ "businessModels": [
+  {
+   "id": 1,
+   "label": "B2B"
+  },
+  {
+   "id": 2,
+   "label": "B2C"
+  },
+  {
+   "id": 3,
+   "label": "B2G"
+  },
+  {
+   "id": 4,
+   "label": "C2C"
+  }
+ ],
+ "revenueModels": [
+  {
+   "id": 1,
+   "label": "Reklam"
+  },
+  {
+   "id": 2,
+   "label": "Komisyon"
+  },
+  {
+   "id": 3,
+   "label": "Lisanslama"
+  },
+  {
+   "id": 4,
+   "label": "Kar amacı gütmeyen"
+  },
+  {
+   "id": 5,
+   "label": "Ürün satışı"
+  },
+  {
+   "id": 6,
+   "label": "Hizmet"
+  },
+  {
+   "id": 7,
+   "label": "Abonelik"
+  },
+  {
+   "id": 8,
+   "label": "Kullanım bazlı"
+  }
+ ],
+ "productTypes": [
+  {
+   "id": 1,
+   "label": "Fiziksel"
+  },
+  {
+   "id": 2,
+   "label": "Dijital"
+  },
+  {
+   "id": 3,
+   "label": "Hizmet"
+  },
+  {
+   "id": 4,
+   "label": "Diğer"
+  }
+ ],
+ "limits": {
+  "deckMaxMb": 25,
+  "cvMaxMb": 5,
+  "deckMinPages": 3,
+  "deckMaxPages": 40,
+  "summaryMin": 50,
+  "summaryMax": 2000
+ }
+}

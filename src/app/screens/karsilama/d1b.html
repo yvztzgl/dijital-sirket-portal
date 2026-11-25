@@ -1,38 +1,31 @@
-<app-step-page [step]="1" [part]="2" [parts]="3" sub="Sunum" ctx="scan" label="D-1b Tarama" [width]="820">
+<app-step-page [step]="1" [part]="2" [parts]="3" sub="Değerlendirme" ctx="evaluate" label="D-1b Değerlendirme" [width]="760">
   <div class="wz-head">
-    <h1 class="wz-h1">Sunumunuz okunuyor</h1>
-    <p class="wz-lead">Kuruluş için gerekli bilgiler sunum üzerinden okunuyor, lütfen bekleyiniz.</p>
+    <span class="wz-chip wz-chip--info"><app-icon name="clock" size="13px" [stroke]="2.2" />Değerlendiriliyor</span>
+    <h1 class="wz-h1">Sunumunuz değerlendiriliyor</h1>
+    <p class="wz-lead">Sunumunuz, özgeçmişiniz ve yanıtlarınız dış değerlendirme hizmetine gönderildi. Değerlendirme genellikle birkaç dakika sürer.</p>
   </div>
 
-  <section class="wz-card wz-scan" aria-live="polite">
-    <div class="read">
-      <div class="page" aria-hidden="true">
-        @if ((store.scan()?.shown ?? 0) > 0) {
-          <span class="co">@if (brand().logo) {<img [src]="brand().logo" alt="">}<b>{{ brand().name }}</b></span>
-        } @else {
-          <span class="co ghost"><i></i><i></i></span>
-        }
-        <span class="ln"></span><span class="ln"></span><span class="ln"></span><span class="ln"></span>
-        <span class="beam"></span>
-      </div>
-      <div class="meta"><b>Sayfa {{ store.scan()?.page }} / {{ scanPages() }}</b><span>%{{ store.scan()?.percent ?? 0 }}</span></div>
-      <div class="dots" aria-hidden="true">@for (t of thumbs(); track $index) {<span [class.done]="!t.cur && t.op === 1" [class.cur]="t.cur"></span>}</div>
-      <span class="file">{{ scanFile() }}</span>
-    </div>
-
-    <div class="found">
-      <h2 class="wz-card-h">Okunan bilgiler<span>{{ store.scan()?.shown ?? 0 }} / {{ scanFields().length }}</span></h2>
-      <ul>
-        @for (f of scanFields(); track f.k) {
-          <li [class.done]="f.done">
-            <span class="ck" aria-hidden="true">@if (f.done) {<app-icon name="check" size="11px" [stroke]="3" />}</span>
-            <span class="k">{{ f.k }}</span>
-            @if (f.done) {<span class="v">{{ f.v }}</span><span class="p">{{ f.p }}</span>} @else {<span class="v wait"></span>}
-          </li>
-        }
-      </ul>
-    </div>
+  <!-- A status page, not a progress bar: how long the evaluation takes is not known, and this page updates itself when it ends. -->
+  <section class="wz-card wz-checks" role="status" aria-live="polite">
+    <ul>
+      <li>
+        <span class="ok" aria-hidden="true"><app-icon name="check" size="13px" [stroke]="3" /></span>
+        <span class="t"><b>Sunum ve özgeçmiş alındı</b><small>{{ uploadedFiles() }}</small></span>
+      </li>
+      <li>
+        <span class="wait" aria-hidden="true"><app-icon name="clock" size="13px" [stroke]="2.4" /></span>
+        <span class="t"><b class="pending">Değerlendirme sürüyor</b><small>@if (evaluationSince(); as at) {<span>{{ at }} tarihinde başladı</span>}@if (evaluationAttempt(); as n) {<span> · {{ n }}</span>}</small></span>
+      </li>
+      <li>
+        <span class="next" aria-hidden="true"></span>
+        <span class="t"><b>Şirket bilgileri</b><small>Değerlendirme tamamlandığında şirket bilgilerinizi doldurursunuz.</small></span>
+      </li>
+    </ul>
+    <p class="note">
+      <b>Bu sayfada beklemeniz gerekmez.</b>
+      <span>Sayfayı kapatabilirsiniz; yeniden giriş yaptığınızda başvurunuz kaldığı yerden devam eder. Sayfa açıksa değerlendirme bittiğinde kendiliğinden güncellenir.</span>
+    </p>
   </section>
 
-  <p class="wz-foot"><app-icon name="info" size="13px" [stroke]="2" />Okunan her bilgi bir sonraki ekranda kontrol edilir ve düzeltilebilir.</p>
+  <p class="wz-foot"><app-icon name="info" size="13px" [stroke]="2" />Değerlendirme sürerken yüklediğiniz dosyalar ve yanıtlarınız değiştirilemez.</p>
 </app-step-page>

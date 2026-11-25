@@ -5,14 +5,15 @@ import type { Api, ApplicationStatus, ReviewPatch, ServerWork, Session } from '.
 import { ApiError } from './api-error';
 import { callStartedAt, toAccount, toApplication, toReviewFields, toStage } from './api-mapper';
 import { ApplicationWire, EdevletStartWire, MeWire, PhoneLinkWire, PhoneStatusWire, StageWire } from './api-types';
-import { Account, Application, CrossKey, DeckConsents, PhoneLinkStatus, Profile, WizardReference } from './models';
+import { Account, Application, DeckConsents, EvaluationAnswers, EvaluationReference, PhoneLinkStatus, Profile, WizardReference } from './models';
 
 /**
  * The real platform API over HTTP, used by the `http` build (see docs/api-client.md).
  *
  * Connected so far: sign-in (register, code, login, logout, password reset, e-Devlet), reading
- * the session back after a reload, step 1 (profile, deck, review, cross-checks, title, the
- * reference data, and polling the status read while the server works) and step 2 (identity check
+ * the session back after a reload, step 1 (profile, the deck with the CV and the answers for the
+ * outside evaluation, review, title, the reference data, and polling the status read while the
+ * server works) and step 2 (identity check
  * on the computer or on the phone, declaration, the result, manual review), the second factor
  * ("step-up"), step 3 (payment with 3-D Secure), step 4 (the e-signature: the video call for foreign
  * founders, the method choice for residents) and step 5 (the formation, followed by polling). The session is an
@@ -52,6 +53,8 @@ export class HttpApi implements Api {
   private seenStatus: ApplicationStatus | null = null;
   /** The reference data, read once per session. */
   private referenceData: Promise<WizardReference> | null = null;
+  /** The evaluation's dictionaries and limits, read once per session. */
+  private evaluationData: Promise<EvaluationReference> | null = null;
   /**
    * The phone link's token, which the API gives only in the answer to `POST /phone-link`. Kept in
    * this object's memory while the QR code is shown (never in storage), put on the mapped
@@ -186,6 +189,7 @@ export class HttpApi implements Api {
     this.view = null;
     this.seenStatus = null;
     this.referenceData = null;
+    this.evaluationData = null;
     this.phoneLink = null;
     this.resultSeen.clear();
     this.card = null;
@@ -232,6 +236,15 @@ export class HttpApi implements Api {
     return this.referenceData;
   }
 
+  /** `GET /api/reference/evaluation`, once per session; read again after a failure. */
+  evaluationReference(): Promise<EvaluationReference> {
+    this.evaluationData ??= this.request<EvaluationReference>('GET', '/api/reference/evaluation').catch((error: unknown) => {
+      this.evaluationData = null;
+      throw error;
+    });
+    return this.evaluationData;
+  }
+
   // step 1 · profile and deck
 
   /** 204; only before a deck is uploaded (409 `wrong_stage` after). 400 with `errors.<field>`. */
@@ -242,22 +255,26 @@ export class HttpApi implements Api {
   }
 
   /**
-   * 202, then the Worker reads the deck (stage `scanning`). Multipart: the file itself and the two
-   * ticks exactly as the founder gave them. The browser sets the multipart Content-Type with its
-   * boundary; setting it here would break the body.
+   * 202, then the outside evaluation runs (stage `evaluating`, minutes). Multipart: the deck under
+   * `file` (the part name of the first deck upload), the CV under `cv`, the summary and the two
+   * single choices as text, each multiple choice as one repeated field per id, and the two ticks
+   * exactly as the founder gave them. The browser sets the multipart Content-Type with its
+   * boundary; setting it here would break the body. 400 `validation_failed` with `errors.<field>`
+   * (deck, cv, summary, activityGroupId, activityId, businessModelIds, revenueModelIds, productTypeIds).
    */
-  async uploadDeck(file: File, consents: DeckConsents): Promise<Application> {
+  async uploadDeck(files: { deck: File; cv: File }, answers: EvaluationAnswers, consents: DeckConsents): Promise<Application> {
     const form = new FormData();
-    form.append('file', file, file.name);
+    form.append('file', files.deck, files.deck.name);
+    form.append('cv', files.cv, files.cv.name);
+    form.append('summary', answers.summary);
+    if (answers.activityGroupId !== null) form.append('activityGroupId', String(answers.activityGroupId));
+    if (answers.activityId !== null) form.append('activityId', String(answers.activityId));
+    for (const id of answers.businessModelIds) form.append('businessModelIds', String(id));
+    for (const id of answers.revenueModelIds) form.append('revenueModelIds', String(id));
+    for (const id of answers.productTypeIds) form.append('productTypeIds', String(id));
     form.append('noticeAcknowledged', String(consents.noticeAcknowledged === true));
     form.append('aiConsent', String(consents.aiConsent === true));
     await this.request('POST', '/api/application/deck', form);
-    return this.fresh();
-  }
-
-  /** 204; 422 `no_choice_needed` on an item that matches. */
-  async resolveCrossCheck(key: CrossKey, choice: 'stated' | 'read'): Promise<Application> {
-    await this.request('POST', `/api/application/cross-checks/${encodeURIComponent(key)}`, { choice });
     return this.fresh();
   }
 
@@ -272,7 +289,7 @@ export class HttpApi implements Api {
     return this.fresh();
   }
 
-  /** 202, stage `titleChecking`. 422 `crosscheck_open`; 400 with one `errors.<field>` per missing field; 400 `nace_codes`. */
+  /** 202, stage `titleChecking`. 400 with one `errors.<field>` per missing field; 400 `nace_codes`. */
   async submitReview(): Promise<Application> {
     await this.request('POST', '/api/application/review/submit');
     return this.fresh();

@@ -1,4 +1,4 @@
-import { FundingSource } from './models';
+import { EvaluationAnswers, EvaluationReference, FundingSource } from './models';
 
 /**
  * Checks and constants the screens use to help the founder before anything is sent. They are pure
@@ -10,21 +10,52 @@ import { FundingSource } from './models';
 /** Largest address document the declaration screen takes. */
 export const ADDRESS_DOC_MAX = 10 * 1024 * 1024;
 
-/** Largest deck the API takes (UploadDeckHandler.MaxBytes). */
-export const DECK_MAX = 25 * 1024 * 1024;
-
 /** The API's refusal when either deck consent is missing; the screen shows the same text. */
-export const DECK_CONSENT_ERROR = 'Devam etmek için aydınlatma metnini ve yapay zekâ ile işleme onayını işaretleyiniz.';
+export const DECK_CONSENT_ERROR = 'Devam etmek için aydınlatma metnini ve değerlendirme hizmetine aktarım onayını işaretleyiniz.';
+
+/** The upload limits as `GET /api/reference/evaluation` sends them (`EvaluationReference.limits`). */
+export type EvaluationLimits = EvaluationReference['limits'];
+
+/** The field names of the API's refusal (`errors.<field>`), which the screen shows at its fields. */
+export type EvaluationField = 'deck' | 'cv' | 'summary' | 'activityGroupId' | 'activityId' | 'businessModelIds' | 'revenueModelIds' | 'productTypeIds';
+
+const isPdf = (file: { name: string }) => /\.pdf$/i.test(file.name);
 
 /**
- * The deck's size and type, in the API's order and words. The API also checks the file's content,
- * not only its name; that cannot be repeated here.
+ * The deck upload's checks (D-1a), keyed by the API's field names, one message each; empty when
+ * nothing is wrong. The screen runs them before sending and the mock refuses with them, so both
+ * modes refuse alike; the API repeats them. The deck's page count (3–40) cannot be checked here:
+ * the evaluation service checks it and ends the evaluation `rejected`.
+ * `choices`: the reference's ids; an id outside them is refused like a missing one.
  */
-export function deckFileError(file: { name: string; size: number }): string | null {
-  if (file.size === 0) return 'Sunum dosyanızı yükleyiniz.';
-  if (file.size > DECK_MAX) return 'Dosya 25 MB’tan büyüktür.';
-  if (!/\.(pdf|pptx)$/i.test(file.name)) return 'Sunum PDF veya PPTX biçiminde olmalıdır.';
-  return null;
+export function evaluationErrors(
+  input: { deck: { name: string; size: number } | null; cv: { name: string; size: number } | null } & EvaluationAnswers,
+  limits: EvaluationLimits,
+  choices?: Pick<EvaluationReference, 'activityGroups' | 'activities' | 'businessModels' | 'revenueModels' | 'productTypes'>,
+): Partial<Record<EvaluationField, string>> {
+  const errors: Partial<Record<EvaluationField, string>> = {};
+  const mb = (n: number) => n * 1024 * 1024;
+  const known = (list: { id: number }[] | undefined, id: number) => !list || list.some((o) => o.id === id);
+
+  if (!input.deck || input.deck.size === 0) errors.deck = 'Sunum dosyanızı yükleyiniz.';
+  else if (!isPdf(input.deck)) errors.deck = 'Sunum PDF biçiminde olmalıdır.';
+  else if (input.deck.size > mb(limits.deckMaxMb)) errors.deck = `Sunum dosyası ${limits.deckMaxMb} MB’tan büyük olamaz.`;
+
+  if (!input.cv || input.cv.size === 0) errors.cv = 'Özgeçmişinizi yükleyiniz.';
+  else if (!isPdf(input.cv)) errors.cv = 'Özgeçmiş PDF biçiminde olmalıdır.';
+  else if (input.cv.size > mb(limits.cvMaxMb)) errors.cv = `Özgeçmiş dosyası ${limits.cvMaxMb} MB’tan büyük olamaz.`;
+
+  const length = input.summary.trim().length;
+  if (length < limits.summaryMin) errors.summary = `Özet en az ${limits.summaryMin} karakter olmalıdır.`;
+  else if (length > limits.summaryMax) errors.summary = `Özet en fazla ${limits.summaryMax} karakter olabilir.`;
+
+  if (input.activityGroupId === null || !known(choices?.activityGroups, input.activityGroupId)) errors.activityGroupId = 'Faaliyet grubunu seçiniz.';
+  if (input.activityId === null || !known(choices?.activities, input.activityId)) errors.activityId = 'Faaliyet alanını seçiniz.';
+  const many = (ids: number[], list: { id: number }[] | undefined) => ids.length > 0 && ids.every((id) => known(list, id));
+  if (!many(input.businessModelIds, choices?.businessModels)) errors.businessModelIds = 'En az bir iş modeli seçiniz.';
+  if (!many(input.revenueModelIds, choices?.revenueModels)) errors.revenueModelIds = 'En az bir gelir modeli seçiniz.';
+  if (!many(input.productTypeIds, choices?.productTypes)) errors.productTypeIds = 'En az bir ürün türü seçiniz.';
+  return errors;
 }
 
 export function luhn(num: string) {

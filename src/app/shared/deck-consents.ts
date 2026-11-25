@@ -1,20 +1,22 @@
 import { ChangeDetectionStrategy, Component, model } from '@angular/core';
 
 /**
- * The two ticks the deck upload needs (D-1a, and the re-upload on D-1c): the privacy notice
- * acknowledged and consent to the deck being processed by AI. The API records both for every
- * upload. Never pre-ticked; the parent starts them at false.
+ * The two ticks the deck upload needs (D-1a): the privacy notice acknowledged, and consent to the
+ * deck, the CV and the answers on D-1a being sent to the outside evaluation service. The API records
+ * both for every upload (its field names are still `noticeAcknowledged` and `aiConsent`). Never
+ * pre-ticked; the parent starts them at false.
  *
- * Wording to be confirmed: the legal text of the notice is not decided yet (see
- * docs/api-client.md), so the labels are kept short and neutral and link to nothing.
+ * PLACEHOLDER WORDING, to be confirmed by the owner: the legal text of the notice is not decided yet
+ * and the evaluation service is not named (see docs/api-client.md), so the labels are short and
+ * neutral and link to nothing.
  */
 @Component({
   selector: 'app-deck-consents',
   template: `
     <fieldset class="wz-consents">
-      <legend>Sunumunuz için onaylar</legend>
-      <label class="wz-check"><input type="checkbox" [checked]="notice()" (change)="notice.set($any($event.target).checked)"><span>Sunumumla ilgili aydınlatma metnini okudum.</span></label>
-      <label class="wz-check"><input type="checkbox" [checked]="ai()" (change)="ai.set($any($event.target).checked)"><span>Sunumumun yapay zekâ ile işlenmesine onay veriyorum.</span></label>
+      <legend>Onaylar</legend>
+      <label class="wz-check"><input type="checkbox" [checked]="notice()" (change)="notice.set($any($event.target).checked)"><span>Sunumum ve özgeçmişimle ilgili aydınlatma metnini okudum.</span></label>
+      <label class="wz-check"><input type="checkbox" [checked]="ai()" (change)="ai.set($any($event.target).checked)"><span>Sunumumun, özgeçmişimin ve bu ekrandaki yanıtlarımın değerlendirme için dış bir değerlendirme hizmetine gönderilmesine onay veriyorum.</span></label>
     </fieldset>
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -25,7 +25,9 @@ export const routes: Routes = [
   { path: 'eposta-dogrulama', redirectTo: 'verify-email' },
   { path: 'sifre-sifirlama', redirectTo: 'reset-password' },
   { path: 'sunum', redirectTo: 'deck' },
-  { path: 'sunum/tarama', redirectTo: 'deck/scan' },
+  { path: 'sunum/tarama', redirectTo: 'deck/evaluating' },
+  // The deck was read by an AI reader here until 2026-11-25; now the outside evaluation runs.
+  { path: 'deck/scan', redirectTo: 'deck/evaluating' },
   { path: 'sunum/inceleme', redirectTo: 'deck/review' },
   { path: 'sunum/mersis-ret', redirectTo: 'deck/name-rejected' },
   { path: 'uygunluk', redirectTo: 'eligibility' },

@@ -8,8 +8,10 @@ export const SCREEN_STAGES: Record<string, { stages: Stage[]; founder?: FounderT
   d0c: { stages: ['registered'] },
   // The profile form stays open after it is saved, until the deck is uploaded (the API allows a new save until then).
   d1e: { stages: ['profile', 'verified'] },
+  // D-1a also after an evaluation that ended failed, rejected or cancelled (the API is back at `verified`).
   d1a: { stages: ['verified'] },
-  d1b: { stages: ['scanning'] },
+  d1b: { stages: ['evaluating'] },
+  d1g: { stages: ['evaluationQuestions'] },
   // D-1c also opens after a refused title ("Diğer bilgilere dön" on D-1d): the API still takes review changes then.
   d1c: { stages: ['review', 'titleConflict'] },
   titlecheck: { stages: ['titleChecking'] },

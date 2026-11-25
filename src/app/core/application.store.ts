@@ -5,7 +5,7 @@ import { ApiError } from './api-error';
 import { Clock } from './clock';
 import { pdfBytes, zipBytes } from './files';
 import { dateTime, initials } from './format';
-import { Account, Application, CrossKey, DeckConsents, DocItem, FounderType, LogEntry, PhoneLinkStatus, Profile, Stage, stepOf, WizardReference } from './models';
+import { Account, Application, DeckConsents, DocItem, EvaluationAnswers, EvaluationReference, FounderType, LogEntry, PhoneLinkStatus, Profile, Stage, stepOf, WizardReference } from './models';
 import { StatusPoller } from './status-poller';
 import {
   callView,
@@ -14,7 +14,6 @@ import {
   identityView,
   openEndedProgress,
   progress,
-  scanView,
   screeningEvents,
   screeningView,
   setupEvents,
@@ -32,8 +31,10 @@ export function routeFor(stage: Stage | null, founderType: FounderType = 'foreig
       return '/details';
     case 'verified':
       return '/deck';
-    case 'scanning':
-      return '/deck/scan';
+    case 'evaluating':
+      return '/deck/evaluating';
+    case 'evaluationQuestions':
+      return '/deck/more-information';
     case 'review':
       return '/deck/review';
     case 'titleChecking':
@@ -72,11 +73,12 @@ export function routeFor(stage: Stage | null, founderType: FounderType = 'foreig
 
 /**
  * Stages in which the server (or its staff) works and the founder waits; in HTTP mode the store
- * polls the status read while the application is in one of them (`waitsForServer`). `manual` and
- * `setup` are done by people (staff and institutions) and can take days; the poll settles at its
- * slowest pace (`pollDelay`). `done` is not one: nothing is polled once the company is founded.
+ * polls the status read while the application is in one of them (`waitsForServer`). `evaluating`
+ * takes minutes (the outside evaluation service). `evaluationQuestions`, `manual` and `setup` wait
+ * for people and can take days; the poll settles at its slowest pace (`pollDelay`). `done` is not
+ * one: nothing is polled once the company is founded.
  */
-export const SERVER_WAITING_STAGES: Stage[] = ['scanning', 'titleChecking', 'screening', 'manual', 'setup'];
+export const SERVER_WAITING_STAGES: Stage[] = ['evaluating', 'evaluationQuestions', 'titleChecking', 'screening', 'manual', 'setup'];
 
 /**
  * True while the portal should poll for the server in HTTP mode: a waiting stage; the identity step
@@ -153,6 +155,8 @@ export class ApplicationStore {
   readonly fieldErrors = signal<Record<string, string[]>>({});
   /** What the profile form and the review screen may offer (`Api.reference`); null until loaded. */
   readonly reference = signal<WizardReference | null>(null);
+  /** What the deck screen may offer and the limits it checks (`Api.evaluationReference`); null until loaded. */
+  readonly evaluationReference = signal<EvaluationReference | null>(null);
   /**
    * HTTP mode: the signed-in founder's application was closed by staff (the API's read answers 404
    * `no_application` while the portal held it, or right after a reload). The stage is then `closed`.
@@ -201,23 +205,6 @@ export class ApplicationStore {
    * leave out what only the mock can say (a liveness score, per-list results, review reasons).
    */
   readonly serverDecides = !!this.serverWork;
-
-  /**
-   * The deck being read. In the mock the reading ends when its simulated time is up. With the
-   * server the animation still moves with time but stops short of 100%: only the server's next
-   * stage ends it.
-   */
-  readonly scan = computed(() => {
-    const a = this.app();
-    if (!a?.deck) return null;
-    const p =
-      a.stage !== 'scanning'
-        ? 1
-        : this.serverWork
-          ? openEndedProgress(a.deck.startedAt, this.dur(DURATION.scan), this.now())
-          : progress(a.deck.startedAt, this.dur(DURATION.scan), this.now());
-    return scanView(a, p);
-  });
 
   /**
    * Step 2's camera check; null until the founder has started it, and in HTTP mode whenever no check
@@ -302,7 +289,7 @@ export class ApplicationStore {
       const a = this.app();
       if (!a) return;
       const done =
-        (a.stage === 'scanning' && this.scan()?.p === 1) ||
+        (a.stage === 'evaluating' && progress(a.evaluation?.startedAt, this.dur(DURATION.evaluation), this.now()) === 1) ||
         (a.stage === 'titleChecking' && progress(a.titleCheck?.requestedAt, this.dur(DURATION.titleCheck), this.now()) === 1) ||
         (a.stage === 'eligibility' && this.identity()?.p === 1) ||
         (a.stage === 'screening' && this.screening()?.p === 1) ||
@@ -473,13 +460,12 @@ export class ApplicationStore {
 
   /** D-1e: the founder's statement before the deck; may be saved again until a deck is uploaded. */
   submitProfile = (input: Omit<Profile, 'at'>) => this.update(() => this.api.submitProfile(input));
-  /** D-1a: the deck with the founder's two ticks for this upload. */
-  uploadDeck = (file: File, consents: DeckConsents) => this.update(() => this.api.uploadDeck(file, consents));
+  /** D-1a: the deck, the CV and the five answers, with the founder's two ticks for this upload. */
+  uploadDeck = (files: { deck: File; cv: File }, answers: EvaluationAnswers, consents: DeckConsents) =>
+    this.update(() => this.api.uploadDeck(files, answers, consents));
   updateReview = (patch: ReviewPatch, edited: string[]) => this.update(() => this.api.updateReview(patch, edited));
   submitReview = () => this.update(() => this.api.submitReview());
   chooseTitle = (title: string) => this.update(() => this.api.chooseTitle(title));
-  /** D-1c: which value to keep where the profile and the deck differ. */
-  resolveCrossCheck = (key: CrossKey, choice: 'stated' | 'read') => this.update(() => this.api.resolveCrossCheck(key, choice));
   /** D-2a: the founder read the pre-information, ticked the consent and starts the identity check. */
   startEligibility = (consent: boolean) => this.update(() => this.api.startEligibility(consent));
   /** D-2d: the address document and the confirmed declaration; the list search starts. */
@@ -499,6 +485,16 @@ export class ApplicationStore {
     if (this.reference()) return;
     try {
       this.reference.set(await this.api.reference());
+    } catch (e) {
+      if (this.sessionLost(e)) return;
+      this.error.set(e instanceof ApiError ? e.message : 'Seçenekler yüklenemedi. Lütfen sayfayı yenileyiniz.');
+    }
+  }
+  /** Loads `evaluationReference` once; the deck screen calls it. A failure is shown as the screen's error. */
+  async loadEvaluationReference() {
+    if (this.evaluationReference()) return;
+    try {
+      this.evaluationReference.set(await this.api.evaluationReference());
     } catch (e) {
       if (this.sessionLost(e)) return;
       this.error.set(e instanceof ApiError ? e.message : 'Seçenekler yüklenemedi. Lütfen sayfayı yenileyiniz.');
@@ -706,6 +702,7 @@ export class ApplicationStore {
     if (this.stepUp()) this.closeStepUp(false);
     // Read again for the next session (HTTP mode reads it once per session).
     this.reference.set(null);
+    this.evaluationReference.set(null);
     if (session) {
       this.pendingEmail.set(null);
       this.notice = null;

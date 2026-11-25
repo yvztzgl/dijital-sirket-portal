@@ -1,47 +1,92 @@
-<app-step-page [step]="1" [part]="2" [parts]="3" sub="Sunum" ctx="upload" label="D-1a Yükleme">
+<app-step-page [step]="1" [part]="2" [parts]="3" sub="Sunum" ctx="upload" label="D-1a Sunum ve sorular">
   <div class="wz-head">
-    <h1 class="wz-h1">Yatırımcı sunumunuzu yükleyiniz</h1>
-    <p class="wz-lead">Bu adımda sizden yalnızca bir dosya istenmektedir: Terminal Şirket sunum formatında hazırlanmış yatırımcı sunumunuz. Başvuru, şirket ve kurucu bilgileri bu dosyadan okunur ve ön bilgilerinizle karşılaştırılır.</p>
+    <h1 class="wz-h1">Sunumunuzu ve özgeçmişinizi yükleyiniz</h1>
+    <p class="wz-lead">Sunumunuz, özgeçmişiniz ve aşağıdaki sorulara verdiğiniz yanıtlar dış bir değerlendirme hizmetine gönderilir. Değerlendirme birkaç dakika sürer; tamamlandığında şirket bilgilerinizi doldurursunuz.</p>
   </div>
 
-  @if (deckFailed()) {
-    <!-- The API's deck.status "failed": the reader gave up on the last file; a new upload starts again. -->
-    <p class="wz-notice" role="alert"><app-icon name="alert" size="16px" [stroke]="2.2" /><span><b>{{ scanFile() || 'Sunumunuz' }} okunamadı.</b> Lütfen dosyanızı kontrol ederek yeniden yükleyiniz. Dosya PDF veya PPTX biçiminde olmalı ve Terminal Şirket sunum formatına uymalıdır.</span></p>
+  @if (evaluationEnded(); as n) {
+    <!-- The API is back at `verified` after an evaluation that ended failed, rejected or cancelled; a new upload starts a new one. -->
+    <p class="wz-notice" role="alert"><app-icon name="alert" size="16px" [stroke]="2.2" /><span><b>{{ n.title }}</b> {{ n.text }}</span></p>
   }
 
-  <!-- Both ticks are the founder's own act for this upload; the drop area opens only after them. -->
-  <app-deck-consents [(notice)]="noticeAcknowledged" [(ai)]="aiConsent" />
+  @let l = limits();
+  @let a = answers();
+  <form class="wz-card wz-profile wz-deckform" (submit)="$event.preventDefault(); submitDeck()" novalidate>
+    <section aria-labelledby="dk-files">
+      <h2 id="dk-files" class="wz-card-h">Dosyalar</h2>
+      <div class="grid">
+        <div class="wz-field">
+          <span id="dk-deck">Sunum</span>
+          <input #deckIn type="file" accept=".pdf,application/pdf" (change)="onFilePicked('deck', $event)" hidden>
+          <button type="button" class="wz-drop wz-drop--sm wz-pick" [class.has]="!!deckFile()" (click)="deckIn.click()" aria-describedby="dk-deck">
+            <app-icon [name]="deckFile() ? 'check' : 'file'" size="20px" [stroke]="2" />
+            <strong>{{ deckFile()?.name ?? 'Sunum dosyasını seçiniz' }}</strong>
+            <span>PDF, {{ l?.deckMinPages ?? 3 }}–{{ l?.deckMaxPages ?? 40 }} sayfa, en fazla {{ l?.deckMaxMb ?? 25 }} MB</span>
+          </button>
+          @if (deckFieldError('deck'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
+        </div>
+        <div class="wz-field">
+          <span id="dk-cv">Özgeçmiş</span>
+          <input #cvIn type="file" accept=".pdf,application/pdf" (change)="onFilePicked('cv', $event)" hidden>
+          <button type="button" class="wz-drop wz-drop--sm wz-pick" [class.has]="!!cvFile()" (click)="cvIn.click()" aria-describedby="dk-cv">
+            <app-icon [name]="cvFile() ? 'check' : 'file'" size="20px" [stroke]="2" />
+            <strong>{{ cvFile()?.name ?? 'Özgeçmiş dosyasını seçiniz' }}</strong>
+            <span>PDF, en fazla {{ l?.cvMaxMb ?? 5 }} MB</span>
+          </button>
+          @if (deckFieldError('cv'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
+        </div>
+      </div>
+    </section>
 
-  <input #deck type="file" accept=".pdf,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" (change)="onFileInput($event)" hidden>
-  <div class="wz-drop" [class.over]="dragging()" [class.off]="!consentsGiven()" role="button" tabindex="0" aria-label="Sunum dosyası seç" [attr.aria-disabled]="!consentsGiven()" (click)="pickFile(deck)" (keydown.enter)="pickFile(deck)" (keydown.space)="$event.preventDefault(); pickFile(deck)" (dragover)="onDragOver($event)" (dragleave)="dragging.set(false)" (drop)="onDrop($event)">
-    <ul class="wz-types" aria-label="Kabul edilen dosya türleri">
-      <li><i></i><i></i><b>PDF</b></li>
-      <li class="lg"><i></i><i></i><i></i><b>PPTX</b></li>
-    </ul>
-    <div class="t">
-      <strong>{{ store.busy() ? 'Dosya yükleniyor…' : dragging() ? 'Dosyayı bu alana bırakınız' : 'Sunum dosyanızı bu alana sürükleyiniz' }}</strong>
-      <span>veya bilgisayarınızdan seçiniz. PDF veya PPTX, en fazla 25 MB.</span>
+    <section aria-labelledby="dk-about">
+      <h2 id="dk-about" class="wz-card-h">Girişiminiz</h2>
+      <div class="grid">
+        <label class="wz-field wide">Kısa özet
+          <textarea class="wz-input wz-textarea" rows="5" [value]="a.summary" (input)="setSummary($any($event.target).value)" placeholder="Girişiminizin ne yaptığını, kime hizmet verdiğini ve nasıl gelir elde ettiğini birkaç cümleyle yazınız."></textarea>
+          <small class="wz-count" [class.over]="summaryOver()" aria-live="polite">{{ summaryHint() }}</small>
+          @if (deckFieldError('summary'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
+        </label>
+        <div class="wz-field">
+          <span>Faaliyet grubu</span>
+          <app-select label="Faaliyet grubu" [options]="groupOptions()" [value]="a.activityGroupId === null ? '' : '' + a.activityGroupId" (valueChange)="setChoice('activityGroupId', $event)" placeholder="Seçiniz" />
+          @if (deckFieldError('activityGroupId'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
+        </div>
+        <div class="wz-field">
+          <span>Faaliyet alanı</span>
+          <app-search-select label="Faaliyet alanı" [options]="activityOptions()" [value]="a.activityId === null ? '' : '' + a.activityId" (valueChange)="setChoice('activityId', $event)" placeholder="Aramak için yazınız" />
+          @if (deckFieldError('activityId'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
+        </div>
+      </div>
+      @for (c of multiChoices(); track c.key) {
+        <fieldset class="wz-multi">
+          <legend>{{ c.title }} <small>birden fazla seçebilirsiniz</small></legend>
+          <div class="opts">
+            @for (o of c.options; track o.id) {
+              <label class="wz-check"><input type="checkbox" [checked]="a[c.key].includes(o.id)" (change)="toggleMulti(c.key, o.id, $any($event.target).checked)"><span>{{ o.label }}</span></label>
+            }
+          </div>
+          @if (deckFieldError(c.key); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
+        </fieldset>
+      }
+    </section>
+
+    <!-- Both ticks are the founder's own act for this upload. -->
+    <app-deck-consents [(notice)]="noticeAcknowledged" [(ai)]="aiConsent" />
+    @if (consentError(); as m) {<app-form-error [message]="m" />}
+    <app-form-error />
+
+    <div class="end">
+      @if (profileEditable()) {<a class="wz-link" routerLink="/details"><app-icon name="pencil" size="15px" [stroke]="2" />Ön bilgileri düzenle</a>}
+      <button type="submit" class="wz-btn" [disabled]="store.busy() || !l">{{ store.busy() ? 'Gönderiliyor…' : 'Gönder ve değerlendirmeyi başlat' }}</button>
     </div>
-    <span class="wz-btn" aria-hidden="true">Bilgisayardan dosya seç</span>
-  </div>
-  <app-form-error [message]="fileError()" />
-
-  <section class="wz-tiles wz-after" aria-labelledby="after-upload">
-    <h2 id="after-upload" class="wz-card-h">Dosyayı yükledikten sonra</h2>
-    <ol>
-      <li><span class="pic" aria-hidden="true"><img src="/assets/illustrations/upload-read.webp" alt=""><span class="num">1</span></span><b>Sunumunuz okunur</b><small>Dosya, Terminal AI tarafından incelenir.</small></li>
-      <li><span class="pic" aria-hidden="true"><img src="/assets/illustrations/upload-fill.webp" alt=""><span class="num">2</span></span><b>Bilgiler forma aktarılır</b><small>Bulunan bilgiler ilgili alanlara yazılır.</small></li>
-      <li><span class="pic" aria-hidden="true"><img src="/assets/illustrations/upload-check.webp" alt=""><span class="num">3</span></span><b>Kontrol edip onaylarsınız</b><small>Ön bilgilerinizden farklı olanlarda doğru değeri seçersiniz.</small></li>
-    </ol>
-  </section>
+  </form>
 
   <div class="wz-actions">
-    @if (profileEditable()) {<a class="wz-link" routerLink="/details"><app-icon name="pencil" size="15px" [stroke]="2" />Ön bilgileri düzenle</a>}
     <button type="button" class="wz-link" (click)="formatOpen.set(true)" aria-haspopup="dialog"><app-icon name="file" size="15px" [stroke]="2" />Sunum formatını inceleyiniz</button>
-    <a class="wz-link" href="/assets/samples/lumora-analytics-pitch.pptx" download="ornek-sunum-lumora-analytics.pptx"><app-icon name="download" size="15px" [stroke]="2" />Örnek sunumu indir (PPTX, 16 sayfa)</a>
+    <a class="wz-link" href="/assets/samples/lumora-analytics-pitch.pdf" download="ornek-sunum-lumora-analytics.pdf"><app-icon name="download" size="15px" [stroke]="2" />Örnek sunumu indir (PDF, 16 sayfa)</a>
   </div>
 
-  <p class="wz-foot"><app-icon name="lock" size="13px" [stroke]="2" />Dosyanız şifreli olarak aktarılır, yalnızca bu başvuru kapsamında işlenir ve KVKK uyarınca saklanır.</p>
+  <p class="wz-foot"><app-icon name="lock" size="13px" [stroke]="2" />Dosyalarınız şifreli olarak aktarılır, yalnızca bu başvuru kapsamında işlenir ve KVKK uyarınca saklanır.</p>
 </app-step-page>
 
 @if (formatOpen()) {

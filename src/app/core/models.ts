@@ -3,15 +3,17 @@
 export type FounderType = 'foreign' | 'resident';
 
 /**
- * Where an application is in the wizard. Long-running stages (`scanning`, `eligibility` once the
- * founder has started it, `screening`, `calling`, `setup`) are time-based: progress is derived from their start timestamp, so they survive reloads.
+ * Where an application is in the wizard. Long-running stages (`evaluating`, `eligibility` once the
+ * founder has started it, `screening`, `calling`, `setup`) are time-based in the mock: progress is
+ * derived from their start timestamp, so they survive reloads.
  */
 export type Stage =
   | 'registered' // account created, e-mail not verified
   | 'profile' // step 1, first screen: the founder states the basics before the deck is read (D-1e)
-  | 'verified' // profile saved, ready to upload a pitch deck (the profile can still be changed)
-  | 'scanning' // AI Reviewer reading the deck
-  | 'review' // founder checks extracted fields
+  | 'verified' // profile saved, ready to upload the deck, the CV and the answers (the profile can still be changed); also after an evaluation that ended failed, rejected or cancelled
+  | 'evaluating' // the outside evaluation service (STB) evaluates the deck, the CV and the answers; takes minutes
+  | 'evaluationQuestions' // the evaluation needs more information; the platform contacts the founder (no form yet)
+  | 'review' // the founder fills the company form, with defaults from the profile and the account
   | 'titleChecking' // the trade name is being checked for reservation; done by staff, so it can take hours
   | 'titleConflict' // MERSİS could not reserve the title
   | 'eligibility' // step 2, first screen: identity check (pre-information, then passport and face on camera)
@@ -31,7 +33,7 @@ export type Stage =
   | 'closed';
 
 export const STAGE_ORDER: Stage[] = [
-  'registered', 'profile', 'verified', 'scanning', 'review', 'titleChecking', 'titleConflict', 'eligibility', 'declaration', 'screening', 'eligible', 'manual',
+  'registered', 'profile', 'verified', 'evaluating', 'evaluationQuestions', 'review', 'titleChecking', 'titleConflict', 'eligibility', 'declaration', 'screening', 'eligible', 'manual',
   'payment', 'threeDs', 'signing', 'calling', 'signed', 'setup', 'done',
 ];
 
@@ -41,7 +43,8 @@ export function stepOf(stage: Stage): number {
     case 'registered':
     case 'profile':
     case 'verified':
-    case 'scanning':
+    case 'evaluating':
+    case 'evaluationQuestions':
     case 'review':
     case 'titleChecking':
     case 'titleConflict':
@@ -74,7 +77,7 @@ export const FUNDING_LABELS: Record<FundingSource, string> = {
   'third-party': 'Üçüncü taraf transferi',
 };
 
-/** Activity area the founder states on D-1e, with the NACE codes it stands for (the API's table; compared with the codes read from the deck). */
+/** Activity area the founder states on D-1e, with the NACE codes it stands for (the API's table; offered as suggestions on the company form). */
 export type Sector = 'software' | 'ecommerce' | 'consulting' | 'design' | 'education' | 'other';
 
 export const SECTORS: Record<Sector, { label: string; nace: string[] }> = {
@@ -97,34 +100,67 @@ export interface Profile {
   at: string;
 }
 
-/** The pieces of the profile that are compared with what was read from the deck. */
-export type CrossKey = 'brand' | 'sector' | 'funding' | 'nationality' | 'phone' | 'country';
-
 /**
- * One comparison between the profile and the deck, made when the scan finishes. Same shape as an
- * item of the API's `crossCheck`. `stated` and `read` are display texts (`read` is "—" when the
- * deck gave nothing). A difference needs the founder's decision before the review can be
- * submitted: `stated` (use what they wrote on D-1e), `read` (keep the deck's value) or `edited`
- * (they typed another value in the review).
+ * The two acts the deck upload needs (D-1a); both must be the founder's own ticks. The field names
+ * are the API's; `aiConsent` now stands for consent to sending the deck, the CV and the answers to
+ * the outside evaluation service (the wording on screen is a placeholder, see deck-consents.ts).
  */
-export interface CrossCheck {
-  key: CrossKey;
-  label: string;
-  stated: string;
-  read: string;
-  match: boolean;
-  choice: null | 'stated' | 'read' | 'edited';
-  at: string | null;
-}
-
-/** The two acts the deck upload needs (D-1a); both must be the founder's own ticks. */
 export interface DeckConsents {
   noticeAcknowledged: boolean;
   aiConsent: boolean;
 }
 
-/** Badge state per reviewable field: read by AI, needs a check, or edited by the founder. */
-export type FieldMark = 'ai' | 'check' | 'edited';
+/**
+ * The five answers sent with the deck and the CV (D-1a), by the ids of `EvaluationReference`.
+ * The API takes them as the multipart fields of the same names.
+ */
+export interface EvaluationAnswers {
+  summary: string;
+  activityGroupId: number | null;
+  activityId: number | null;
+  businessModelIds: number[];
+  revenueModelIds: number[];
+  productTypeIds: number[];
+}
+
+/** One choice of the evaluation's dictionaries. */
+export interface EvaluationOption {
+  id: number;
+  label: string;
+}
+
+/**
+ * What D-1a may offer and the limits it checks (`GET /api/reference/evaluation`): the outside
+ * evaluation service's dictionaries and the upload limits. Which activity belongs to which group
+ * is not known, so the activities are one flat list.
+ */
+export interface EvaluationReference {
+  activityGroups: EvaluationOption[];
+  activities: EvaluationOption[];
+  businessModels: EvaluationOption[];
+  revenueModels: EvaluationOption[];
+  productTypes: EvaluationOption[];
+  limits: { deckMaxMb: number; cvMaxMb: number; deckMinPages: number; deckMaxPages: number; summaryMin: number; summaryMax: number };
+}
+
+/**
+ * Where the outside evaluation stands (the API's `evaluation`). Only the status and times reach the
+ * founder: no findings and no question content. `attempt` counts the service's tries of this
+ * evaluation (shown only above 1).
+ */
+export interface Evaluation {
+  status: 'queued' | 'running' | 'questions' | 'done' | 'failed' | 'rejected' | 'cancelled';
+  attempt: number;
+  maxAttempts: number;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+/**
+ * Per value on the company form: `profile` (a default taken from the profile or the account, not
+ * touched since) or `edited` (the founder typed it; the API's `edited` and `entered`). No mark: empty.
+ */
+export type FieldMark = 'profile' | 'edited';
 
 /**
  * The signed-in founder as the portal sees them; the same fields as the API's `GET /api/me`.
@@ -137,13 +173,6 @@ export interface Account {
   lastName: string;
   founderType: FounderType;
   verified: boolean;
-}
-
-export interface ScanField {
-  key: string;
-  label: string;
-  value: string;
-  page: number | null;
 }
 
 export interface LogEntry {
@@ -187,12 +216,14 @@ export interface Application {
   founder: { firstName: string; lastName: string; nationality: string; passportNo: string; tckn?: string };
   contact: { email: string; phone: string; address: string; postalCode: string; country: string };
   company: {
-    deckName: string; // brand as written in the deck ("Acme Cloud")
-    /** The company's logo as found in the deck, as an image URL (the mock draws a stand-in; see mock-api `deckLogo`). */
+    /** The brand the founder stated on the profile (D-1e), "Acme Cloud". */
+    brand: string;
+    /** A logo image URL the founder chose on D-1c (mock only; the API keeps no logo). */
     logo?: string;
     root: string; // title root ("Acme")
     activity: string; // title activity part ("Bulut Bilişim")
     nace: string[];
+    /** Codes offered on D-1c: those of the activity area stated on the profile. */
     suggestedNace: string[];
     capital: number;
   };
@@ -200,27 +231,12 @@ export interface Application {
   marks: Record<string, FieldMark>;
   /** Stated by the founder on D-1e before the deck is uploaded; each save replaces the last. */
   profile?: Profile;
-  /**
-   * `noticeAt` / `aiConsentAt`: when the founder ticked the privacy notice and the AI-processing
-   * consent for this deck (absent on decks uploaded before 2026-11-25).
-   */
-  deck?: {
-    fileName: string;
-    sizeKb: number;
-    pages: number;
-    startedAt: string;
-    fields: ScanField[];
-    noticeAt?: string;
-    aiConsentAt?: string;
-    /**
-     * Where reading the deck stands (the API's `deck.status`). `failed`: the reader gave up; the
-     * application is back at `verified` and the founder uploads again. Absent on mock decks saved
-     * before 2026-11-25, which were all read.
-     */
-    status?: 'reading' | 'read' | 'failed';
-  };
-  /** The profile compared with the deck, from the end of the scan; empty until both exist. */
-  crossCheck: CrossCheck[];
+  /** The deck as uploaded (name and size only). */
+  deck?: { fileName: string; sizeKb: number };
+  /** The CV uploaded with the deck (name and size only). */
+  cv?: { fileName: string; sizeKb: number };
+  /** The outside evaluation of the last upload; absent before the first. */
+  evaluation?: Evaluation;
   /**
    * The trade-name check after the review. `candidate`: the title asked for, without the type suffix.
    * `checking` (stage `titleChecking`): waiting for the answer; `requestedAt` is when it was asked

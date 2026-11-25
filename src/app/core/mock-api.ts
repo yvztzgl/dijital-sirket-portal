@@ -1,24 +1,23 @@
 import { inject, Injectable } from '@angular/core';
 import type { Api, DemoTools, ReviewPatch, SimulatedWork } from './api';
 import { ApiError } from './api-error';
-import { DemoSettings } from './demo-settings';
+import { DemoSettings, EvaluationOutcome } from './demo-settings';
+import EVALUATION_REFERENCE from './evaluation-reference.json';
 import { titleCase, tl } from './format';
 import { Inbox } from './inbox';
 import {
   Account,
   Application,
   CAPITAL,
-  CrossCheck,
-  CrossKey,
   DeckConsents,
+  EvaluationAnswers,
+  EvaluationReference,
   FEE_TOTAL,
-  FieldMark,
   FUNDING_LABELS,
   FounderType,
   FundingSource,
   LogEntry,
   Profile,
-  ScanField,
   PhoneLinkStatus,
   Sector,
   SECTORS,
@@ -29,7 +28,7 @@ import { NACE } from './nace';
 import {
   ADDRESS_DOC_MAX,
   DECK_CONSENT_ERROR,
-  deckFileError,
+  evaluationErrors,
   FUNDING_OPTIONS,
   sameStem,
   titleAlternatives,
@@ -69,6 +68,12 @@ interface Db {
   apps: Record<string, Application>;
   /** Open password-reset links: token → address and expiry. Single use. */
   resets?: Record<string, { email: string; expiresAt: string }>;
+  /**
+   * How the running evaluation of each founder (by e-mail) will end, fixed at the upload: `rejected`
+   * when the deck's page count is outside the limits, else the demo panel's choice. Not on the
+   * application, because the API does not tell the founder anything of the kind in advance.
+   */
+  outcomes?: Record<string, EvaluationOutcome>;
 }
 
 const DB_KEY = 'dsp.db.v1';
@@ -131,8 +136,8 @@ export class MockApi implements Api {
     kind: 'simulated',
     complete: (stage) => {
       switch (stage) {
-        case 'scanning':
-          return this.completeScan();
+        case 'evaluating':
+          return this.completeEvaluation();
         case 'titleChecking':
           return this.completeTitleCheck();
         case 'eligibility':
@@ -158,6 +163,11 @@ export class MockApi implements Api {
         .sort()
         .map((code) => ({ code, title: NACE[code] })),
     };
+  }
+
+  /** The saved dictionary of the outside evaluation service (2026-11-25), in the API's shape. */
+  async evaluationReference(): Promise<EvaluationReference> {
+    return clone(EVALUATION_REFERENCE);
   }
 
   /**
@@ -318,8 +328,8 @@ export class MockApi implements Api {
   // ------------------------------------------------------------------------- step 1 · sunum
 
   /**
-   * D-1e: what the founder states before the deck is read. Kept as given, so that after the scan
-   * the deck can be checked against it (see `crossCheck`). It may be saved again until a deck is
+   * D-1e: what the founder states before the deck. Kept as given; after the evaluation its values
+   * are the company form's defaults (see `completeEvaluation`). It may be saved again until a deck is
    * uploaded; each save replaces the last (the API keeps every version with its time).
    * Same rules and messages as the API's SubmitProfileHandler.
    */
@@ -342,77 +352,84 @@ export class MockApi implements Api {
   }
 
   /**
-   * D-1c: the founder decides a difference between the profile and the deck. `stated` writes the
-   * profile's value into the application; `read` keeps the deck's. Either way it is their decision
-   * and is logged as theirs.
+   * D-1a: the deck, the CV and the five answers, with the founder's two ticks for this upload. The
+   * same refusals as the API: without both ticks, without a profile, and `validation_failed` with the
+   * fields `rules.evaluationErrors` names. The mock keeps only the files' names and sizes; it counts
+   * the deck's pages when it can read them (a PDF it cannot read is not refused here, as the API
+   * leaves the page count to the evaluation service).
    */
-  async resolveCrossCheck(key: CrossKey, choice: 'stated' | 'read') {
-    return this.mutate(['review', 'titleConflict'], (app) => {
-      const item = app.crossCheck.find((c) => c.key === key);
-      if (!item || item.match || !app.profile) throw new ApiError('Bu bilgi için seçim gerekmemektedir.');
-      if (choice === 'stated') applyStated(app, app.profile, key);
-      item.choice = choice;
-      item.at = nowIso();
-      log(app, `${item.label}: ${choice === 'stated' ? 'ön bilgilerdeki değer' : 'sunumdaki değer'} seçildi`, 'u');
+  async uploadDeck(files: { deck: File; cv: File }, answers: EvaluationAnswers, consents: DeckConsents) {
+    await this.wait(500);
+    if (!consents.noticeAcknowledged || !consents.aiConsent) throw new ApiError(DECK_CONSENT_ERROR);
+    const ref = EVALUATION_REFERENCE as EvaluationReference;
+    const errors = evaluationErrors({ ...answers, deck: files.deck, cv: files.cv }, ref.limits, ref);
+    if (Object.keys(errors).length) {
+      throw new ApiError('Gönderdiğiniz bilgiler eksik veya hatalıdır.', {
+        code: 'validation_failed',
+        status: 400,
+        fields: Object.fromEntries(Object.entries(errors).map(([k, m]) => [k, [m as string]])),
+      });
+    }
+    const pages = await pdfPageCount(files.deck);
+    const outcome: EvaluationOutcome = pages !== null && (pages < ref.limits.deckMinPages || pages > ref.limits.deckMaxPages) ? 'rejected' : this.settings.state().evaluationOutcome;
+    const email = this.who();
+    const app = await this.mutate(['profile', 'verified'], (app) => {
+      if (!app.profile) throw new ApiError('Önce ön bilgileri doldurunuz.');
+      const kb = (f: File) => Math.max(1, Math.round(f.size / 1024));
+      app.deck = { fileName: files.deck.name, sizeKb: kb(files.deck) };
+      app.cv = { fileName: files.cv.name, sizeKb: kb(files.cv) };
+      app.evaluation = { status: 'running', attempt: 1, maxAttempts: 3, startedAt: nowIso(), finishedAt: null };
+      app.titleCheck = undefined;
+      app.stage = 'evaluating';
+      log(app, 'Aydınlatma metni okundu (sunum)', 'u');
+      log(app, 'Sunum, özgeçmiş ve yanıtların değerlendirme hizmetine aktarılmasına onay verildi', 'u');
+      log(app, `Sunum ve özgeçmiş yüklendi · ${files.deck.name}, ${files.cv.name}`, 'u');
+      log(app, 'Değerlendirme başladı', 's');
     });
+    const db = this.db();
+    db.outcomes = { ...db.outcomes, [email]: outcome };
+    this.save(db);
+    return app;
   }
 
   /**
-   * D-1a (and "Başka dosya yükle" on D-1c): the deck, with the founder's two ticks for this upload.
-   * Refused without both, as the API does, which records them as consent rows. The mock keeps only
-   * the file's name and size; the HTTP client sends the file itself.
+   * The simulated outside evaluation ends (after `DURATION.evaluation`, or at once when seeding).
+   * `done`: the company form opens with defaults from the profile and the account, marked `profile`;
+   * the title and the NACE codes are left for the founder. `questions`: a stop state. `failed` and
+   * `rejected`: back to the upload, as on the API.
    */
-  async uploadDeck(file: File, consents: DeckConsents) {
-    await this.wait(500);
-    if (!consents.noticeAcknowledged || !consents.aiConsent) throw new ApiError(DECK_CONSENT_ERROR);
-    const fileError = deckFileError(file);
-    if (fileError) throw new ApiError(fileError);
-    return this.mutate(['profile', 'verified', 'review', 'titleConflict', 'scanning'], (app, acc) => {
-      if (!app.profile) throw new ApiError('Önce ön bilgileri doldurunuz.');
-      const brand = brandFromFile(file.name);
-      const root = brand.split(' ')[0];
-      const prof = deckProfile(file.name, acc.founderType);
-      app.company = { ...app.company, deckName: brand, logo: deckLogo(brand), root, activity: prof.activity, nace: prof.nace, suggestedNace: prof.suggestedNace };
-      app.founder.nationality = prof.nationality;
-      app.contact = { email: acc.email, ...prof.contact };
-      app.funding = prof.funding;
-      app.marks = { title: 'ai', nace: 'ai', phone: 'ai', funding: 'ai', address: 'ai', email: 'ai', ...prof.marks };
-      const name = `${acc.firstName} ${acc.lastName}`;
-      const pg = prof.pages;
-      const fields: ScanField[] = [
-        { key: 'title', label: 'Şirket unvanı', value: brand, page: pg.title },
-        { key: 'nace', label: 'NACE kodları', value: prof.nace.join(' · '), page: pg.nace },
-        { key: 'share', label: 'Pay sahipliği', value: `%100 · ${name}`, page: pg.founder },
-        { key: 'name', label: 'Ad / Soyad', value: name, page: pg.founder },
-        { key: 'nationality', label: 'Uyruk', value: app.founder.nationality, page: pg.founder },
-        { key: 'email', label: 'E-posta', value: acc.email, page: pg.contact },
-        { key: 'phone', label: 'Telefon', value: app.contact.phone, page: pg.contact },
-        { key: 'address', label: 'Adres', value: app.contact.address, page: pg.contact },
-        { key: 'funding', label: 'Fon kaynağı', value: FUNDING_LABELS[prof.funding], page: pg.funding },
-        { key: 'postal', label: 'Posta kodu · Ülke', value: `${app.contact.postalCode} · ${app.contact.country}`, page: pg.contact },
-      ];
-      const at = nowIso();
-      app.deck = { fileName: file.name, sizeKb: Math.max(1, Math.round(file.size / 1024)), pages: pg.total ?? 10 + (file.name.length % 5), startedAt: at, fields, noticeAt: at, aiConsentAt: at, status: 'reading' };
-      app.titleCheck = undefined;
-      app.crossCheck = [];
-      app.stage = 'scanning';
-      log(app, 'Aydınlatma metni okundu (sunum)', 'u');
-      log(app, 'Sunumun yapay zekâ ile işlenmesine onay verildi', 'u');
-      log(app, `Sunum yüklendi · ${file.name}`, 'u');
-    });
-  }
-
-  async completeScan() {
-    return this.mutate(['scanning'], (app) => {
-      app.stage = 'review';
-      if (app.deck) app.deck.status = 'read';
-      log(app, `AI Reviewer ${(app.deck?.fields.length ?? 10) + 3} alan çıkardı`, 'a');
-      if (app.profile) {
-        app.crossCheck = crossCheck(app, app.profile);
-        const diff = app.crossCheck.filter((c) => !c.match).length;
-        log(app, `Ön bilgilerle karşılaştırıldı: ${app.crossCheck.length - diff} bilgi uyuşuyor, ${diff} bilgi farklı`, 'a');
+  async completeEvaluation(outcome?: EvaluationOutcome) {
+    const email = this.who();
+    const end = outcome ?? this.db().outcomes?.[email] ?? 'done';
+    const app = await this.mutate(['evaluating'], (app, acc) => {
+      const e = app.evaluation!;
+      e.finishedAt = end === 'questions' ? null : nowIso();
+      if (end === 'questions') {
+        e.status = 'questions';
+        app.stage = 'evaluationQuestions';
+        log(app, 'Değerlendirme için ek bilgi gerekiyor', 's');
+        return;
       }
+      if (end === 'failed' || end === 'rejected') {
+        e.status = end;
+        app.stage = 'verified';
+        log(app, end === 'rejected' ? 'Sunum değerlendirmeye alınamadı' : 'Değerlendirme tamamlanamadı', 's');
+        return;
+      }
+      e.status = 'done';
+      const p = app.profile!;
+      app.company = { ...app.company, brand: p.brand, root: '', activity: '', nace: [], suggestedNace: SECTORS[p.sector].nace };
+      app.founder = { ...app.founder, firstName: acc.firstName, lastName: acc.lastName, nationality: p.nationality };
+      app.contact = { email: acc.email, phone: p.phone, address: '', postalCode: '', country: p.country };
+      app.funding = p.funding;
+      app.marks = { name: 'profile', email: 'profile', phone: 'profile', address: 'profile', funding: 'profile' };
+      app.stage = 'review';
+      log(app, 'Değerlendirme tamamlandı', 's');
     });
+    const db = this.db();
+    if (db.outcomes) delete db.outcomes[email];
+    this.save(db);
+    return app;
   }
 
   async updateReview(patch: ReviewPatch, edited: string[]) {
@@ -425,13 +442,6 @@ export class MockApi implements Api {
         funding: patch.funding ?? app.funding,
       });
       edited.forEach((k) => (app.marks[k] = 'edited'));
-      // A difference the founder settled by typing another value counts as decided.
-      for (const c of app.crossCheck) {
-        if (!c.match && !c.choice && crossValue(app, c.key) !== c.read) {
-          c.choice = 'edited';
-          c.at = nowIso();
-        }
-      }
     });
   }
 
@@ -442,7 +452,7 @@ export class MockApi implements Api {
   async submitReview() {
     await this.wait(1_200);
     return this.mutate(['review', 'titleConflict'], (app) => {
-      if (app.crossCheck.some((c) => !c.match && !c.choice)) throw new ApiError('Ön bilgilerinizle uyuşmayan bilgilerde doğru değeri seçiniz.');
+      if (!app.company.root.trim()) throw new ApiError('Şirket unvanını yazınız.');
       if (app.company.nace.length === 0) throw new ApiError('En az bir NACE faaliyet kodu seçiniz.');
       log(app, 'Başvuru bilgileri onaylandı', 'u');
       this.requestTitle(app);
@@ -957,10 +967,9 @@ function newApplication(acc: MockAccount): Application {
     founderType: acc.founderType,
     founder: { firstName: acc.firstName, lastName: acc.lastName, nationality: '', passportNo: String(Math.floor(10_000_000 + Math.random() * 89_999_999)), tckn: acc.tckn },
     contact: { email: acc.email, phone: '', address: '', postalCode: '', country: '' },
-    company: { deckName: '', root: '', activity: '', nace: [], suggestedNace: [], capital: CAPITAL },
+    company: { brand: '', root: '', activity: '', nace: [], suggestedNace: [], capital: CAPITAL },
     funding: 'own-abroad',
     marks: {},
-    crossCheck: [],
     docs: [],
     logs: [],
   };
@@ -969,14 +978,24 @@ function newApplication(acc: MockAccount): Application {
 }
 
 /**
- * Applications saved between 2026-11-20 and 2026-11-25 were made without the profile form: one
- * waiting at the deck upload without a profile goes back to the form, since the deck now needs
- * one. Any application without a comparison gets an empty one. Later stages are left as they are.
+ * Applications saved before 2026-11-25 by older versions of the portal:
+ * - made without the profile form: one waiting at the deck upload without a profile goes back to it;
+ * - read by the old AI deck reader: one still being read goes back to the upload (the deck, the CV
+ *   and the answers are asked for now), and the reader's leftovers (the comparison, the deck's
+ *   fields, `ai` / `check` marks, `deckName`) are dropped. Later stages keep their values.
  */
 function upgrade(db: Db): Db {
-  for (const app of Object.values(db.apps)) {
+  for (const app of Object.values(db.apps) as (Application & { crossCheck?: unknown; company: { deckName?: string } })[]) {
     if (app.stage === 'verified' && !app.profile) app.stage = 'profile';
-    app.crossCheck ??= [];
+    if ((app.stage as string) === 'scanning') {
+      app.stage = 'verified';
+      delete app.deck;
+    }
+    delete app.crossCheck;
+    if (app.deck) app.deck = { fileName: app.deck.fileName, sizeKb: app.deck.sizeKb };
+    if (app.company.brand === undefined) app.company.brand = app.company.deckName ?? app.profile?.brand ?? '';
+    delete app.company.deckName;
+    for (const [k, m] of Object.entries(app.marks)) if (m !== 'profile' && m !== 'edited') delete app.marks[k];
   }
   return db;
 }
@@ -1005,93 +1024,6 @@ export function edevletIdentity(tckn: string) {
   return { firstName, lastName, email: `${asciiLower(firstName)}.${asciiLower(lastName)}@ornek.com.tr` };
 }
 
-/** The deck's value for a compared item, as shown to the founder ("—" when the deck gave nothing). */
-function crossValue(app: Application, key: CrossKey): string {
-  const value = (() => {
-    switch (key) {
-      case 'brand':
-        return app.company.deckName;
-      case 'sector': {
-        const s = sectorOf(app.company.nace);
-        return s ? SECTORS[s].label : app.company.nace.join(', ');
-      }
-      case 'funding':
-        return FUNDING_LABELS[app.funding];
-      case 'nationality':
-        return app.founder.nationality;
-      case 'phone':
-        return app.contact.phone;
-      case 'country':
-        return app.contact.country;
-    }
-  })();
-  return value || '—';
-}
-
-/** The first activity area any of these NACE codes belongs to. */
-export function sectorOf(codes: string[]): Sector | null {
-  return (Object.keys(SECTORS) as Sector[]).find((s) => SECTORS[s].nace.some((c) => codes.includes(c))) ?? null;
-}
-
-const fold = (v: string) => v.toLocaleLowerCase('tr-TR').replace(/[^\p{L}\p{N}]/gu, '');
-
-/** Labels of the compared items, as the API names them (Wizard.CrossLabels). */
-const CROSS_LABELS: Record<CrossKey, string> = {
-  brand: 'Şirket / marka adı',
-  sector: 'Faaliyet alanı',
-  funding: 'Sermaye kaynağı',
-  nationality: 'Uyruk',
-  phone: 'Telefon',
-  country: 'Yaşadığınız ülke',
-};
-
-/** Compares the profile with what was read from the deck; one item per compared piece. */
-export function crossCheck(app: Application, p: Profile): CrossCheck[] {
-  const item = (key: CrossKey, stated: string, match: boolean): CrossCheck => ({ key, label: CROSS_LABELS[key], stated, read: crossValue(app, key), match, choice: null, at: null });
-  const [a, b] = [fold(p.brand), fold(app.company.deckName)];
-  const digits = (v: string) => v.replace(/\D/g, '').slice(-9);
-  return [
-    item('brand', p.brand, !!a && !!b && (a.includes(b) || b.includes(a))),
-    item('sector', SECTORS[p.sector].label, p.sector === 'other' || SECTORS[p.sector].nace.some((c) => app.company.nace.includes(c))),
-    item('funding', FUNDING_LABELS[p.funding], p.funding === app.funding),
-    item('nationality', p.nationality, fold(p.nationality) === fold(app.founder.nationality)),
-    item('phone', p.phone, digits(p.phone) === digits(app.contact.phone)),
-    item('country', p.country, fold(p.country) === fold(app.contact.country)),
-  ];
-}
-
-/** Writes the profile's value for `key` into the application, as if the founder had typed it in the review. */
-function applyStated(app: Application, p: Profile, key: CrossKey) {
-  switch (key) {
-    case 'brand':
-      app.company.deckName = p.brand;
-      app.company.root = p.brand;
-      app.company.logo = deckLogo(p.brand);
-      app.marks['title'] = 'edited';
-      break;
-    case 'sector':
-      app.company.nace = SECTORS[p.sector].nace.slice(0, 2);
-      app.marks['nace'] = 'edited';
-      break;
-    case 'funding':
-      app.funding = p.funding;
-      app.marks['funding'] = 'edited';
-      break;
-    case 'nationality':
-      app.founder.nationality = p.nationality;
-      app.marks['name'] = 'edited';
-      break;
-    case 'phone':
-      app.contact.phone = p.phone;
-      app.marks['phone'] = 'edited';
-      break;
-    case 'country':
-      app.contact.country = p.country;
-      app.marks['address'] = 'edited';
-      break;
-  }
-}
-
 /** A real `File` that reports a given size without holding the bytes; the mock reads only name and size. */
 export function demoFile(name: string, size: number): File {
   const file = new File([], name);
@@ -1099,29 +1031,28 @@ export function demoFile(name: string, size: number): File {
   return file;
 }
 
-/** "acme-cloud-pitch_v3.pdf" → "Acme Cloud" */
 /**
- * Stand-in for the logo a real scan would lift from the deck's first page: the brand's initials
- * on a tile whose colour is picked from the name. Returned as an SVG data URL so it needs no file.
+ * The deck's page count, when the mock can read it: the page objects of an uncompressed PDF (the
+ * sample deck's kind). Null when it cannot tell (no bytes, as with `demoFile`, or pages hidden in
+ * compressed object streams); the mock then does not refuse, as the API leaves it to the service.
  */
-export function deckLogo(brand: string): string {
-  const words = brand.trim().split(/\s+/).filter(Boolean);
-  const initials = (words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? '?').slice(0, 2)).toLocaleUpperCase('tr-TR');
-  const tiles = ['#0C217E', '#0F766E', '#7C2D92', '#B45309', '#1D4ED8', '#9F1239'];
-  let h = 0;
-  for (const ch of brand) h = (h * 31 + ch.codePointAt(0)!) >>> 0;
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="${tiles[h % tiles.length]}"/>` +
-    `<text x="32" y="41" text-anchor="middle" font-family="IBM Plex Sans, Arial, sans-serif" font-size="25" font-weight="600" fill="#fff">${initials}</text></svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
-
-export function brandFromFile(name: string): string {
-  const base = name.replace(/\.[^.]+$/, '');
-  const words = base
-    .split(/[-_.\s]+/)
-    .filter((w) => w && !/^(pitch|deck|sunum|investor|yatirimci|yatırımcı|ornek|örnek|sample|final|son|v\d+|\d+)$/i.test(w));
-  return words.length ? titleCase(words.slice(0, 3).join(' ')) : 'Yeni Girişim';
+export async function pdfPageCount(file: File): Promise<number | null> {
+  try {
+    // FileReader rather than `File.arrayBuffer`, which the test environment's File lacks.
+    const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(file);
+    });
+    const bytes = new Uint8Array(buffer);
+    let text = '';
+    for (let i = 0; i < bytes.length; i += 8192) text += String.fromCharCode(...bytes.subarray(i, i + 8192));
+    const n = text.match(/\/Type\s*\/Page(?![a-zA-Z])/g)?.length ?? 0;
+    return n > 0 ? n : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -1138,57 +1069,20 @@ const TITLE_ASKED = 'Unvan MERSİS’e soruldu';
 
 const withoutSuffixWords = (title: string) => withoutSuffix(title).replace(/\s+/g, ' ');
 
-/**
- * What the simulated AI Reviewer "reads" from a deck. The downloadable sample deck
- * (public/assets/samples/lumora-analytics-pitch.pptx, built by tools/sample-deck in the deck format of
- * src/app/core/deck-format.json) returns exactly what is on its slides;
- * any other file gets a generic profile with two fields flagged for checking.
- * The founder's name and e-mail always come from the signed-in account (the applicant).
- */
-interface DeckProfile {
-  activity: string;
-  nace: string[];
-  suggestedNace: string[];
-  nationality: string;
-  contact: Omit<Application['contact'], 'email'>;
-  funding: FundingSource;
-  marks: Record<string, FieldMark>;
-  pages: { title: number; nace: number; founder: number; contact: number; funding: number; total?: number };
-}
-
-export function deckProfile(fileName: string, founderType: FounderType): DeckProfile {
-  if (/lumora/i.test(fileName)) {
-    return {
-      activity: 'Veri Analitiği',
-      nace: ['62.01', '63.11', '62.02'],
-      suggestedNace: [],
-      nationality: 'Almanya',
-      contact: { phone: '+49 151 2345 6789', address: 'Torstraße 45, Berlin', postalCode: '10119', country: 'Almanya' },
-      funding: 'own-abroad',
-      marks: {},
-      pages: { title: 13, nace: 13, founder: 14, contact: 15, funding: 16, total: 16 },
-    };
-  }
-  const foreign = founderType === 'foreign';
-  return {
-    activity: 'Bulut Bilişim',
-    nace: ['62.01', '63.11'],
-    suggestedNace: ['62.02'],
-    nationality: foreign ? 'Birleşik Krallık' : 'Türkiye',
-    contact: foreign
-      ? { phone: '+44 7700 900123', address: '14 Baker Street, London', postalCode: 'NW1 6XE', country: 'Birleşik Krallık' }
-      : { phone: '+90 532 410 2611', address: 'Bağdat Cad. No:212, Kadıköy / İstanbul', postalCode: '34728', country: 'Türkiye' },
-    funding: 'own-abroad',
-    marks: { phone: 'check', funding: 'check' },
-    pages: { title: 1, nace: 7, founder: 11, contact: 12, funding: 10 },
-  };
-}
+/** The demo founder's answers on D-1a (seeding stands in for the founder's form). */
+export const DEMO_ANSWERS: EvaluationAnswers = {
+  summary: 'Acme Cloud, küçük ve orta ölçekli işletmelere bulut tabanlı muhasebe ve stok yönetimi yazılımı sunar. Abonelikle satılır.',
+  activityGroupId: 1,
+  activityId: 3,
+  businessModelIds: [1],
+  revenueModelIds: [7],
+  productTypeIds: [2],
+};
 
 /** Drives the real API methods in order until the application reaches `want`. */
 async function fastForward(api: MockApi, email: string, want: Stage) {
   if (want === 'registered' || want === 'profile') return;
   const resident = JSON.parse(localStorage.getItem(DB_KEY)!).apps[email].founderType === 'resident';
-  // The demo profile agrees with the demo deck except for the phone number, so D-1c shows one difference.
   await api.submitProfile({
     brand: 'Acme Cloud',
     sector: 'software',
@@ -1198,21 +1092,31 @@ async function fastForward(api: MockApi, email: string, want: Stage) {
     country: resident ? 'Türkiye' : 'Birleşik Krallık',
   });
   if (want === 'verified') return;
-  // Seeding stands in for the founder's ticks on D-1a, so that later stages have a deck to show.
-  await api.uploadDeck(demoFile('acme-cloud-pitch.pdf', 4_812_000), { noticeAcknowledged: true, aiConsent: true });
-  if (want === 'scanning') return;
-  const scanned = await api.completeScan();
-  if (want === 'review') return;
-  for (const c of scanned.crossCheck) if (!c.match) await api.resolveCrossCheck(c.key, 'read');
-  // The demo deck's first title clashes in MERSİS; pick a free alternative unless we want the conflict.
-  if (want === 'titleChecking' || want === 'titleConflict') {
-    await api.submitReview();
-    if (want === 'titleConflict') await api.completeTitleCheck();
-    return;
-  }
-  await api.updateReview({ company: { activity: 'Bulut Yazılım' }, funding: want === 'manual' ? 'third-party' : 'own-abroad' }, ['title']);
+  // Seeding stands in for the founder's form and ticks on D-1a, so that later stages have a deck to show.
+  await api.uploadDeck(
+    { deck: demoFile('acme-cloud-pitch.pdf', 4_812_000), cv: demoFile('ozgecmis.pdf', 212_000) },
+    DEMO_ANSWERS,
+    { noticeAcknowledged: true, aiConsent: true },
+  );
+  if (want === 'evaluating') return;
+  await api.completeEvaluation(want === 'evaluationQuestions' ? 'questions' : 'done');
+  if (want === 'evaluationQuestions' || want === 'review') return;
+  // The founder fills in what the evaluation leaves empty. "Acme Bulut Bilişim" clashes in MERSİS.
+  const conflict = want === 'titleChecking' || want === 'titleConflict';
+  await api.updateReview(
+    {
+      company: { root: 'Acme', activity: conflict ? 'Bulut Bilişim' : 'Bulut Yazılım', nace: ['62.01', '63.11'] },
+      contact: resident
+        ? { address: 'Bağdat Cad. No:212, Kadıköy / İstanbul', postalCode: '34728' }
+        : { address: '14 Baker Street, London', postalCode: 'NW1 6XE' },
+      funding: want === 'manual' ? 'third-party' : 'own-abroad',
+    },
+    ['title', 'nace', 'address', 'funding'],
+  );
   await api.submitReview();
+  if (want === 'titleChecking') return;
   await api.completeTitleCheck();
+  if (want === 'titleConflict') return;
   if (want === 'eligibility') return; // D-2a opens on its pre-information view
   await api.startEligibility(true);
   await backdate(email, 'identity');
@@ -1271,12 +1175,13 @@ async function backdate(email: string, which: 'identity' | 'screening' | 'setup'
  */
 const ANSWERS: [RegExp, string][] = [
   [/sermaye kaynağı/i, 'Sermaye kaynağı, şirkete konacak paranın nereden geldiğini gösterir: kendi hesabınız, bir yatırımcı veya üçüncü bir taraf. Üçüncü taraf transferleri uyum ekibince incelenir.'],
-  [/farklı/i, 'Farklı olan her bilgi için ön bilgilerinizdeki veya sunumdaki değeri seçersiniz; dilerseniz başka bir değer yazabilirsiniz. Seçimleriniz işlem kaydına eklenir.'],
-  [/[öÖ]n bilgi/, 'Ön bilgileriniz, sunumunuzdan okunan bilgilerle karşılaştırılır. Uyuşmayan bilgiler inceleme ekranında gösterilir ve hangisinin doğru olduğunu siz seçersiniz.'],
-  [/format|pdf|pptx|dosya/i, 'PDF ve PowerPoint (.pptx) dosyaları kabul edilir; dosya boyutu en fazla 25 MB olabilir.'],
-  [/gizli|kvkk|saklan|veri/i, 'Sunumunuz yalnızca başvurunuz kapsamında işlenir, KVKK uyarınca Türkiye’deki sunucularda şifreli olarak saklanır ve kurumlarla yalnızca gerekli alanlar paylaşılır.'],
+  [/değerlendirme ne kadar/i, 'Değerlendirme genellikle birkaç dakika sürer. Bu sırada sayfayı kapatabilirsiniz; yeniden giriş yaptığınızda başvurunuz kaldığı yerden devam eder.'],
+  [/değerlendir/i, 'Sunumunuz, özgeçmişiniz ve sunum ekranındaki yanıtlarınız dış bir değerlendirme hizmetine gönderilir. Değerlendirme tamamlandığında şirket formunu doldurursunuz; ek bilgi gerekirse sizinle iletişime geçilir.'],
+  [/nereden geliyor|formdaki/i, 'Şirket formundaki bazı değerler ön bilgilerinizden ve hesabınızdan alınır ve “Ön bilgilerinizden” olarak işaretlenir; hepsini düzeltebilirsiniz. Şirket unvanını ve faaliyet kodlarını siz yazarsınız.'],
+  [/[öÖ]n bilgi/, 'Ön bilgileriniz şirket formunda varsayılan değer olarak kullanılır; formu doldururken düzeltebilirsiniz.'],
+  [/format|pdf|pptx|dosya/i, 'Sunum ve özgeçmiş PDF biçiminde olmalıdır. Sunum 3 ile 40 sayfa arasında ve en fazla 25 MB, özgeçmiş en fazla 5 MB olabilir.'],
+  [/gizli|kvkk|saklan|veri/i, 'Sunumunuz ve özgeçmişiniz yalnızca başvurunuz kapsamında işlenir. Değerlendirme için dış bir değerlendirme hizmetine gönderilir; bu aktarım için sunum ekranında onayınız alınır.'],
   [/adres belgesi/i, 'Son üç ay içinde düzenlenmiş fatura, banka hesap özeti veya yerleşim yeri belgesi kabul edilir. Belge üzerinde adınız ve beyan ettiğiniz adres okunmalıdır.'],
-  [/okun/i, 'Şirket adı, faaliyet alanı, kurucu, iletişim ve sermaye bilgileri okunur. Okunan her bilgi bir sonraki ekranda düzeltilebilir.'],
   [/anonim|neden a\.?ş|şirket türü/i, 'Tek pay sahipli anonim şirket, yabancı kurucuların tamamen çevrim içi kurabildiği ve yatırımcıların en çok tercih ettiği şirket türüdür.'],
   [/nace|faaliyet kodu/i, 'NACE kodları şirketinizin faaliyet alanını tanımlar; vergi ve SGK kayıtları bu kodlara göre açılır. Birden fazla kod seçilebilir.'],
   [/unvan|rezerv/i, 'Unvan MERSİS’te sorgulanır; benzer kayıtlı bir unvan bulunmuyorsa 30 gün süreyle rezerve edilir.'],

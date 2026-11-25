@@ -6,9 +6,11 @@ import { Application, DocItem, LogEntry } from './models';
  * same events are persisted by the mock API with identical timestamps.
  */
 
-/** Base durations at 1× speed (ms). */
-/** Simulated durations in the mock (ms). `titleCheck` stands for staff work that takes hours on the real API. */
-export const DURATION = { scan: 5_000, titleCheck: 4_000, identity: 6_000, screening: 5_000, call: 20_000, setup: 45_000 };
+/**
+ * Simulated durations in the mock at 1× speed (ms). `evaluation` stands for the outside evaluation
+ * service, which takes minutes on the real API; `titleCheck` for staff work that takes hours.
+ */
+export const DURATION = { evaluation: 6_000, titleCheck: 4_000, identity: 6_000, screening: 5_000, call: 20_000, setup: 45_000 };
 
 export const progress = (startedAt: string | undefined, duration: number, now: number) =>
   startedAt ? Math.min(1, Math.max(0, (now - Date.parse(startedAt)) / duration)) : 0;
@@ -24,23 +26,6 @@ export const openEndedProgress = (startedAt: string | undefined, duration: numbe
 const at = (startedAt: string, duration: number, f: number) => new Date(Date.parse(startedAt) + f * duration).toISOString();
 
 const doc = (group: string, name: string, sizeKb: number, when: string): DocItem => ({ group, name, sizeKb, at: when });
-
-// ---------------------------------------------------------------------------------- scan (D-1b)
-
-export function scanView(app: Application, p: number) {
-  const fields = app.deck?.fields ?? [];
-  // The API knows the page count only once the deck is read.
-  const pages = app.deck?.pages || 12;
-  const shown = Math.min(fields.length, Math.floor(p * (fields.length + 1)));
-  return {
-    p,
-    percent: Math.round(p * 100),
-    page: Math.min(pages, Math.max(1, Math.ceil(p * pages))),
-    pages,
-    shown,
-    total: fields.length + 3, // a few fields come from defaults (type, capital, address) — "13 alan"
-  };
-}
 
 // ------------------------------------------------- step 2: identity (D-2a) and screening (D-2e)
 

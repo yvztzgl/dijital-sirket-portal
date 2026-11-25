@@ -1,5 +1,5 @@
 import { callStartedAt, LOG_TEXTS, splitNace, toAccount, toApplication, toReviewFields, toStage } from './api-mapper';
-import { CAPTURED, DECK_FAILED, IDENTITY_FAILED, IDENTITY_FAILED_TWICE, ME, NEW_APPLICATION, REVIEW_APPLICATION, SIGNATURE_EXPIRED } from './testing/api-fixtures';
+import { CAPTURED, HAND, IDENTITY_FAILED, IDENTITY_FAILED_TWICE, ME, NEW_APPLICATION, REVIEW_APPLICATION, SIGNATURE_EXPIRED } from './testing/api-fixtures';
 import { AGENCIES } from './timeline';
 
 describe('api-mapper', () => {
@@ -17,10 +17,11 @@ describe('api-mapper', () => {
     expect(app.createdAt).toBe('2026-11-25T09:41:12.408113+00:00');
     expect(app.founder).toEqual({ firstName: 'Ayşe', lastName: 'Kaya', nationality: '', passportNo: '' });
     expect(app.contact).toEqual({ email: 'ayse@example.test', phone: '', address: '', postalCode: '', country: '' });
-    expect(app.company).toEqual({ deckName: '', root: '', activity: '', nace: [], suggestedNace: [], capital: 250_000 });
+    expect(app.company).toEqual({ brand: '', root: '', activity: '', nace: [], suggestedNace: [], capital: 250_000 });
     expect(app.profile).toBeUndefined();
     expect(app.deck).toBeUndefined();
-    expect(app.crossCheck).toEqual([]);
+    expect(app.cv).toBeUndefined();
+    expect(app.evaluation).toBeUndefined();
     expect(app.marks).toEqual({});
     expect(app.payment).toBeUndefined();
     expect(app.fees).toEqual([
@@ -35,37 +36,29 @@ describe('api-mapper', () => {
     expect(app.logs).toEqual([{ at: '2026-11-25T09:41:12.408113+00:00', text: 'Başvuru oluşturuldu', who: 's' }]);
   });
 
-  it('maps the review: profile, deck, comparison, the founder\'s current values and their marks', () => {
+  it('maps the company form: profile, deck and CV, the evaluation, the founder\'s current values and their marks', () => {
     const app = toApplication(REVIEW_APPLICATION, account);
     expect(app.stage).toBe('review');
     expect(app.profile).toEqual({ brand: 'Lumora', sector: 'software', funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya', at: '2026-11-25T09:45:00+00:00' });
-    expect(app.deck).toEqual({
-      fileName: 'Lumora Sunum.pdf',
-      sizeKb: 57,
-      pages: 16,
-      startedAt: '2026-11-25T09:46:00+00:00',
-      // Under the portal's keys, which the scan and review screens look up.
-      fields: [
-        { key: 'title', label: 'Şirket unvanı', value: 'Lumora Veri Analitiği', page: 13 },
-        { key: 'nace', label: 'NACE kodları', value: '62.01, 63.11', page: 13 },
-        { key: 'phone', label: 'Telefon', value: '+49 151 2345 6789', page: 15 },
-      ],
-      status: 'read',
-    });
-    expect(app.crossCheck[1]).toEqual({ key: 'phone', label: 'Telefon', stated: '+49 151 2345 6700', read: '+49 151 2345 6789', match: false, choice: null, at: null });
-    expect(app.company).toMatchObject({ deckName: 'Lumora Veri Analitiği', root: 'Lumora', activity: 'Veri Analitiği', nace: ['62.01', '63.11'] });
+    expect(app.deck).toEqual({ fileName: 'Lumora Sunum.pdf', sizeKb: 57 });
+    expect(app.cv).toEqual({ fileName: 'Ozgecmis.pdf', sizeKb: 120 });
+    expect(app.evaluation).toEqual({ status: 'done', attempt: 1, maxAttempts: 3, startedAt: '2026-11-25T09:46:00+00:00', finishedAt: '2026-11-25T09:50:00+00:00' });
+    // The brand is the profile's; the suggested codes are those of the profile's activity area.
+    expect(app.company).toMatchObject({ brand: 'Lumora', root: 'Lumora', activity: 'Veri Analitiği', nace: ['62.01', '63.11'], suggestedNace: ['62.01', '62.02', '63.11'] });
     expect(app.founder).toMatchObject({ firstName: 'Ayşe', lastName: 'Kaya-Berg', nationality: 'Almanya' });
-    expect(app.contact).toEqual({ email: 'ayse@example.test', phone: '+49 151 2345 6789', address: 'Torstraße 45, Berlin', postalCode: '10119', country: 'Almanya' });
+    expect(app.contact).toEqual({ email: 'ayse@example.test', phone: '+49 151 2345 6700', address: '', postalCode: '10119', country: 'Almanya' });
     expect(app.funding).toBe('investor');
-    // trade_name was read with medium confidence: to be checked. A changed family name marks the whole name row.
-    expect(app.marks).toEqual({ title: 'check', nace: 'ai', name: 'edited', phone: 'ai', address: 'edited', funding: 'edited' });
-    expect(app.logs.map((l) => l.who)).toEqual(['s', 'u', 'a']);
+    // `entered` and `edited` both show as edited; a changed family name marks the whole name row.
+    expect(app.marks).toEqual({ title: 'edited', nace: 'edited', name: 'edited', email: 'profile', phone: 'profile', address: 'edited', funding: 'edited' });
   });
 
   it('maps the stages the portal knows and refuses one it does not', () => {
     expect(toStage('threeDs')).toBe('threeDs');
     expect(toStage('titleConflict')).toBe('titleConflict');
     expect(toStage('titleChecking')).toBe('titleChecking');
+    expect(toStage('evaluating')).toBe('evaluating');
+    expect(toStage('evaluationQuestions')).toBe('evaluationQuestions');
+    expect(() => toStage('scanning' as never)).toThrow('Unknown application stage');
     expect(() => toStage('archived' as never)).toThrow('Unknown application stage');
   });
 
@@ -125,45 +118,10 @@ describe('api-mapper on captured API answers', () => {
     expect(app.deck).toBeUndefined();
   });
 
-  it('scanning: the deck without fields or pages yet, still reading', () => {
-    const app = map('scanning');
-    expect(app.stage).toBe('scanning');
-    expect(app.deck).toMatchObject({ fileName: 'Lumora Sunum.pdf', sizeKb: 1, pages: 0, fields: [], status: 'reading' });
-    expect(app.crossCheck).toEqual([]);
-    expect(app.company.root).toBe('');
-  });
-
-  it('a failed reading: back at verified, the deck marked failed', () => {
-    const app = toApplication(DECK_FAILED, account);
-    expect(app.stage).toBe('verified');
-    expect(app.deck!.status).toBe('failed');
-  });
-
-  it('review with open differences: deck fields under the portal\'s keys, funding as its label, two choices waiting', () => {
-    const app = map('reviewOpen');
-    expect(app.stage).toBe('review');
-    expect(app.deck!.status).toBe('read');
-    expect(app.deck!.fields.map((f) => f.key)).toEqual(['title', 'nace', 'share', 'name', 'name', 'nationality', 'email', 'phone', 'address', 'funding']);
-    expect(app.deck!.fields.find((f) => f.key === 'funding')!.value).toBe('Yurt dışı banka transferi');
-    const open = app.crossCheck.filter((c) => !c.match && !c.choice).map((c) => c.key).sort();
-    expect(open).toEqual(['country', 'phone']);
-    expect(app.crossCheck.find((c) => c.key === 'funding')).toMatchObject({ stated: 'Yurt dışı banka transferi', read: 'Yurt dışı banka transferi', match: true });
-    expect(app.crossCheck.find((c) => c.key === 'country')).toMatchObject({ stated: 'Almanya', read: 'Torstraße 45, 10119 Berlin' });
-    expect(app.company).toMatchObject({ deckName: 'Lumora Veri Analitiği', root: 'Lumora', activity: 'Veri Analitiği', nace: ['62.01', '63.11'] });
-    expect(app.founder).toMatchObject({ firstName: 'Deneme', lastName: 'Kurucu', nationality: 'Almanya' });
-    expect(app.contact).toEqual({ email: 'kurucu@example.test', phone: '+49 151 2345 6789', address: 'Torstraße 45, 10119 Berlin', postalCode: '', country: '' });
-    expect(app.funding).toBe('own-abroad');
-    expect(app.marks).toEqual({ title: 'ai', nace: 'ai', name: 'ai', email: 'ai', phone: 'ai', address: 'ai', funding: 'ai' });
-  });
-
-  it('review decided: the choices, the typed postal code and the stated country, and their marks', () => {
-    const app = map('reviewDecided');
-    expect(app.crossCheck.find((c) => c.key === 'phone')!.choice).toBe('read');
-    expect(app.crossCheck.find((c) => c.key === 'country')!.choice).toBe('stated');
-    expect(app.contact).toEqual({ email: 'kurucu@example.test', phone: '+49 151 2345 6789', address: 'Torstraße 45, 10119 Berlin', postalCode: '10119', country: 'Almanya' });
-    expect(app.founder.lastName).toBe('Kurucu-Test');
-    // "entered" (postal code, country chosen from the profile) and "edited" (family name) both show as edited.
-    expect(app.marks).toMatchObject({ name: 'edited', address: 'edited', phone: 'ai' });
+  it('verified, captured before the evaluation existed: no CV and no evaluation', () => {
+    const app = map('verified');
+    expect(app.cv).toBeUndefined();
+    expect(app.evaluation).toBeUndefined();
   });
 
   it('titleChecking: its own stage, the candidate without the suffix', () => {
@@ -209,25 +167,76 @@ describe('api-mapper on captured API answers', () => {
   });
 
   it('review changes back to the API: only what differs, titles and NACE lists as single strings', () => {
-    const view = CAPTURED.reviewOpen;
-    expect(toReviewFields({ company: { root: 'Lumora', activity: 'Veri Analitiği' } }, view)).toEqual({});
-    expect(toReviewFields({ company: { activity: 'Analitik Yazılım A.Ş.' } }, view)).toEqual({ trade_name: 'Lumora Analitik Yazılım' });
+    const view = HAND.reviewEdited;
+    expect(toReviewFields({ company: { root: 'Lumora', activity: 'Analitik Yazılım' } }, view)).toEqual({});
+    expect(toReviewFields({ company: { activity: 'Veri Analitiği A.Ş.' } }, view)).toEqual({ trade_name: 'Lumora Veri Analitiği' });
     expect(toReviewFields({ company: { nace: ['62.01', '63.11'] } }, view)).toEqual({});
     expect(toReviewFields({ company: { nace: ['62.01', '63.11', '62.02'] } }, view)).toEqual({ nace_codes: '62.01, 63.11, 62.02' });
     expect(
       toReviewFields(
         {
-          founder: { firstName: 'Deneme', lastName: 'Kurucu ', nationality: 'Almanya' },
-          contact: { email: 'kurucu@example.test', phone: '+49 151 2345 6789', address: 'Torstraße 45, 10119 Berlin', postalCode: '10119', country: 'Almanya' },
+          founder: { firstName: 'Deneme', lastName: 'Kurucu-Berg ', nationality: 'Almanya' },
+          contact: { email: 'kurucu@example.test', phone: '+49 151 2345 6700', address: 'Torstraße 45, Berlin', postalCode: '10115', country: 'Almanya' },
           funding: 'investor',
         },
         view,
       ),
-    ).toEqual({ postal_code: '10119', residence_country: 'Almanya', source_of_funds: 'investor' });
+    ).toEqual({ postal_code: '10115', source_of_funds: 'investor' });
     // A cleared value is sent, so the API's own message about it comes back.
     expect(toReviewFields({ contact: { phone: '' } }, view)).toEqual({ phone: '' });
     // The name shown from the account before the review has one is sent, to become the founder's own.
-    expect(toReviewFields({ founder: { firstName: 'Deneme' } }, CAPTURED.scanning)).toEqual({ given_name: 'Deneme' });
+    expect(toReviewFields({ founder: { firstName: 'Deneme' } }, HAND.evaluating)).toEqual({ given_name: 'Deneme' });
+  });
+});
+
+/** The deck step with the outside evaluation, on the hand-written answers (testing/hand-written/, until recaptured). */
+describe('api-mapper on the evaluation answers (hand-written)', () => {
+  const account = toAccount({ firstName: 'Deneme', lastName: 'Kurucu', email: 'kurucu@example.test', founderType: 'foreign', verified: true });
+
+  it('evaluating: the deck and the CV by name and size, the evaluation running, no form values', () => {
+    const app = toApplication(HAND.evaluating, account);
+    expect(app.stage).toBe('evaluating');
+    expect(app.deck).toEqual({ fileName: 'Lumora Sunum.pdf', sizeKb: 812 });
+    expect(app.cv).toEqual({ fileName: 'Ozgecmis.pdf', sizeKb: 164 });
+    expect(app.evaluation).toEqual({ status: 'running', attempt: 1, maxAttempts: 3, startedAt: '2026-11-25T10:08:02.112000+00:00', finishedAt: null });
+    expect(app.marks).toEqual({});
+    expect(app.docs.map((d) => d.name)).toEqual(['Sunum', 'Özgeçmiş']);
+    expect(toStage(HAND.statusEvaluating.stage)).toBe('evaluating');
+  });
+
+  it('more information needed: its own stage, the evaluation waiting on questions', () => {
+    const app = toApplication(HAND.evaluationQuestions, account);
+    expect(app.stage).toBe('evaluationQuestions');
+    expect(app.evaluation!.status).toBe('questions');
+  });
+
+  it('a failed evaluation: back at the upload, the evaluation kept as failed', () => {
+    const app = toApplication(HAND.evaluationFailed, account);
+    expect(app.stage).toBe('verified');
+    expect(app.evaluation).toMatchObject({ status: 'failed', attempt: 3 });
+    expect(() => toApplication({ ...HAND.evaluationFailed, evaluation: { ...HAND.evaluationFailed.evaluation!, status: 'lost' as never } }, account)).toThrow('Unknown evaluation status');
+  });
+
+  it('the company form: defaults from the profile and the account marked profile; the empty title and codes carry no mark', () => {
+    const app = toApplication(HAND.reviewDefaults, account);
+    expect(app.stage).toBe('review');
+    expect(app.company).toMatchObject({ brand: 'Lumora', root: '', activity: '', nace: [] });
+    expect(app.founder).toMatchObject({ firstName: 'Deneme', lastName: 'Kurucu', nationality: 'Almanya' });
+    expect(app.contact).toEqual({ email: 'kurucu@example.test', phone: '+49 151 2345 6700', address: '', postalCode: '', country: 'Almanya' });
+    expect(app.funding).toBe('own-abroad');
+    expect(app.marks).toEqual({ name: 'profile', email: 'profile', phone: 'profile', address: 'profile', funding: 'profile' });
+  });
+
+  it('the company form after the founder typed: entered and edited are the founder\'s own', () => {
+    const app = toApplication(HAND.reviewEdited, account);
+    expect(app.company).toMatchObject({ root: 'Lumora', activity: 'Analitik Yazılım', nace: ['62.01', '63.11'] });
+    expect(app.marks).toEqual({ title: 'edited', nace: 'edited', name: 'edited', email: 'profile', phone: 'profile', address: 'edited', funding: 'profile' });
+  });
+
+  it('the evaluation reference: the saved dictionary in the contract\'s shape', () => {
+    const r = HAND.referenceEvaluation;
+    expect([r.activityGroups.length, r.activities.length, r.businessModels.length, r.revenueModels.length, r.productTypes.length]).toEqual([17, 216, 4, 8, 4]);
+    expect(r.limits).toEqual({ deckMaxMb: 25, cvMaxMb: 5, deckMinPages: 3, deckMaxPages: 40, summaryMin: 50, summaryMax: 2000 });
   });
 });
 

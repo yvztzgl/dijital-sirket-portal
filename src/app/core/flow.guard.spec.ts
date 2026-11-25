@@ -48,8 +48,21 @@ describe('flowGuard', () => {
     await store.seed('verified');
     expect((await run('d1e'))).toBe(true);
     expect((await run('d1a'))).toBe(true);
-    await store.seed('scanning');
-    expect(router.serializeUrl((await run('d1e')) as UrlTree)).toBe('/deck/scan');
+    await store.seed('evaluating');
+    expect(router.serializeUrl((await run('d1e')) as UrlTree)).toBe('/deck/evaluating');
+  });
+
+  it('opens the waiting screen while the evaluation runs, and the stop screen when it needs more information', async () => {
+    const store = TestBed.inject(ApplicationStore);
+    const router = TestBed.inject(Router);
+    await store.seed('evaluating');
+    expect(await run('d1b')).toBe(true);
+    expect(router.serializeUrl((await run('d1a')) as UrlTree)).toBe('/deck/evaluating');
+    expect(router.serializeUrl((await run('d1c')) as UrlTree)).toBe('/deck/evaluating');
+    await store.seed('evaluationQuestions');
+    expect(await run('d1g')).toBe(true);
+    expect(router.serializeUrl((await run('d1b')) as UrlTree)).toBe('/deck/more-information');
+    expect(router.serializeUrl((await run('d1c')) as UrlTree)).toBe('/deck/more-information');
   });
 
   it('shows the title check while it runs, and lets D-1c open again after a refused title', async () => {

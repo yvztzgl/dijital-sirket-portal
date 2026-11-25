@@ -12,7 +12,7 @@ export type SidePanelTab = 'ai' | 'docs' | 'log';
 export type SidePanelCtx =
   | 'profile'
   | 'upload'
-  | 'scan'
+  | 'evaluate'
   | 'review'
   | 'title'
   | 'aml'
@@ -33,12 +33,12 @@ type Opt = [icon: string, title: string, question: string];
 
 const Q = {
   formats: ['file', 'Dosya biçimleri', 'Hangi dosya biçimleri kabul edilir?'],
-  read: ['search', 'Okunan bilgiler', 'Sunumdan hangi bilgiler okunur?'],
-  fix: ['pencil', 'Düzeltme', 'Okunan bilgiler düzeltilebilir mi?'],
+  read: ['search', 'Değerlendirme', 'Sunumum nasıl değerlendirilir?'],
+  fix: ['clock', 'Değerlendirme süresi', 'Değerlendirme ne kadar sürer?'],
   privacy: ['lock', 'Gizlilik', 'Sunum gizli tutulur mu?'],
   why: ['help', 'Ön bilgiler', 'Ön bilgiler neden isteniyor?'],
   source: ['landmark', 'Sermaye kaynağı', 'Sermaye kaynağı ne demektir?'],
-  differ: ['list-checks', 'Farklı bilgiler', 'Ön bilgilerle sunum farklıysa ne olur?'],
+  differ: ['list-checks', 'Formdaki bilgiler', 'Formdaki bilgiler nereden geliyor?'],
   type: ['building', 'Şirket türü', 'Şirket türü neden anonim şirkettir?'],
   nace: ['list-checks', 'Faaliyet kodları', 'NACE kodu nedir?'],
   title: ['search', 'Şirket unvanı', 'Unvan nasıl rezerve edilir?'],
@@ -68,7 +68,7 @@ const Q = {
 const AI: Record<SidePanelCtx, { step: string; opts: Opt[] }> = {
   profile: { step: 'Ön bilgiler', opts: [Q.why, Q.source, Q.nace] },
   upload: { step: 'Sunum', opts: [Q.formats, Q.read, Q.privacy] },
-  scan: { step: 'Sunum', opts: [Q.read, Q.fix, Q.privacy] },
+  evaluate: { step: 'Sunum', opts: [Q.fix, Q.read, Q.privacy] },
   review: { step: 'Sunum', opts: [Q.differ, Q.nace, Q.title] },
   title: { step: 'Sunum', opts: [Q.title, Q.type, Q.nace] },
   aml: { step: 'Kimlik', opts: [Q.mrz, Q.lists, Q.camera] },

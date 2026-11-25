@@ -6,8 +6,8 @@ import { ReviewKey } from '../../core/api-types';
 import { followFlow } from '../../core/follow';
 import { tl0 } from '../../core/format';
 import { dateTime } from '../../core/format';
-import { DECK_CONSENT_ERROR, deckFileError } from '../../core/rules';
-import { CAPITAL, CrossKey, FUNDING_LABELS, FundingSource, Profile, Sector } from '../../core/models';
+import { DECK_CONSENT_ERROR, EvaluationField, evaluationErrors } from '../../core/rules';
+import { CAPITAL, EvaluationAnswers, FUNDING_LABELS, FundingSource, Profile, Sector } from '../../core/models';
 import { companyPurpose, naceName as localNaceName } from '../../core/nace';
 
 type CardId = 'founder' | 'contact' | 'funding';
@@ -33,8 +33,12 @@ const SECTOR_HINTS: Partial<Record<string, string>> = {
 
 type ProfileDraft = Omit<Profile, 'at' | 'sector' | 'funding'> & { sector: Sector | ''; funding: FundingSource | '' };
 
-/** Which review row a compared item stands for, so that a difference is not also listed as "kontrol edilmesi gereken". */
-const CROSS_ROW: Record<CrossKey, string> = { brand: 'title', sector: 'nace', funding: 'funding', nationality: 'nationality', phone: 'phone', country: 'address' };
+/** What D-1a says above the form when the last evaluation did not end well (the API is back at `verified`). */
+const EVALUATION_ENDED: Record<'failed' | 'rejected' | 'cancelled', { title: string; text: string }> = {
+  failed: { title: 'Önceki değerlendirme tamamlanamadı.', text: 'Değerlendirme hizmeti başvurunuzu sonuçlandıramadı. Lütfen sunumunuzu ve özgeçmişinizi yeniden yükleyiniz.' },
+  rejected: { title: 'Sunumunuz değerlendirmeye alınamadı.', text: 'Lütfen sunumun 3 ile 40 sayfa arasında bir PDF dosyası olduğunu kontrol ederek yeniden yükleyiniz.' },
+  cancelled: { title: 'Önceki değerlendirme iptal edildi.', text: 'Devam etmek için sunumunuzu ve özgeçmişinizi yeniden yükleyiniz.' },
+};
 
 interface EditField {
   key: string;
@@ -46,7 +50,7 @@ interface EditField {
   kind?: 'country' | 'phone' | 'select';
 }
 
-/** Welcome and step 1 — pitch deck upload, AI scan, review, MERSİS title conflict (Ekranlar 1). */
+/** Welcome and step 1 — profile, deck and evaluation questions, the evaluation, the company form, MERSİS title conflict (Ekranlar 1). */
 export class KarsilamaData {
   protected readonly store = inject(ApplicationStore);
   private readonly router = inject(Router);
@@ -54,11 +58,12 @@ export class KarsilamaData {
   constructor() {
     this.store.clearError();
     followFlow();
-    // The choices offered on D-1e and D-1c are the API's own list (Api.reference).
+    // The choices offered on D-1e and D-1c are the API's own list (Api.reference); D-1a's, the evaluation service's.
     void this.store.loadReference();
+    void this.store.loadEvaluationReference();
     // Once both ticks are given, the message asking for them has done its job.
     effect(() => {
-      if (this.consentsGiven() && untracked(this.fileError) === DECK_CONSENT_ERROR) this.fileError.set(null);
+      if (this.consentsGiven() && untracked(this.consentError)) this.consentError.set(null);
     });
   }
 
@@ -120,118 +125,137 @@ export class KarsilamaData {
     if (await this.store.submitProfile({ ...p, sector: p.sector as Sector, funding: p.funding as FundingSource })) void this.router.navigateByUrl('/deck');
   }
 
-  /**
-   * Demo: values for the downloadable sample deck (Lumora Analytics). The phone number differs from
-   * the one on the deck's contact page on purpose, so that D-1c shows how a difference is decided.
-   */
+  /** Demo: values for the downloadable sample deck (Lumora Analytics). */
   protected useSampleProfile() {
     this.profileDraft.set({ brand: 'Lumora Analytics', sector: 'software', funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
   }
 
-  // ---------------------------------------------------------------------------- D-1a upload
+  // ------------------------------------------------------- D-1a deck, CV and the five answers
 
-  /**
-   * Reading the last deck failed for good (the API's `deck.status: "failed"`; the stage is back at
-   * `verified`). D-1a says so and takes a new upload.
-   */
-  protected readonly deckFailed = computed(() => this.store.app()?.deck?.status === 'failed');
-  /** The profile can be changed only until a deck is uploaded (the API refuses it afterwards, also after a failed reading). */
+  /** The profile can be changed only until a deck is uploaded (the API refuses it afterwards, also after an evaluation that ended badly). */
   protected readonly profileEditable = computed(() => !this.store.app()?.deck);
 
-  protected readonly dragging = signal(false);
-  protected readonly fileError = signal<string | null>(null);
+  /** The last evaluation ended without a result; D-1a says so above the form and takes a new upload. */
+  protected readonly evaluationEnded = computed(() => {
+    const status = this.store.stage() === 'verified' ? this.store.app()?.evaluation?.status : undefined;
+    return status === 'failed' || status === 'rejected' || status === 'cancelled' ? EVALUATION_ENDED[status] : null;
+  });
+
+  protected readonly limits = computed(() => this.store.evaluationReference()?.limits ?? null);
+  protected readonly groupOptions = computed(() => (this.store.evaluationReference()?.activityGroups ?? []).map((o) => ({ value: String(o.id), label: o.label })));
+  protected readonly activityOptions = computed(() => (this.store.evaluationReference()?.activities ?? []).map((o) => ({ value: String(o.id), label: o.label })));
+  /** The three multiple choices, in the form's order, with the API's field names. */
+  protected readonly multiChoices = computed(() => {
+    const ref = this.store.evaluationReference();
+    return [
+      { key: 'businessModelIds' as const, title: 'İş modeli', options: ref?.businessModels ?? [] },
+      { key: 'revenueModelIds' as const, title: 'Gelir modeli', options: ref?.revenueModels ?? [] },
+      { key: 'productTypeIds' as const, title: 'Ürün türü', options: ref?.productTypes ?? [] },
+    ];
+  });
+
+  protected readonly deckFile = signal<File | null>(null);
+  protected readonly cvFile = signal<File | null>(null);
+  protected readonly answers = signal<EvaluationAnswers>({ summary: '', activityGroupId: null, activityId: null, businessModelIds: [], revenueModelIds: [], productTypeIds: [] });
+  /** The screen's own checks (`evaluationErrors`), shown at the fields like the API's refusals. */
+  protected readonly formErrors = signal<Partial<Record<EvaluationField, string>>>({});
+  protected readonly consentError = signal<string | null>(null);
+
+  /** "120 / 2000 karakter · en az 50" under the summary. */
+  protected readonly summaryHint = computed(() => {
+    const l = this.limits();
+    const n = this.answers().summary.trim().length;
+    if (!l) return `${n} karakter`;
+    return n < l.summaryMin ? `${n} / ${l.summaryMax} karakter · en az ${l.summaryMin}` : `${n} / ${l.summaryMax} karakter`;
+  });
+  protected readonly summaryOver = computed(() => this.answers().summary.trim().length > (this.limits()?.summaryMax ?? Infinity));
+
   /**
-   * The two ticks the upload needs. They start unticked on every screen and are sent with this one
-   * upload only; "Başka dosya yükle" on D-1c asks for them again (the API records both per upload).
+   * The two ticks the upload needs. They start unticked and are sent with this one upload only
+   * (the API records both per upload); nothing is remembered from an earlier upload.
    */
   protected readonly noticeAcknowledged = signal(false);
   protected readonly aiConsent = signal(false);
   protected readonly consentsGiven = computed(() => this.noticeAcknowledged() && this.aiConsent());
-  /** D-1c: the re-upload panel with its own ticks is open. */
-  protected readonly reuploadOpen = signal(false);
 
-  /** Opens the file picker only after both ticks; otherwise says what is missing. */
-  protected pickFile(input: HTMLInputElement) {
-    if (!this.consentsGiven()) return this.fileError.set(DECK_CONSENT_ERROR);
-    this.fileError.set(null);
-    input.click();
+  /** The message at a field: the screen's own check first, else the API's refusal. */
+  protected deckFieldError(key: EvaluationField): string | null {
+    return this.formErrors()[key] ?? this.fieldError(key);
   }
 
-  /** D-1c "Başka dosya yükle": opens the panel with both ticks cleared. */
-  protected openReupload() {
-    this.noticeAcknowledged.set(false);
-    this.aiConsent.set(false);
-    this.fileError.set(null);
-    this.reuploadOpen.set(!this.reuploadOpen());
+  private clearFieldError(key: EvaluationField) {
+    if (!this.formErrors()[key]) return;
+    const next = { ...this.formErrors() };
+    delete next[key];
+    this.formErrors.set(next);
   }
 
-  protected onFileInput(e: Event) {
+  protected setSummary(value: string) {
+    this.answers.update((a) => ({ ...a, summary: value }));
+    this.clearFieldError('summary');
+  }
+
+  protected setChoice(key: 'activityGroupId' | 'activityId', value: string) {
+    this.answers.update((a) => ({ ...a, [key]: value ? Number(value) : null }));
+    this.clearFieldError(key);
+  }
+
+  protected toggleMulti(key: 'businessModelIds' | 'revenueModelIds' | 'productTypeIds', id: number, on: boolean) {
+    this.answers.update((a) => ({ ...a, [key]: on ? [...a[key].filter((x) => x !== id), id] : a[key].filter((x) => x !== id) }));
+    this.clearFieldError(key);
+  }
+
+  protected onFilePicked(which: 'deck' | 'cv', e: Event) {
     const input = e.target as HTMLInputElement;
-    const f = input.files?.[0];
+    const f = input.files?.[0] ?? null;
     input.value = '';
-    if (f) void this.upload(f);
-  }
-
-  protected onDrop(e: DragEvent) {
-    e.preventDefault();
-    this.dragging.set(false);
-    const f = e.dataTransfer?.files?.[0];
-    if (f) void this.upload(f);
-  }
-
-  protected onDragOver(e: DragEvent) {
-    e.preventDefault();
-    this.dragging.set(true);
-  }
-
-  private async upload(f: File) {
-    if (!this.consentsGiven()) return this.fileError.set(DECK_CONSENT_ERROR);
-    const error = deckFileError(f);
-    if (error) return this.fileError.set(error);
-    this.fileError.set(null);
-    await this.store.uploadDeck(f, { noticeAcknowledged: this.noticeAcknowledged(), aiConsent: this.aiConsent() });
-  }
-
-  // ------------------------------------------------------------------------------ D-1b scan
-
-  protected readonly scanFile = computed(() => this.store.app()?.deck?.fileName ?? '');
-
-  protected readonly thumbs = computed(() => {
-    const s = this.store.scan();
-    const pages = s?.pages ?? 12;
-    const curPage = s?.page ?? 1;
-    return Array.from({ length: pages }, (_, i) => {
-      const n = i + 1;
-      const done = n < curPage;
-      const cur = n === curPage;
-      return {
-        label: n,
-        cur,
-        op: done || cur ? 1 : 0.6,
-        border: done ? 'var(--bd-86CFA0)' : cur ? 'var(--bd-061262)' : 'var(--bd-E5E7EB)',
-        bg: done ? 'var(--bg-F0FDF4)' : cur ? 'var(--bg-F7F9FE)' : 'var(--bg-FAFBFD)',
-        ink: done ? 'var(--bg-86CFA0)' : cur ? 'var(--bg-061262)' : 'var(--bg-DDE3EE)',
-        ink2: done ? 'var(--bg-BBE5C8)' : cur ? 'var(--bg-C7D5F7)' : 'var(--bg-E8ECF3)',
-        num: done ? 'var(--fg-15803D)' : cur ? 'var(--fg-061262)' : 'var(--fg-8A93A6)',
-      };
+    if (!f) return;
+    (which === 'deck' ? this.deckFile : this.cvFile).set(f);
+    // Say at once when the file itself is wrong (type, size); the other fields wait for "Gönder".
+    const l = this.limits();
+    const error = l ? evaluationErrors({ ...this.answers(), deck: this.deckFile(), cv: this.cvFile() }, l)[which] : undefined;
+    this.formErrors.update((x) => {
+      const next = { ...x };
+      if (error) next[which] = error;
+      else delete next[which];
+      return next;
     });
+  }
+
+  /** Checks everything on screen, then sends the deck, the CV and the answers; the evaluation starts. */
+  protected async submitDeck() {
+    const l = this.limits();
+    const ref = this.store.evaluationReference();
+    if (!l || !ref) return;
+    const errors = evaluationErrors({ ...this.answers(), deck: this.deckFile(), cv: this.cvFile() }, l, ref);
+    this.formErrors.set(errors);
+    this.consentError.set(this.consentsGiven() ? null : DECK_CONSENT_ERROR);
+    if (Object.keys(errors).length || !this.consentsGiven()) return;
+    await this.store.uploadDeck({ deck: this.deckFile()!, cv: this.cvFile()! }, this.answers(), { noticeAcknowledged: this.noticeAcknowledged(), aiConsent: this.aiConsent() });
+  }
+
+  // ------------------------------------------------------- D-1b the evaluation runs (waiting)
+
+  /** "2. deneme": shown only when the service is trying again. */
+  protected readonly evaluationAttempt = computed(() => {
+    const e = this.store.app()?.evaluation;
+    return e && e.attempt > 1 ? `${e.attempt}. deneme (en fazla ${e.maxAttempts})` : null;
+  });
+  protected readonly evaluationSince = computed(() => {
+    const at = this.store.app()?.evaluation?.startedAt;
+    return at ? dateTime(at) : null;
+  });
+  protected readonly uploadedFiles = computed(() => {
+    const a = this.store.app();
+    return [a?.deck?.fileName, a?.cv?.fileName].filter(Boolean).join(' · ');
   });
 
-  protected readonly scanFields = computed(() => {
-    const fields = this.store.app()?.deck?.fields ?? [];
-    const shown = this.store.scan()?.shown ?? 0;
-    return fields.map((f, i) => {
-      const done = i < shown;
-      return { k: f.label, v: f.value, p: f.page ? `s. ${f.page}` : '…', done, pending: !done, op: done ? 1 : 0.7 };
-    });
-  });
-
-  /** The company's logo and name as found in the deck (shown once the title has been read). */
+  /** The brand stated on the profile, with the logo the founder chose on D-1c (mock only). */
   protected readonly brand = computed(() => {
     const c = this.store.app()?.company;
-    return { name: c?.deckName ?? '', logo: c?.logo ?? '', initials: (c?.deckName ?? '').slice(0, 1).toLocaleUpperCase('tr-TR') };
+    const name = c?.brand ?? '';
+    return { name, logo: c?.logo ?? '', initials: name.slice(0, 1).toLocaleUpperCase('tr-TR') };
   });
-  protected readonly scanPages = computed(() => this.store.scan()?.pages ?? 0);
 
   /** The logo on the confirm screen can be replaced with the founder's own image file. */
   protected onLogoInput(e: Event) {
@@ -254,40 +278,14 @@ export class KarsilamaData {
   protected readonly naceQuery = signal('');
   protected readonly openCard = signal<CardId | null>(null);
   protected readonly draft = signal<Partial<Record<string, string>>>({});
-  private readonly deckInput = signal<HTMLInputElement | null>(null);
 
   protected readonly marks = computed(() => this.store.app()?.marks ?? {});
-  protected readonly checkCount = computed(() => Object.values(this.marks()).filter((m) => m === 'check').length);
-  protected readonly editedCount = computed(() => ['title', 'nace'].filter((k) => this.marks()[k] === 'edited').length);
-  protected readonly reviewHint = computed(() => {
-    const m = this.marks();
-    const checks = [m['funding'] === 'check' && 'fon kaynağını', m['phone'] === 'check' && 'telefon numarasını'].filter(Boolean) as string[];
-    return checks.length
-      ? {
-          title: `${checks.join(' ve ').replace(/^./, (c) => c.toLocaleUpperCase('tr-TR'))} kontrol edin`,
-          reason: [m['funding'] === 'check' && 'Fon kaynağı sunumda dolaylı ifade edilmiş (s. 10)', m['phone'] === 'check' && 'telefonun ülke kodu tahmin edildi (s. 12)'].filter(Boolean).join('; ') + '.',
-        }
-      : { title: 'Sunumunuzdaki bilgiler eksiksiz okundu', reason: 'Unvan önerimi ve faaliyet kodlarını gözden geçirin; her şey doğruysa devam edebilirsiniz.' };
-  });
   protected readonly founderLabel = computed(() => (this.store.founderType() === 'resident' ? '◍ T.C. vatandaşı kurucu' : '◍ Yabancı kurucu'));
 
   protected setTitle(value: string) {
     const [root = '', ...rest] = value.replace(/\s+(A\.Ş\.|Anonim Şirketi)$/i, '').trim().split(/\s+/);
     void this.store.updateReview({ company: { root, activity: rest.join(' ') } }, ['title']);
   }
-
-  protected readonly nameSugs = computed(() => {
-    const root = this.store.app()?.company.root || 'Şirket';
-    const current = this.store.title();
-    return [
-      [root, 'Bulut Bilişim'],
-      [root, 'Yazılım ve Bulut Hizmetleri'],
-      [`${root}way`, 'Bilişim Teknolojileri'],
-    ].map(([r, act]) => {
-      const on = `${r} ${act}` === current;
-      return { root: r, act, full: `${r} ${act}`, border: on ? 'var(--bd-061262)' : 'var(--bd-D6DEEE)', bg: on ? 'var(--bg-EFF4FF)' : 'var(--bg-FFFFFF)' };
-    });
-  });
 
   /** The NACE codes the API accepts (Api.reference), code → title. */
   private readonly naceTitles = computed(() => new Map((this.store.reference()?.naceCodes ?? []).map((n) => [n.code, n.title])));
@@ -307,11 +305,13 @@ export class KarsilamaData {
       return [...allowed]
         .filter(([code, name]) => !c.nace.includes(code) && (code.startsWith(q) || name.toLocaleLowerCase('tr-TR').includes(q)))
         .slice(0, 5)
-        .map(([code, name]) => ({ code, name, ai: false }));
+        .map(([code, name]) => ({ code, name, suggested: false }));
     }
-    const offer = (codes: string[], ai: boolean) => codes.filter((x) => allowed.has(x) && !c.nace.includes(x)).map((code) => ({ code, name: this.naceName(code), ai }));
-    const related = ['63.12', '62.09'].filter((x) => !c.suggestedNace.includes(x));
-    return [...offer(c.suggestedNace, true), ...offer(related, false)].slice(0, 3);
+    // Without a search: the codes of the activity area stated on the profile.
+    return c.suggestedNace
+      .filter((x) => allowed.has(x) && !c.nace.includes(x))
+      .map((code) => ({ code, name: this.naceName(code), suggested: true }))
+      .slice(0, 3);
   });
 
   protected readonly purpose = computed(() => companyPurpose(this.store.app()?.company.nace ?? []));
@@ -340,9 +340,8 @@ export class KarsilamaData {
     if (!a) return [];
     const m = a.marks;
     const card = (id: CardId, t: string, keys: string[], s: string, fields: EditField[]) => {
-      const warnN = keys.filter((k) => m[k] === 'check').length;
       const edited = keys.some((k) => m[k] === 'edited');
-      return { id, t, ok: warnN === 0, okText: edited ? '✎ Düzenlendi' : '✓ AI okudu', warn: warnN > 0, warnText: `${warnN} alanı kontrol ediniz`, s, open: this.openCard() === id, fields };
+      return { id, t, edited, s, open: this.openCard() === id, fields };
     };
     return [
       card('founder', 'Kurucu', ['name'], `${a.founder.firstName} ${a.founder.lastName} · ${a.founder.nationality || '—'} · Kimlik 2. adımda doğrulanır`, [
@@ -395,12 +394,11 @@ export class KarsilamaData {
 
   /** Which editor is open under the rows; one at a time. */
   protected readonly editor = signal<Editor | null>(null);
-  /** Values typed into the "kontrol edilmesi gereken" block before they are saved. */
-  protected readonly flagDraft = signal<Partial<Record<string, string>>>({});
 
   /**
-   * Every piece of information on the confirm screen as one row: what it is, its value, which
-   * editor its pencil opens (none for fixed facts) and whether the scan flagged it for checking.
+   * Every piece of information on the company form as one row: what it is, its value, which editor
+   * its pencil opens (none for fixed facts), and whether it is a default from the profile or the
+   * account (`profile`) or the founder's own value (`edited`).
    */
   protected readonly rows = computed(() => {
     const a = this.store.app();
@@ -408,7 +406,7 @@ export class KarsilamaData {
     const m = a.marks;
     const name = `${a.founder.firstName} ${a.founder.lastName}`.trim();
     const row = (key: string, label: string, value: string, edit: Editor | null, mark = key, raw = value) => ({
-      key, label, value: value || '—', raw, edit, flag: m[mark] === 'check', edited: m[mark] === 'edited',
+      key, label, value: value || '—', raw, edit, fromProfile: m[mark] === 'profile', edited: m[mark] === 'edited',
     });
     return [
       row('title', 'Şirket unvanı', this.store.fullTitle(), 'title'),
@@ -425,7 +423,6 @@ export class KarsilamaData {
       row('office', 'Merkez adresi', 'Terminal İstanbul sanal ofisi, Gebze / Kocaeli', null),
     ];
   });
-  protected readonly okRows = computed(() => this.rows().filter((r) => !r.flag));
 
   /** A refusal's messages at the review rows (e.g. "Ad eksik." under Kurucu after "Onayla ve devam et"). */
   protected readonly rowErrors = computed(() => {
@@ -446,33 +443,6 @@ export class KarsilamaData {
     }
     return out;
   });
-  /** Flagged rows, less those already asked about as a difference from the profile. */
-  protected readonly flagRows = computed(() => {
-    const asked = new Set(this.crossOpen().map((c) => CROSS_ROW[c.key]));
-    return this.rows().filter((r) => r.flag && !asked.has(r.key));
-  });
-
-  // ------------------------------------------- D-1c: the profile (D-1e) compared with the deck
-
-  protected readonly cross = computed(() => this.store.app()?.crossCheck ?? []);
-  protected readonly crossMatched = computed(() => this.cross().filter((c) => c.match));
-  /** Differences, each with the deck page its value was read from. */
-  protected readonly crossDiffs = computed(() => {
-    const fields = this.store.app()?.deck?.fields ?? [];
-    // The mock reads the country with the postal code; the API compares it with the address line.
-    const field: Record<CrossKey, string[]> = { brand: ['title'], sector: ['nace'], funding: ['funding'], nationality: ['nationality'], phone: ['phone'], country: ['postal', 'address'] };
-    const page = (key: CrossKey) => field[key].map((k) => fields.find((f) => f.key === k)?.page).find((p) => p != null) ?? null;
-    return this.cross()
-      .filter((c) => !c.match)
-      .map((c) => ({ ...c, page: page(c.key) }));
-  });
-  /** Differences still waiting for the founder's choice; the review cannot be submitted while any remain. */
-  protected readonly crossOpen = computed(() => this.crossDiffs().filter((c) => !c.choice));
-
-  protected resolveCross(key: CrossKey, choice: 'stated' | 'read') {
-    void this.store.resolveCrossCheck(key, choice);
-  }
-
   /** The founder / contact / funding form shown when that editor is open. */
   protected readonly editorCard = computed(() => this.collapsedCards().find((c) => c.id === this.editor()) ?? null);
 
@@ -486,33 +456,6 @@ export class KarsilamaData {
   protected async saveEditor() {
     const e = this.editor();
     if (e && e !== 'title' && e !== 'nace' && (await this.saveCard(e))) this.editor.set(null);
-  }
-
-  protected setFlag(key: string, v: string) {
-    this.flagDraft.update((d) => ({ ...d, [key]: v }));
-  }
-
-  /** Saves the values in the "kontrol edilmesi gereken" block; saving a flagged value clears its flag. */
-  protected async saveFlags() {
-    const d = this.flagDraft();
-    const rows = this.flagRows();
-    const val = (key: string) => d[key] ?? rows.find((r) => r.key === key)?.raw;
-    const has = (key: string) => rows.some((r) => r.key === key);
-    const contact = { ...(has('phone') ? { phone: val('phone') } : {}), ...(has('address') ? { address: val('address') } : {}), ...(has('email') ? { email: val('email') } : {}) };
-    const ok = await this.store.updateReview(
-      { ...(Object.keys(contact).length ? { contact } : {}), ...(has('funding') ? { funding: val('funding') as FundingSource } : {}) },
-      rows.map((r) => r.key).filter((k) => ['phone', 'address', 'email', 'funding'].includes(k)),
-    );
-    if (ok) this.flagDraft.set({});
-  }
-
-  /** "Başka sunum": pick a new deck and scan again. */
-  protected registerDeckInput(el: HTMLInputElement) {
-    this.deckInput.set(el);
-  }
-
-  protected chooseOtherDeck() {
-    this.deckInput()?.click();
   }
 
   protected submitReview() {
@@ -550,7 +493,7 @@ export class KarsilamaData {
     void this.router.navigateByUrl('/deck/name-rejected');
   }
 
-  /** D-1c opened from D-1d: the title was refused; a new deck is not offered here (see d1c.html). */
+  /** D-1c opened from D-1d: the title was refused. */
   protected readonly titleRefused = computed(() => this.store.stage() === 'titleConflict');
 
   // ------------------------------------------------------------- D-1f title being checked

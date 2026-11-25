@@ -106,8 +106,8 @@ describe('ApplicationStore while the server works (HTTP mode)', () => {
   function serverWork() {
     const work = {
       kind: 'server' as const,
-      current: { stage: 'scanning', changedAt: 't1' } as ApplicationStatus,
-      seenStatus: { stage: 'scanning', changedAt: 't1' } as ApplicationStatus | null,
+      current: { stage: 'evaluating', changedAt: 't1' } as ApplicationStatus,
+      seenStatus: { stage: 'evaluating', changedAt: 't1' } as ApplicationStatus | null,
       next: at('review'),
       statusReads: 0,
       fullReads: 0,
@@ -127,7 +127,7 @@ describe('ApplicationStore while the server works (HTTP mode)', () => {
     return work;
   }
 
-  function setUp(work: ReturnType<typeof serverWork>, stage: Application['stage'] = 'scanning') {
+  function setUp(work: ReturnType<typeof serverWork>, stage: Application['stage'] = 'evaluating') {
     localStorage.clear();
     const api = { demo: null, work, restore: async () => ({ account: ACCOUNT, app: at(stage) }), logout: async () => undefined } as unknown as Api;
     TestBed.configureTestingModule({ providers: [provideRouter([{ path: '**', children: [] }]), { provide: Api, useValue: api }] });
@@ -145,7 +145,7 @@ describe('ApplicationStore while the server works (HTTP mode)', () => {
     await vi.advanceTimersByTimeAsync(6_000);
     expect(work.statusReads).toBe(3);
     expect(work.fullReads).toBe(0);
-    expect(store.stage()).toBe('scanning');
+    expect(store.stage()).toBe('evaluating');
 
     work.current = { stage: 'review', changedAt: 't2' };
     await vi.advanceTimersByTimeAsync(2_000);
@@ -193,15 +193,6 @@ describe('ApplicationStore while the server works (HTTP mode)', () => {
     await vi.advanceTimersByTimeAsync(30_000);
     expect(work.statusReads).toBe(0);
     await store.logout();
-  });
-
-  it('never lets the scan reach 100% on its own', async () => {
-    const work = serverWork();
-    const store = setUp(work);
-    await store.restored;
-    (store as unknown as { app: { set(a: Application): void } }).app.set({ ...at('scanning'), deck: { fileName: 'a.pdf', sizeKb: 1, pages: 0, startedAt: new Date(Date.now() - 3_600_000).toISOString(), fields: [] } });
-    expect(store.scan()!.percent).toBeLessThan(100);
-    expect(store.scan()!.p).toBeLessThanOrEqual(0.95);
   });
 });
 

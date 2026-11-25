@@ -8,7 +8,7 @@
     "thumbs": "/assets/samples/format"
   },
   "rules": [
-    { "title": "Dosya", "text": "Tek dosya yüklenir: PDF veya PowerPoint (.pptx), en fazla 25 MB." },
+    { "title": "Dosya", "text": "Tek dosya yüklenir: PDF, en fazla 25 MB." },
     { "title": "Sayfa sayısı", "text": "16 zorunlu sayfa aşağıdaki sırayla yer alır. Ardından ek sayfalar eklenebilir; toplam en fazla 40 sayfadır." },
     { "title": "Sayfa başlıkları", "text": "Her zorunlu sayfanın başlığı bu formattaki başlıkla aynı olmalıdır. Terminal AI sayfaları başlıklarından tanır." },
     { "title": "Metin olarak yazım", "text": "Okunacak bilgiler görsel içine gömülmeden, seçilebilir metin olarak yazılmalıdır. Taranmış sayfalardaki bilgiler kontrol edilmek üzere işaretlenir." },

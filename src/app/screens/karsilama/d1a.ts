@@ -4,16 +4,19 @@ import { DeckConsents } from '../../shared/deck-consents';
 import { DeckFormatDialog } from '../../shared/deck-format-dialog';
 import { Icon } from '../../shared/icon';
 import { FormError } from '../../shared/form-error';
+import { SearchSelect } from '../../shared/search-select';
+import { Select } from '../../shared/select';
 import { StepPage } from '../../shared/step-page';
 import { KarsilamaData } from '../data/karsilama.data';
 
 /**
- * D-1a — Sunum yükleme. One request (the deck file): the two ticks the upload needs, the upload
- * area, what happens after it, the deck format dialog, and the way back to the profile form.
+ * D-1a — Sunum ve değerlendirme soruları. The deck and the CV (PDF), a short summary, the activity
+ * group and activity, the business, revenue and product choices, and the two ticks; then the outside
+ * evaluation starts. A notice above the form when the last evaluation ended without a result.
  */
 @Component({
   selector: 'app-screen-d1a',
-  imports: [DeckConsents, DeckFormatDialog, FormError, Icon, RouterLink, StepPage],
+  imports: [DeckConsents, DeckFormatDialog, FormError, Icon, RouterLink, SearchSelect, Select, StepPage],
   templateUrl: './d1a.html',
   host: { style: 'display:block' },
   changeDetection: ChangeDetectionStrategy.OnPush,

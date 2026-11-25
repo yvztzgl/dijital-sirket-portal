@@ -1,6 +1,6 @@
 import type { ReviewPatch } from './api';
-import { ApplicationWire, DeckFieldWire, MeWire, ReviewFieldWire, ReviewKey, StageWire, TitleCheckWire } from './api-types';
-import { Account, Application, CAPITAL, CrossCheck, CrossKey, FieldMark, FundingSource, FUNDING_LABELS, LogEntry, Profile, ScanField, Sector, SECTORS, SetupStep, SetupTask, Stage } from './models';
+import { ApplicationWire, EvaluationWire, MeWire, ReviewFieldWire, ReviewKey, StageWire, TitleCheckWire, UploadWire } from './api-types';
+import { Account, Application, CAPITAL, Evaluation, FieldMark, FundingSource, FUNDING_LABELS, LogEntry, Profile, Sector, SECTORS, SetupStep, SetupTask, Stage } from './models';
 import { titleAlternatives, withoutSuffix } from './rules';
 
 /**
@@ -34,7 +34,7 @@ export function toStage(stage: StageWire): Stage {
 }
 
 const SAME_STAGES: string[] = [
-  'profile', 'verified', 'scanning', 'review', 'titleChecking', 'titleConflict', 'eligibility', 'declaration', 'screening', 'manual',
+  'profile', 'verified', 'evaluating', 'evaluationQuestions', 'review', 'titleChecking', 'titleConflict', 'eligibility', 'declaration', 'screening', 'manual',
   'payment', 'threeDs', 'signing', 'calling', 'signed', 'setup', 'done',
 ];
 
@@ -71,7 +71,6 @@ export function toApplication(view: ApplicationWire, account: Account, options: 
   const [root = '', ...activity] = title.split(/\s+/).filter(Boolean);
   const profile = view.profile ? toProfile(view.profile) : undefined;
   const funding = asFunding(review('source_of_funds')) ?? profile?.funding ?? 'own-abroad';
-  const readName = view.deck?.fields.find((f) => f.key === 'trade_name')?.value ?? '';
 
   return {
     // The reference number is what the founder sees and quotes ("DS-…"); the API's uuid is not needed by any screen.
@@ -93,29 +92,22 @@ export function toApplication(view: ApplicationWire, account: Account, options: 
       country: review('residence_country'),
     },
     company: {
-      deckName: readName || tradeName,
+      brand: profile?.brand ?? '',
       root,
       activity: activity.join(' '),
       nace: splitNace(review('nace_codes')),
-      suggestedNace: [],
+      // The codes of the activity area stated on the profile (the portal's table, the same as the API's).
+      suggestedNace: profile ? SECTORS[profile.sector].nace : [],
       // The legal minimum for an anonim şirket, the same constant the mock uses; the API does not send a capital yet.
       capital: CAPITAL,
     },
     funding,
     marks: toMarks(view),
     profile,
-    deck: view.deck
-      ? {
-          fileName: view.deck.fileName ?? '',
-          sizeKb: view.deck.sizeKb,
-          // Not known while the deck is being read; the development reader leaves it null even after.
-          pages: view.deck.pages ?? 0,
-          startedAt: view.deck.uploadedAt,
-          fields: view.deck.fields.map(toScanField),
-          status: view.deck.status,
-        }
-      : undefined,
-    crossCheck: view.crossCheck.map(toCrossCheck),
+    // `?? null`: answers captured before the evaluation existed have no `cv` and no `evaluation`.
+    deck: toUpload(view.deck),
+    cv: toUpload(view.cv ?? null),
+    evaluation: toEvaluation(view.evaluation ?? null),
     titleCheck: toTitleCheck(view.titleCheck),
     eligibility: toEligibility(view),
     payment: toPayment(view.payment, options.card),
@@ -137,6 +129,19 @@ export function toApplication(view: ApplicationWire, account: Account, options: 
     docs: view.documents.map((d) => ({ ...(DOC_NAMES[d.type] ?? { group: 'Diğer belgeler', name: d.type }), sizeKb: d.sizeKb, at: d.at })),
     logs: view.logs.map(toLog),
   };
+}
+
+function toUpload(u: UploadWire | null): Application['deck'] {
+  return u ? { fileName: u.fileName ?? '', sizeKb: u.sizeKb } : undefined;
+}
+
+const EVALUATION_STATUSES: Evaluation['status'][] = ['queued', 'running', 'questions', 'done', 'failed', 'rejected', 'cancelled'];
+
+/** The outside evaluation as the API reports it; an unknown status is an error, like an unknown stage. */
+function toEvaluation(e: EvaluationWire | null): Application['evaluation'] {
+  if (!e) return undefined;
+  if (!EVALUATION_STATUSES.includes(e.status)) throw new Error(`Unknown evaluation status from the API: ${e.status}`);
+  return { status: e.status, attempt: e.attempt, maxAttempts: e.maxAttempts, startedAt: e.startedAt, finishedAt: e.finishedAt };
 }
 
 /**
@@ -321,6 +326,7 @@ function toEligibility(view: ApplicationWire): Application['eligibility'] {
  */
 const DOC_NAMES: Record<string, { group: string; name: string }> = {
   deck: { group: '1 · Başvuru & Uygunluk', name: 'Sunum' },
+  cv: { group: '1 · Başvuru & Uygunluk', name: 'Özgeçmiş' },
   address_proof: { group: '1 · Başvuru & Uygunluk', name: 'Adres belgesi' },
   passport_page: { group: '1 · Başvuru & Uygunluk', name: 'Pasaport sayfası' },
   makbuz: { group: '2 · Ödeme', name: 'Ödeme makbuzu' },
@@ -346,31 +352,6 @@ function toProfile(p: NonNullable<ApplicationWire['profile']>): Profile {
 function asFunding(value: string): FundingSource | undefined {
   return value in FUNDING_LABELS ? (value as FundingSource) : undefined;
 }
-
-/** A funding key read from the deck ("own-abroad") as the founder reads it; any other text as it is. */
-const fundingText = (value: string) => FUNDING_LABELS[asFunding(value) as FundingSource] ?? value;
-
-/**
- * A field the deck reader found, under the key the portal's scan and review screens use (the mock's
- * keys: `title`, `nace`, …), so D-1b lists it and D-1c finds its page for a difference.
- */
-function toScanField(f: DeckFieldWire): ScanField {
-  const key = DECK_FIELD_KEYS[f.key as ReviewKey] ?? f.key;
-  return { key, label: f.label, value: f.key === 'source_of_funds' ? fundingText(f.value) : f.value, page: f.page };
-}
-
-const DECK_FIELD_KEYS: Partial<Record<ReviewKey, string>> = {
-  trade_name: 'title',
-  nace_codes: 'nace',
-  shareholding: 'share',
-  given_name: 'name',
-  family_name: 'name',
-  nationality: 'nationality',
-  email: 'email',
-  phone: 'phone',
-  residence_address: 'address',
-  source_of_funds: 'funding',
-};
 
 /**
  * The review screen's changes → the API's review fields (`PATCH /api/application/review`), only
@@ -448,19 +429,18 @@ export function splitNace(value: string): string[] {
 }
 
 /**
- * The review's marks, under the portal's field names. The API says `ai` (as read), `edited` (read,
- * then changed) or `entered` (typed with nothing read); the portal shows both of the latter as
- * edited. A field read with less than `high` confidence is marked for checking, as the mock marks
- * uncertain readings.
+ * The review's marks, under the portal's field names. The API says `profile` (a default taken from
+ * the profile or the account, untouched), `edited` or `entered`; the portal shows the last two alike.
+ * Several API fields share one portal row (given name, family name and nationality are "name"): an
+ * edit wins.
  */
 function toMarks(view: ApplicationWire): Record<string, FieldMark> {
-  const confidence = new Map(view.deck?.fields.map((f) => [f.key, f.confidence]) ?? []);
   const marks: Record<string, FieldMark> = {};
   for (const [key, field] of Object.entries(view.review) as [ReviewKey, ReviewFieldWire][]) {
     const name = MARK_NAMES[key];
-    if (!name) continue;
-    const mark: FieldMark = field.mark !== 'ai' ? 'edited' : confidence.get(key) && confidence.get(key) !== 'high' ? 'check' : 'ai';
-    // Several API fields share one portal row (given name, family name and nationality are "name"): an edit wins.
+    // An empty value has no mark to show (the title and the NACE codes arrive empty after the evaluation).
+    if (!name || !field.value.trim()) continue;
+    const mark: FieldMark = field.mark === 'profile' ? 'profile' : 'edited';
     if (marks[name] !== 'edited') marks[name] = mark;
   }
   return marks;
@@ -480,19 +460,6 @@ const MARK_NAMES: Partial<Record<ReviewKey, string>> = {
   postal_code: 'address',
   source_of_funds: 'funding',
 };
-
-const CROSS_KEYS: CrossKey[] = ['brand', 'sector', 'funding', 'nationality', 'phone', 'country'];
-
-/**
- * One comparison of the profile with the deck. The API states the funding as its label but reads it
- * from the deck as a key ("own-abroad"); the key is shown as its label too, so both sides read alike.
- */
-function toCrossCheck(c: ApplicationWire['crossCheck'][number]): CrossCheck {
-  if (!CROSS_KEYS.includes(c.key as CrossKey)) throw new Error(`Unknown cross-check key from the API: ${c.key}`);
-  const choice = c.choice === 'stated' || c.choice === 'read' || c.choice === 'edited' ? c.choice : null;
-  const read = c.key === 'funding' ? fundingText(c.read) : c.read;
-  return { key: c.key as CrossKey, label: c.label, stated: c.stated, read, match: c.match, choice, at: c.at };
-}
 
 /**
  * The trade-name check. The API's candidate carries the type suffix ("… A.Ş."); the portal keeps

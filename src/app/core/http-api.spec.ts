@@ -7,7 +7,7 @@ import { HttpApi, markApiWrites } from './http-api';
 import { callStartedAt } from './api-mapper';
 import { ApplicationWire, MeWire } from './api-types';
 import { Application } from './models';
-import { CAPTURED, IDENTITY_FAILED, ME, NEW_APPLICATION, NO_VALID_SIGNATURE } from './testing/api-fixtures';
+import { CAPTURED, HAND, IDENTITY_FAILED, ME, NEW_APPLICATION, NO_VALID_SIGNATURE } from './testing/api-fixtures';
 
 describe('HttpApi', () => {
   let api: HttpApi;
@@ -359,50 +359,60 @@ describe('HttpApi step 1', () => {
     expect((await pending).stage).toBe('verified');
   });
 
-  it('uploads the deck as multipart with the file and the ticks as given, without setting the Content-Type itself', async () => {
+  it('uploads the deck, the CV and the answers as multipart, multiple choices as repeated fields, without setting the Content-Type itself', async () => {
     await signedInAt(CAPTURED.verified);
-    const file = new File(['%PDF-1.4'], 'Lumora Sunum.pdf', { type: 'application/pdf' });
-    const pending = api.uploadDeck(file, { noticeAcknowledged: true, aiConsent: false });
+    const deck = new File(['%PDF-1.4'], 'Lumora Sunum.pdf', { type: 'application/pdf' });
+    const cv = new File(['%PDF-1.4'], 'Ozgecmis.pdf', { type: 'application/pdf' });
+    const answers = { summary: 'Özet', activityGroupId: 1, activityId: 3, businessModelIds: [1, 2], revenueModelIds: [7], productTypeIds: [2, 3] };
+    const pending = api.uploadDeck({ deck, cv }, answers, { noticeAcknowledged: true, aiConsent: false });
     const post = await next('POST', '/api/application/deck');
     const body = post.request.body as FormData;
     expect(body).toBeInstanceOf(FormData);
     expect((body.get('file') as File).name).toBe('Lumora Sunum.pdf');
+    expect((body.get('cv') as File).name).toBe('Ozgecmis.pdf');
+    expect(body.get('summary')).toBe('Özet');
+    expect(body.get('activityGroupId')).toBe('1');
+    expect(body.get('activityId')).toBe('3');
+    expect(body.getAll('businessModelIds')).toEqual(['1', '2']);
+    expect(body.getAll('revenueModelIds')).toEqual(['7']);
+    expect(body.getAll('productTypeIds')).toEqual(['2', '3']);
     expect(body.get('noticeAcknowledged')).toBe('true');
     expect(body.get('aiConsent')).toBe('false');
     expect(post.request.headers.has('Content-Type')).toBe(false);
     expect(post.request.headers.get('X-DSP-Request')).toBe('1');
     post.flush(...empty(202));
-    await read(CAPTURED.scanning);
-    expect((await pending).deck!.status).toBe('reading');
+    await read(HAND.evaluating);
+    expect((await pending).stage).toBe('evaluating');
   });
 
-  it('decides a difference by its key', async () => {
-    await signedInAt(CAPTURED.reviewOpen);
-    const pending = api.resolveCrossCheck('phone', 'read');
-    const post = await next('POST', '/api/application/cross-checks/phone');
-    expect(post.request.body).toEqual({ choice: 'read' });
-    post.flush(...empty(204));
-    await read(CAPTURED.reviewDecided);
-    await pending;
+  it('passes on a refused upload with its fields', async () => {
+    await signedInAt(CAPTURED.verified);
+    const f = new File(['x'], 'a.pdf');
+    const refused = api.uploadDeck({ deck: f, cv: f }, { summary: '', activityGroupId: null, activityId: null, businessModelIds: [], revenueModelIds: [], productTypeIds: [] }, { noticeAcknowledged: true, aiConsent: true }).catch((e: unknown) => e);
+    (await next('POST', '/api/application/deck')).flush(
+      { title: 'Gönderdiğiniz bilgiler eksik veya hatalıdır.', status: 400, code: 'validation_failed', requestId: 'r', errors: { summary: ['Özet en az 50 karakter olmalıdır.'], cv: ['Özgeçmiş PDF biçiminde olmalıdır.'] } },
+      { status: 400, statusText: 'x' },
+    );
+    expect(((await refused) as ApiError).fields).toEqual({ summary: ['Özet en az 50 karakter olmalıdır.'], cv: ['Özgeçmiş PDF biçiminde olmalıdır.'] });
   });
 
   it('sends only the review fields that changed, and nothing when none did', async () => {
-    await signedInAt(CAPTURED.reviewOpen);
-    let pending = api.updateReview({ contact: { email: 'kurucu@example.test', phone: '+49 151 2345 6789', address: 'Torstraße 45, 10119 Berlin', postalCode: '10119', country: 'Almanya' } }, ['address']);
+    await signedInAt(HAND.reviewDefaults);
+    let pending = api.updateReview({ contact: { email: 'kurucu@example.test', phone: '+49 151 2345 6700', address: 'Torstraße 45, Berlin', postalCode: '10119', country: 'Almanya' } }, ['address']);
     const patch = await next('PATCH', '/api/application/review');
-    expect(patch.request.body).toEqual({ fields: { postal_code: '10119', residence_country: 'Almanya' } });
+    expect(patch.request.body).toEqual({ fields: { residence_address: 'Torstraße 45, Berlin', postal_code: '10119' } });
     patch.flush(...empty(204));
-    await read(CAPTURED.reviewDecided);
+    await read(HAND.reviewEdited);
     await pending;
 
-    pending = api.updateReview({ founder: { firstName: 'Deneme', lastName: 'Kurucu-Test', nationality: 'Almanya' } }, ['name']);
-    await read(CAPTURED.reviewDecided);
+    pending = api.updateReview({ founder: { firstName: 'Deneme', lastName: 'Kurucu-Berg', nationality: 'Almanya' } }, ['name']);
+    await read(HAND.reviewEdited);
     await pending;
     backend.expectNone('/api/application/review');
   });
 
   it('submits the review and passes on a refusal with its fields', async () => {
-    await signedInAt(CAPTURED.reviewDecided);
+    await signedInAt(HAND.reviewEdited);
     const refused = api.submitReview().catch((e: unknown) => e);
     (await next('POST', '/api/application/review/submit')).flush(
       { title: 'Eksik bilgileri tamamlayınız.', status: 400, code: 'validation_failed', requestId: 'r', errors: { given_name: ['Ad eksik.'], nationality: ['Uyruk eksik.'] } },
@@ -451,6 +461,14 @@ describe('HttpApi step 1', () => {
     const again = api.reference();
     (await next('GET', '/api/reference/wizard')).flush(CAPTURED.reference);
     expect((await again).naceCodes).toHaveLength(10);
+  });
+
+  it('reads the evaluation reference once per session', async () => {
+    const first = api.evaluationReference();
+    const second = api.evaluationReference();
+    (await next('GET', '/api/reference/evaluation')).flush(HAND.referenceEvaluation);
+    expect((await first).activities).toHaveLength(216);
+    expect(await second).toBe(await first);
   });
 });
 

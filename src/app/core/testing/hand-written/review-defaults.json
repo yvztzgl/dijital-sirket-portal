@@ -1,0 +1,144 @@
+{
+  "id": "01a2122c-144f-7242-8b31-e0bc12d7992a",
+  "referenceNo": "DS-26-76430541",
+  "stage": "review",
+  "status": "draft",
+  "founderType": "foreign",
+  "createdAt": "2026-11-25T10:06:48.399851+00:00",
+  "profile": {
+    "brand": "Lumora",
+    "sector": "software",
+    "funding": "own-abroad",
+    "nationality": "Almanya",
+    "phone": "+49 151 2345 6700",
+    "country": "Almanya",
+    "at": "2026-11-25T10:06:48.475671+00:00"
+  },
+  "deck": {
+    "fileName": "Lumora Sunum.pdf",
+    "sizeKb": 812
+  },
+  "cv": {
+    "fileName": "Ozgecmis.pdf",
+    "sizeKb": 164
+  },
+  "evaluation": {
+    "status": "done",
+    "attempt": 1,
+    "maxAttempts": 3,
+    "startedAt": "2026-11-25T10:08:02.112000+00:00",
+    "finishedAt": "2026-11-25T10:12:31.900000+00:00"
+  },
+  "review": {
+    "trade_name": {
+      "label": "Şirket unvanı",
+      "value": "",
+      "mark": "profile"
+    },
+    "nace_codes": {
+      "label": "NACE kodları",
+      "value": "",
+      "mark": "profile"
+    },
+    "given_name": {
+      "label": "Ad",
+      "value": "Deneme",
+      "mark": "profile"
+    },
+    "family_name": {
+      "label": "Soyad",
+      "value": "Kurucu",
+      "mark": "profile"
+    },
+    "nationality": {
+      "label": "Uyruk",
+      "value": "Almanya",
+      "mark": "profile"
+    },
+    "email": {
+      "label": "E-posta",
+      "value": "kurucu@example.test",
+      "mark": "profile"
+    },
+    "phone": {
+      "label": "Telefon",
+      "value": "+49 151 2345 6700",
+      "mark": "profile"
+    },
+    "residence_country": {
+      "label": "Ülke",
+      "value": "Almanya",
+      "mark": "profile"
+    },
+    "source_of_funds": {
+      "label": "Sermaye kaynağı",
+      "value": "own-abroad",
+      "mark": "profile"
+    }
+  },
+  "titleCheck": null,
+  "eligibility": null,
+  "payment": {
+    "amountMinor": 1275000,
+    "fees": [
+      {
+        "code": "tescil_ilan_harci",
+        "label": "Ticaret sicili tescil ve ilan harçları",
+        "amountMinor": 485000
+      },
+      {
+        "code": "noter_eimza",
+        "label": "Noter onayı ve e-İmza (ESHS)",
+        "amountMinor": 240000
+      },
+      {
+        "code": "sanal_ofis_yil1",
+        "label": "Sanal ofis · ilk yıl",
+        "amountMinor": 360000
+      },
+      {
+        "code": "platform",
+        "label": "Platform hizmet bedeli",
+        "amountMinor": 190000
+      }
+    ],
+    "status": null,
+    "last4": null,
+    "paidAt": null
+  },
+  "signature": null,
+  "callConsentAt": null,
+  "setup": null,
+  "results": null,
+  "documents": [
+    {
+      "id": "01a2122c-0000-7000-8000-00000000d001",
+      "type": "deck",
+      "sizeKb": 812,
+      "at": "2026-11-25T10:08:02.112000+00:00"
+    },
+    {
+      "id": "01a2122c-0000-7000-8000-00000000c001",
+      "type": "cv",
+      "sizeKb": 164,
+      "at": "2026-11-25T10:08:02.112000+00:00"
+    }
+  ],
+  "logs": [
+    {
+      "at": "2026-11-25T10:06:48.405029+00:00",
+      "text": "Başvuru oluşturuldu",
+      "who": "s"
+    },
+    {
+      "at": "2026-11-25T10:06:48.476878+00:00",
+      "text": "Ön bilgiler kaydedildi",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T10:08:02.112000+00:00",
+      "text": "Sunum ve özgeçmiş yüklendi",
+      "who": "u"
+    }
+  ]
+}

@@ -2,11 +2,11 @@
   @let p = profileDraft();
   <div class="wz-head">
     <h1 class="wz-h1">Şirketiniz hakkında ön bilgi veriniz</h1>
-    <p class="wz-lead">Sunumunuzu yüklemeden önce temel bilgileri giriniz. Sunumunuz okunduktan sonra bu bilgilerle karşılaştırılır.</p>
+    <p class="wz-lead">Sunumunuzu yüklemeden önce temel bilgileri giriniz. Bu bilgiler daha sonra şirket formunuza varsayılan değer olarak aktarılır.</p>
   </div>
 
   <form class="wz-card wz-profile" (submit)="$event.preventDefault(); submitProfile()">
-    <p class="why"><app-icon name="list-checks" size="16px" [stroke]="2" />Sunumdan okunan bilgiler bu bilgilerle uyuşmazsa, inceleme ekranında hangisinin doğru olduğunu siz seçersiniz.</p>
+    <p class="why"><app-icon name="list-checks" size="16px" [stroke]="2" />Sunumunuzun değerlendirilmesinin ardından şirket formunu doldururken bu bilgileri düzeltebilirsiniz.</p>
 
     <section aria-labelledby="pf-co">
       <h2 id="pf-co" class="wz-card-h">Şirket bilgileri</h2>
