@@ -35,9 +35,10 @@
 
     @if (editor() === 'title') {
       <div class="ed">
+        <!-- Saved on change only: Enter fires change too, and a second handler sent the same PATCH twice (409 against the API). -->
         <label class="wz-field" for="rv-title">Şirket unvanı</label>
         <div class="title">
-          <input id="rv-title" class="wz-input" [value]="store.title()" (change)="setTitle($any($event.target).value)" (keydown.enter)="setTitle($any($event.target).value)" autocomplete="off">
+          <input id="rv-title" class="wz-input" [value]="store.title()" (change)="setTitle($any($event.target).value)" autocomplete="off">
           <span class="suffix">Anonim Şirketi</span>
         </div>
         <small>@if (brand().name) {Ön bilgilerinizdeki marka adı: “{{ brand().name }}”. }Tür eki kendiliğinden eklenir; “A.Ş.” yazmayınız.</small>

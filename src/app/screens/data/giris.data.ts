@@ -163,7 +163,7 @@ export class GirisData {
       toggleRemember: () => set({ remember: !u.remember }),
       trust: ['Başvurunuz her adımda otomatik kaydedilir', 'Bağlantınız 256-bit SSL ile şifrelenir', 'Verileriniz KVKK kapsamında işlenir'],
       steps: [
-        { n: 1, t: 'Sunum', d: 'AI bilgilerinizi okur' },
+        { n: 1, t: 'Sunum', d: 'Sunum ve özgeçmiş değerlendirilir' },
         { n: 2, t: 'Uygunluk', d: 'Kimlik ve AML kontrolü' },
         { n: 3, t: 'Ödeme', d: 'Tüm harçlar tek seferde' },
         { n: 4, t: 'e-İmza', d: 'Kısa görüntülü görüşme' },
