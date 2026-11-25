@@ -21,8 +21,9 @@ screens ─► ApplicationStore ─► Api (abstract class, used as the injectio
 | `src/app/core/api-types.ts` | The API's JSON as it arrives (`MeWire`, `ApplicationWire`, …), written from the API's `Models/` records. |
 | `src/app/core/api-mapper.ts` | `toAccount(me)`, `toApplication(view, account)`, `toStage`: wire → portal model. Pure functions. |
 | `src/app/core/testing/api-fixtures.ts` | Literal API answers the specs use: hand-written ones, and `CAPTURED` (below). |
-| `src/app/core/testing/captured/*.json` | `GET /api/application` as the running API answered it at each stage of steps 1 and 2, plus the status read, the reference data, the phone routes and the closed application's 404 (2026-11-25). Made-up founders, e-mail addresses and the phone token replaced. |
-| `tools/api-capture/capture.sh` | Re-captures those files against a running stack (`capture.sh [step1\|step2\|all]`; needs `../dijital-sirket-api/dev/staff.sh` for the title and review steps). |
+| `src/app/core/testing/captured/*.json` | `GET /api/application` as the running API answered it at each stage of steps 1 to 3, plus the status read, the reference data, the phone routes, the closed application's 404 and the refusals of step 3 (2026-11-25). Made-up founders, e-mail addresses and the phone token replaced; the card is only ever a development token. |
+| `tools/api-capture/capture.sh` | Re-captures those files against a running stack (`capture.sh [step1\|step2\|step3\|all]`; needs `../dijital-sirket-api/dev/staff.sh` for the title and review steps and `dev/last-code.sh` for the second factor). |
+| `src/app/shell/step-up-dialog.ts` | `StepUpDialog`: the second-factor dialog, rendered once by the app shell; its state and logic are in `ApplicationStore` (below). |
 | `src/app/core/status-poller.ts` | `StatusPoller` and `pollDelay`: the pacing of the status poll in HTTP mode. |
 | `src/app/core/rules.ts` | Pure checks the screens use (card, T.C. kimlik no, password strength, address document size, deck size and type, funding options, title suffix and title suggestions). Not part of either implementation. |
 | `src/environments/environment.ts` | Default (mock) mode: names `MockApi`, no extra providers. |
@@ -95,8 +96,8 @@ Inbox toasts belong to the mock, and nothing in HTTP mode sends to the Inbox).
 **Connected:** `submitProfile`, `uploadDeck`, `resolveCrossCheck`, `updateReview`, `submitReview`,
 `chooseTitle`, `reference`, and the background-work capability `work` (polling). Every write answers
 with an empty body (204/202); `HttpApi` then reads the application again (`fresh()`: the status read,
-then `GET /api/application`, mapped). Step 2 came in piece 6 (below); step 3 on still rejects with
-`not_connected`.
+then `GET /api/application`, mapped). Step 2 came in piece 6 and step 3 with the second factor in
+piece 7 (below); step 4 on still rejects with `not_connected`.
 
 ### Requests of step 1
 
@@ -307,7 +308,7 @@ Left neutral, not invented:
 | `titleCheck.conflictWith` | absent | The API sends a `reason`, not the clashing title. |
 | `company.root` / `activity` | first word / the rest of the title | The API keeps one string; joined again nothing is lost. |
 | `eligibility` | mapped since piece 6 (see "Step 2 over HTTP") | no score; times from the timeline |
-| `payment.holder` | `''` | Not in the view. |
+| `payment.holder`, `payment.last4` | what this page typed for this application (`HttpApi` memory), else `''` | Not in the view (`last4` is always null); see "Step 3 over HTTP" |
 | `signature.method` | `existing` / `edevlet` kept, anything else `eshs` | The API's certificate kinds were not seen yet. |
 | `setup`, `results`, `call` | absent | Different shapes; the next pieces. |
 | `phoneLink` | only in `HttpApi`'s memory while the QR code is shown | the API gives the token once, in the answer to `POST /phone-link` |
@@ -479,6 +480,120 @@ nothing and changes nothing on the server.
 | D-2c | "İnceleme kaydıyla devam et", "Sunum bilgilerini düzelt" | hidden | API refuses both; open decision 12 |
 | closed | "Çıkış yap" | sign-out | |
 
+## The second factor ("step-up") (since 2026-11-25, piece 7)
+
+**What triggers it.** The API refuses four actions with **403 `step_up_required`** ("Bu işlem için
+e-posta adresinize gönderilen kodu girmeniz gerekir.") unless this session passed an e-mailed code in
+the last 15 minutes: `POST /api/application/payment`, `POST /api/application/esign/call/start`,
+`POST /api/application/esign/resident` and `POST /api/application/setup`. Today only the payment is
+connected; the others go through the same mechanism when the next pieces connect them.
+
+```
+Send code    POST /api/auth/step-up                   202 (no body); nothing is sent within 60 s of the last code
+                                                       409 no_email (account without an e-mail address)
+Check code   POST /api/auth/step-up/verify {code}      204; wrong: 400 validation_failed, errors.code
+                                                       "Kod hatalı veya süresi dolmuş."
+Both are rate limited with sign-in (20 a minute per address → 429, shown as toApiError words it).
+```
+
+**One mechanism, in the store.** `ApplicationStore.run()` (which every action goes through) calls
+`withSecondFactor(fn)`:
+
+1. run `fn`; if it is refused with `step_up_required`:
+2. open the dialog (`stepUp` signal; `StepUpDialog` in the app shell shows it) and send one code
+   (`sendStepUpCode`);
+3. the founder types six digits → `verifyStepUpCode(code)`. A wrong code shows the server's sentence in
+   the dialog and empties the boxes; the dialog stays open;
+4. on 204 the dialog closes and **`fn` runs once more, by itself**;
+5. a second refusal of any kind (`step_up_required` included) is shown like any refusal: **never a loop**;
+6. "Vazgeç", Esc, a click outside or a page change close the dialog: the action ends with
+   "İşlem yapılmadı. Devam etmek için e-posta adresinize gönderilen kodu girmeniz gerekir." and nothing
+   else is sent.
+
+- "Kodu yeniden gönder" is offered only 60 s after the last code (the dialog counts down), because the
+  server silently ignores an earlier one. `no_email` and 429 are shown as worded.
+- Two actions refused at once share one dialog and one code. A 401 at any point signs out and closes it.
+- While the dialog is open the store is `busy` (the page's button keeps its spinner).
+- No code is ever shown, prefilled or hinted in HTTP mode.
+- **The mock does not demand a second factor** (which actions need one is still the owner's decision,
+  and the mock is what the product is presented with). `MockApi.sendStepUpCode` / `verifyStepUpCode`
+  exist only so the dialog can be shown from `/screens` ("Pencereler" → "İkinci doğrulama",
+  `ApplicationStore.previewStepUp`); its code arrives as an Inbox e-mail like the mock's other codes.
+- The dialog is a fixed overlay (like `EdevletDialog`, z-index 900), not a modal `<dialog>`: the top
+  layer would cover the mock's Inbox toasts (z-index 950), where the demo code appears.
+- Tested in `application.store.spec.ts` with fake timers: refused → dialog → verified → retried exactly
+  once; cancel; wrong code; a second refusal after the retry; the 60 s resend; `no_email` and 429; two
+  actions at once; a 401.
+
+## Step 3 over HTTP (since 2026-11-25, piece 7)
+
+**Connected:** `pay`, `confirm3ds`, `resendOtp`, `cancel3ds`, each followed by a fresh read.
+
+```
+Pay (D-3a)        POST /api/application/payment {holder, cardToken}     204, stage threeDs (payment.status "3ds_pending")
+                  403 step_up_required (→ the dialog above, then repeated); 400 holder / cardToken;
+                  409 payment_open, wrong_stage (both re-read the application); 422 card_declined
+                  "Kartınızdan ödeme alınamadı. Lütfen başka bir kart deneyiniz."
+3-D Secure (D-3b) POST /api/application/payment/3ds {code}               204, stage signing (payment.status "captured")
+                  wrong code: 422 with the provider's code (development: 3ds_failed, "Doğrulama kodu hatalı.");
+                  the payment stays open
+Resend            POST /api/application/payment/3ds/resend               204
+Cancel            POST /api/application/payment/3ds/cancel               204, back to payment (payment.status "failed")
+                  409 no_open_payment for the three above (re-reads the application)
+```
+
+### Card data never leaves the browser
+
+- The portal's card form and its checks (Luhn, expiry, CVV: `validateCard` in rules.ts) stay as they were.
+- `HttpApi.pay` sends **exactly `{ holder, cardToken }`**. The token is a **development stand-in**:
+  `tok_test_` + the last four digits typed, which is what the API's development payment provider
+  (`FakePaymentProvider`) accepts (`tok_test_0002` is declined; the 3-D Secure code is always `123456`).
+  **With a real payment provider the card fields must be the provider's own hosted fields** (its iframe
+  or page), the card goes from the browser to the provider, and the provider hands the portal the
+  token. The portal's own card form must not be used with a real provider (comment at that line in
+  `http-api.ts`). This keeps the platform out of PCI DSS card-data scope (API step 06).
+- The number, expiry and CVV appear in no request, not in `Application`, in no store signal, not in
+  storage and not in logs. The card object lives only in the call to `store.pay` (and in its one
+  repeat after the second-factor dialog) and in D-3a's own form while that screen is open.
+  `http-api.spec.ts` asserts the body is exactly `{ holder, cardToken }` and that neither the request
+  nor the mapped application nor `HttpApi`'s memory contains the number, expiry or CVV; nothing is
+  written to storage. Checked in the browser too (below).
+- The API returns no last four digits (`payment.last4` is always null). `HttpApi` keeps the holder and
+  the last four digits (only) in memory for the application they were typed for, so D-3b shows
+  "**** **** **** 4242"; after a reload, or a new sign-in, D-3b shows no card row.
+
+### Mapper (`toPayment`)
+
+| API `payment.status` | API stage | Portal `payment` | Screen |
+| --- | --- | --- | --- |
+| null | `payment` | absent | D-2b once (result screen), then D-3a |
+| `3ds_pending` | `threeDs` | `{holder, last4, amount}` (holder/last4 from memory or `''`) | D-3b |
+| `failed` (3-D Secure cancelled) | `payment` | absent | D-3a (the result screen does not come back) |
+| `captured` | `signing` | `{…, paidAt}` | e-signature |
+
+Amounts are kuruş on the wire, TL in the portal (`amountMinor / 100`). `Application.fees` is the API's
+`payment.fees`. The result screen (D-2b) shows only while `payment.status` is null, so once a payment
+was started, even a cancelled one, a reload goes to D-3a. Checked against `payment-*.json` captured on
+2026-11-25 (`api-mapper.spec.ts`, "step 3").
+
+### What the payment screens show in each mode
+
+| Screen | Element | Mock | HTTP | Why |
+| --- | --- | --- | --- | --- |
+| D-3a | Fee lines and total, the pay button's amount | `FEES` | the API's `payment.fees` (the payment's own amount once started) | the API charges its own fee schedule |
+| D-3a | "Test kartını doldur" | as before | "Test kartını doldur (yalnızca formu doldurur)" | it only fills the form; the development provider then gets `tok_test_4242` |
+| D-3b | Amount | the payment's | the payment's (from the API) | |
+| D-3b | "Kart **** 4242" | always | only while this page remembers the last digits | the API never returns them |
+| D-3b | "Tarih" | the mock's code time | hidden | the API gives no time for the 3-D Secure step |
+| D-3b | "+44 ••• ••• 0123 numarasına gönderilen…" | as before | "Bankanızın gönderdiği 6 haneli doğrulama kodunu giriniz" | the bank sends the code; the portal does not know where |
+| D-3b | "Kalan süre 02:58" countdown | as before | hidden | the API gives no expiry |
+| D-3b | SMS mirror (KARTBANK) | as before | hidden | there is no code to show; it comes from the bank |
+| D-3b | "Kodu tekrar gönder" | as before | connected; "Yeni kod istendi." after it | otherwise nothing on screen changes |
+| D-3b | Onayla / İptal | as before | connected; the provider's refusal shown as worded | |
+
+The 3-D Secure panel itself ("KART BANKANIZ") is still the portal's own lookalike in both modes. With a
+real provider the 3-D Secure step is the provider's (or the bank's) own page or frame.
+
 ## Flow: the mock walks the API's path up to the review (since 2026-11-25)
 
 Piece 2 made the portal's step 1 follow the API's flow, still on the mock, so that both modes walk
@@ -517,8 +632,13 @@ in piece 3.)
 
 ## Known gaps for later pieces
 
-- Step 3 onward: payment, call and setup are still `not_connected` in HTTP mode; when connected, their
-  waiting stages join `SERVER_WAITING_STAGES`.
+- Step 4 onward: call and setup are still `not_connected` in HTTP mode; when connected, their waiting
+  stages join `SERVER_WAITING_STAGES`, and their refusals for want of a second factor already go through
+  the dialog.
+- Payment: the card form is the portal's own and the token a development stand-in (see "Card data never
+  leaves the browser"); a real provider's hosted fields and its 3-D Secure page are not built.
+- The landing page (`/`, before sign-in) still lists the portal's `FEES`; the API's fee list is read
+  only for a signed-in founder.
 - Step 2: the camera is simulated in both modes (no identity vendor). A failed identity check and the
   second failure were not walked (the development provider always passes); they are covered by mapper
   and store tests on hand-built fixtures (`IDENTITY_FAILED`, `IDENTITY_FAILED_TWICE`).
