@@ -13,15 +13,17 @@ The whole flow runs on real application state, with no backend yet:
   simulated delays). Screens only talk to `ApplicationStore` (`src/app/core/application.store.ts`),
   which talks to `Api`; `ng serve --configuration http` uses the HTTP client of the real API instead
   (see [docs/api-client.md](docs/api-client.md)). The demo tools below exist only in the default (mock) mode.
-- What the founder enters at registration and review flows through every later screen. The pitch
-  deck "AI reading" fills company fields from a sample profile.
-- Long-running steps (AI scan, AML checks, e-signature call, company setup) are time-based and
-  survive reloads; `src/app/core/timeline.ts` defines them.
+- What the founder enters at registration, on the profile and on the company form flows through every
+  later screen. The deck, a CV and five answers go to an outside evaluation (simulated in the mock);
+  afterwards the founder fills the company form with defaults from the profile and the account.
+- Long-running steps (the deck evaluation, AML checks, e-signature call, company setup) are time-based
+  and survive reloads; `src/app/core/timeline.ts` defines them.
 - Verification codes (e-mail, 3-D Secure SMS) appear as on-screen toasts. Test card: `4242 4242 4242 4242`.
   Demo T.C. kimlik no: `10000000146`.
 - Natural variants: a title like "Acme Bulut Bilişim" clashes in MERSİS, funding source
   "Üçüncü taraf transferi" triggers manual review, registering as "T.C. vatandaşı" uses e-Devlet.
-- The **Demo** button (bottom-left) sets simulation speed, forces scenarios, jumps to any screen with a
+- The **Demo** button (bottom-left) sets simulation speed, how the deck evaluation ends (done, more
+  information needed, failed, rejected; a PDF outside 3–40 pages is always rejected), forces scenarios, jumps to any screen with a
   seeded demo founder, and resets all data.
 
 This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.1.3.

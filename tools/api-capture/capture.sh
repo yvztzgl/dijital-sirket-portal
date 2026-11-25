@@ -10,8 +10,11 @@
 #   tools/api-capture/capture.sh step45   steps 4 and 5 only (two founders; the other files are left as they are)
 #
 # Step 1, one founder:
-#   profile → verified → scanning → review (difference open) → review (decided, fields filled)
+#   profile → verified → evaluating (deck, CV and answers sent; the outside evaluation runs, minutes)
+#   → review (defaults from the profile and the account) → review (title, codes, address typed)
 #   → titleChecking → titleConflict → titleChecking (new title) → the stage after a reserved title
+#   The evaluation's other ends (questions, failed, rejected) cannot be caused from here; their
+#   answers stay hand-written (src/app/core/testing/hand-written/).
 #
 # Step 2 (each founder first walks step 1 to a reserved title, saving nothing of it):
 #   A  foreign, own funds: the identity check handed to the phone (phone link, the phone routes with
@@ -48,10 +51,10 @@
 # run stops if the number is found in a file it wrote). Each run leaves its accounts and applications behind in
 # the development database.
 #
-# The deck is a "PDF" whose bytes are UTF-8 text: it starts with the PDF signature (the API's file
-# check) and then has "key: value" lines, which the development deck reader (FakeDeckReader) takes as
-# the fields it read. In step 1 its phone differs from the profile's, so the review has an open
-# difference. The address document is a minimal real one-page PDF.
+# The deck is a minimal real PDF of three pages (the evaluation takes 3 to 40), the CV and the
+# address document minimal real one-page PDFs. Step 1's evaluating, reference-evaluation,
+# review-defaults and review-edited files take the place of the hand-written ones of the same names
+# in src/app/core/testing/hand-written/ (move them there, or point api-fixtures.ts here).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 PORTAL=$(pwd)
@@ -149,34 +152,44 @@ new_founder() {
   call 204 "POST /api/application" -X POST -H 'X-DSP-Request: 1' "$API/api/application"
 }
 
-# step_one <funding> <with_difference>: profile, deck, review, title reserved. Saves only when DEST is captured/.
+# pdf <file> <pages>: a minimal valid PDF with that many empty pages.
+pdf() {
+  local kids="" i
+  for i in $(seq 1 "$2"); do kids="$kids $((i + 2)) 0 R"; done
+  { printf '%s\n' '%PDF-1.4' '1 0 obj <</Type/Catalog/Pages 2 0 R>> endobj' "2 0 obj <</Type/Pages/Kids[$kids]/Count $2>> endobj"
+    for i in $(seq 1 "$2"); do printf '%s\n' "$((i + 2)) 0 obj <</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>> endobj"; done
+    printf '%s\n' 'trailer <</Root 1 0 R>>' '%%EOF'; } > "$1"
+}
+
+# step_one <funding>: profile, deck with CV and answers, the evaluation, the company form, title asked.
+# Saves only when DEST is captured/. The evaluation takes minutes (the outside service).
 step_one() {
-  local funding=$1 deck_phone="+49 151 2345 6789"
-  [ "$2" = yes ] || deck_phone="+49 151 2345 6700"
+  local funding=$1
   save profile
   call 200 "GET /api/reference/wizard → reference.json" "$API/api/reference/wizard"
   keep reference
+  call 200 "GET /api/reference/evaluation → reference-evaluation.json" "$API/api/reference/evaluation"
+  keep reference-evaluation
   write 204 "PUT profile" PUT "{\"brand\":\"Lumora\",\"sector\":\"software\",\"funding\":\"$funding\",\"nationality\":\"Almanya\",\"phone\":\"+49 151 2345 6700\",\"country\":\"Almanya\"}" /api/application/profile
   save verified
 
-  local deck="$WORK/Lumora Sunum.pdf"
-  printf '%s\n' '%PDF-1.4' \
-    'trade_name: Lumora Veri Analitiği' 'nace_codes: 62.01, 63.11' 'shareholding: %100' \
-    'given_name: Deneme' 'family_name: Kurucu' 'nationality: Almanya' "email: $EMAIL" \
-    "phone: $deck_phone" 'residence_address: Torstraße 45, 10119 Berlin' "source_of_funds: $funding" > "$deck"
-  call 202 "POST deck" -X POST -H 'X-DSP-Request: 1' -F "file=@$deck;filename=Lumora Sunum.pdf;type=application/pdf" \
+  local deck="$WORK/Lumora Sunum.pdf" cv="$WORK/Ozgecmis.pdf"
+  pdf "$deck" 3; pdf "$cv" 1
+  call 202 "POST deck (deck, CV, answers)" -X POST -H 'X-DSP-Request: 1' \
+    -F "file=@$deck;filename=Lumora Sunum.pdf;type=application/pdf" -F "cv=@$cv;filename=Ozgecmis.pdf;type=application/pdf" \
+    --form-string 'summary=Lumora, küçük işletmelere veri analitiği yazılımı sunar; abonelikle satılır ve Avrupa pazarında büyür.' \
+    -F activityGroupId=1 -F activityId=3 -F businessModelIds=1 -F revenueModelIds=7 -F productTypeIds=2 \
     -F noticeAcknowledged=true -F aiConsent=true "$API/api/application/deck"
-  # The Worker usually reads it within a second, so the scanning read is made at once.
-  save scanning
-  wait_stage review 15
-  save review-open
+  save evaluating
+  call 200 "GET /api/application/status → status-evaluating.json" "$API/api/application/status"
+  keep status-evaluating
+  wait_stage review 900
+  save review-defaults
 
-  # The differences: the phone (step 1's founder only), and the country (the API compares the stated
-  # country with the deck's whole address line, which names the city, not the country).
-  if [ "$2" = yes ]; then write 204 "resolve phone → read" POST '{"choice":"read"}' /api/application/cross-checks/phone; fi
-  write 204 "resolve country → stated" POST '{"choice":"stated"}' /api/application/cross-checks/country
-  write 204 "PATCH review (postal code, family name)" PATCH '{"fields":{"postal_code":"10119","family_name":"Kurucu-Test"}}' /api/application/review
-  save review-decided
+  write 204 "PATCH review (title, codes, address, postal code, family name)" PATCH \
+    '{"fields":{"trade_name":"Lumora Analitik Yazılım","nace_codes":"62.01, 63.11","residence_address":"Torstraße 45, Berlin","postal_code":"10119","family_name":"Kurucu-Berg"}}' /api/application/review
+  save review-edited
+  write 204 "PATCH review (title for the conflict)" PATCH '{"fields":{"trade_name":"Lumora Veri Analitiği"}}' /api/application/review
   call 202 "POST review/submit" -X POST -H 'X-DSP-Request: 1' "$API/api/application/review/submit"
   save title-checking
   call 200 "GET /api/application/status → status.json" "$API/api/application/status"
@@ -204,7 +217,7 @@ if [ "$WHAT" = all ] || [ "$WHAT" = step1 ]; then
   echo "step 1"
   new_founder foreign
   echo "  as $EMAIL"
-  step_one own-abroad yes
+  step_one own-abroad
   staff title reject "Benzer bir unvan sicilde kayıtlıdır."
   wait_stage titleConflict 30
   save title-conflict
@@ -229,7 +242,7 @@ keep_problem() { jq . "$BODY" > "$OUT/$1.json"; }
 
 if [ "$WHAT" = all ] || [ "$WHAT" = step3 ]; then
   echo "step 3 · E: second factor and payment"
-  DEST="$WORK"; new_founder foreign; step_one own-abroad no; reserve_title; step_two_quick; DEST="$OUT"
+  DEST="$WORK"; new_founder foreign; step_one own-abroad; reserve_title; step_two_quick; DEST="$OUT"
   save payment-open
   CARD='{"holder":"DENEME KURUCU","cardToken":"tok_test_4242"}'
   write 403 "POST payment (no second factor) → step-up-required.json" POST "$CARD" /api/application/payment
@@ -282,7 +295,7 @@ wait_setup_steps() {
 
 if [ "$WHAT" = all ] || [ "$WHAT" = step45 ]; then
   echo "steps 4 and 5 · F: a foreign founder, call and set-up to done"
-  DEST="$WORK"; new_founder foreign; step_one own-abroad no; reserve_title; step_two_quick; pay_quick; DEST="$OUT"
+  DEST="$WORK"; new_founder foreign; step_one own-abroad; reserve_title; step_two_quick; pay_quick; DEST="$OUT"
   save esign-signing
   # The second factor from the payment is still fresh (15 minutes), so the consent check answers.
   call 409 "POST esign/call/start (no consent) → esign-consent-missing.json" -X POST -H 'X-DSP-Request: 1' "$API/api/application/esign/call/start"
@@ -341,7 +354,7 @@ fi
 [ "$WHAT" = all ] || [ "$WHAT" = step2 ] || exit 0
 
 echo "step 2 · A: identity on the phone, declaration, screening, result"
-DEST="$WORK"; new_founder foreign; step_one own-abroad no; reserve_title; DEST="$OUT"
+DEST="$WORK"; new_founder foreign; step_one own-abroad; reserve_title; DEST="$OUT"
 call 200 "POST phone-link → phone-link.json" -X POST -H 'X-DSP-Request: 1' "$API/api/application/phone-link"
 PHONE_TOKEN=$(jq -r .token "$BODY")
 keep phone-link

@@ -21,11 +21,13 @@ screens ─► ApplicationStore ─► Api (abstract class, used as the injectio
 | `src/app/core/api-types.ts` | The API's JSON as it arrives (`MeWire`, `ApplicationWire`, …), written from the API's `Models/` records. |
 | `src/app/core/api-mapper.ts` | `toAccount(me)`, `toApplication(view, account)`, `toStage`: wire → portal model. Pure functions. |
 | `src/app/core/testing/api-fixtures.ts` | Literal API answers the specs use: hand-written ones, and `CAPTURED` (below). |
-| `src/app/core/testing/captured/*.json` | `GET /api/application` as the running API answered it at each stage of steps 1 to 5, plus the status read, the reference data, the phone routes, the closed application's 404 and the refusals of steps 3 and 4 (2026-11-25). Made-up founders, e-mail addresses and the phone token replaced; the card is only ever a development token; no T.C. kimlik no. |
+| `src/app/core/testing/hand-written/*.json` | **Hand-written until recaptured**: the deck step with the outside evaluation (evaluating, more information needed, failed, the company form with defaults and after edits, the status read), written from the contract of 2026-11-25 before the API had it. `HAND` in api-fixtures.ts. |
+| `src/app/core/evaluation-reference.json` | The outside evaluation service's dictionary saved on 2026-11-25 (17 activity groups, 216 activities, 4 business models, 8 revenue models, 4 product types) and the upload limits, in the shape of `GET /api/reference/evaluation`. The mock's answer and the specs' fixture; not in the http bundle. |
+| `src/app/core/testing/captured/*.json` | `GET /api/application` as the running API answered it at each stage of steps 1 to 5 (the deck-reader stages `scanning`, `review-open`, `review-decided` were removed with the reader on 2026-11-25; the later files still carry its `crossCheck` and deck fields, which the mapper ignores), plus the status read, the reference data, the phone routes, the closed application's 404 and the refusals of steps 3 and 4 (2026-11-25). Made-up founders, e-mail addresses and the phone token replaced; the card is only ever a development token; no T.C. kimlik no. |
 | `tools/api-capture/capture.sh` | Re-captures those files against a running stack (`capture.sh [step1\|step2\|step3\|step45\|all]`; needs `../dijital-sirket-api/dev/staff.sh` for the title, review and set-up steps and `dev/last-code.sh` for the second factor). |
 | `src/app/shell/step-up-dialog.ts` | `StepUpDialog`: the second-factor dialog, rendered once by the app shell; its state and logic are in `ApplicationStore` (below). |
 | `src/app/core/status-poller.ts` | `StatusPoller` and `pollDelay`: the pacing of the status poll in HTTP mode. |
-| `src/app/core/rules.ts` | Pure checks the screens use (card, T.C. kimlik no, password strength, address document size, deck size and type, funding options, title suffix and title suggestions). Not part of either implementation. |
+| `src/app/core/rules.ts` | Pure checks the screens use (card, T.C. kimlik no, password strength, address document size, the deck upload's checks `evaluationErrors`, funding options, title suffix and title suggestions). Not part of either implementation. |
 | `src/environments/environment.ts` | Default (mock) mode: names `MockApi`, no extra providers. |
 | `src/environments/environment.http.ts` | HTTP mode: names `HttpApi`, provides `HttpClient` with the interceptor. |
 | `proxy.conf.json` | Dev server: `/api` → `http://localhost:5149`. |
@@ -91,10 +93,100 @@ production serves the portal and the API is still open (open decision 6 in the p
 The portal never shows, prefills or hints at a code in this mode: codes go only by e-mail (the
 Inbox toasts belong to the mock, and nothing in HTTP mode sends to the Inbox).
 
+## The deck step: outside evaluation (since 2026-11-25, piece 9)
+
+Owner's decision of 2026-11-25: "Replace the deck step with the STB evaluation." The AI deck reader,
+the scanning screen and the comparison with the profile (cross-check) are gone. The founder uploads the
+deck **and a CV**, answers five questions, and an outside evaluation service (STB) evaluates them for
+**minutes**. Afterwards the founder fills the company form (D-1c) themselves, with defaults from the
+profile and the account. The text of step 1 below that speaks of `scanning`, deck fields and
+cross-checks describes the state before this piece.
+
+**Written against the contract, before the API had it.** The API agent built the API side in
+parallel; nothing here has been run against it yet. Points where the portal had to choose (to be
+reconciled with the API):
+
+- the deck's multipart part stays `file` (the name of the first deck upload); the CV is `cv`;
+- `activityGroupId` and `activityId` are sent only when chosen; each multiple choice is one repeated
+  field per id (`businessModelIds=1`, `businessModelIds=2`);
+- the summary's length is counted after trimming;
+- the consent refusal's sentence (`DECK_CONSENT_ERROR`) is the portal's own wording; the API's may differ;
+- `evaluationQuestions` is polled like `manual` (slowest pace), in case the server moves on by itself;
+- after the evaluation `trade_name` and `nace_codes` may arrive as absent or as an empty value with any
+  mark: an empty value gets no mark on screen;
+- the document type of the CV in `documents` is taken to be `cv` ("Özgeçmiş").
+
+### Requests
+
+```
+Reference   GET  /api/reference/evaluation → {activityGroups, activities, businessModels, revenueModels,
+                 productTypes: [{id,label}], limits:{deckMaxMb,cvMaxMb,deckMinPages,deckMaxPages,summaryMin,summaryMax}}
+                 once per session (cached in HttpApi, dropped on sign-out)
+Upload      POST /api/application/deck  multipart: file (deck, PDF), cv (PDF), summary, activityGroupId,
+                 activityId, businessModelIds*, revenueModelIds*, productTypeIds*, noticeAcknowledged, aiConsent   202
+                 400 validation_failed with errors.<deck|cv|summary|activityGroupId|activityId|businessModelIds|
+                 revenueModelIds|productTypeIds>, shown at the fields on D-1a
+Polling     GET  /api/application/status (then GET /api/application only when it changed)
+```
+
+### Stages
+
+| API stage (+ `evaluation.status`) | Screen | Polled? | What ends it |
+| --- | --- | --- | --- |
+| `verified`, `evaluation` null | D-1a `/deck` | no | the upload |
+| `evaluating` (`queued` / `running`) | D-1b `/deck/evaluating` | yes | the service: `review`, `evaluationQuestions`, or `verified` |
+| `evaluationQuestions` (`questions`) | D-1g `/deck/more-information` (new) | yes (slow) | people (unknown) |
+| `verified` + `failed` / `rejected` / `cancelled` | D-1a with a notice above the form | no | a new upload, a new evaluation |
+| `review` (`done`) | D-1c `/deck/review` (company form) | no | submit |
+
+`/deck/scan` and the old `/sunum/tarama` redirect to `/deck/evaluating`.
+
+### Screens
+
+- **D-1a** (`/deck`): deck (PDF, 3–40 pages, 25 MB) and CV (PDF, 5 MB) pickers; the summary with a live
+  length hint; the activity group (`Select`) and the activity (`SearchSelect`, new in
+  `shared/search-select.ts`: a text box that filters the 216 options); business model, revenue model
+  and product type as tick boxes; the two consents, unticked. The screen's own checks
+  (`rules.evaluationErrors`, the same ones the mock refuses with) and the API's `errors` are shown at
+  their fields. The page count cannot be checked in the browser; the service ends the evaluation
+  `rejected`. A notice above the form after `failed`, `rejected` (with "3 ile 40 sayfa arasında bir PDF")
+  or `cancelled`. "Ön bilgileri düzenle" while no deck was ever uploaded.
+- **D-1b** (`/deck/evaluating`): a status page like D-1f. Says the evaluation takes a few minutes, that
+  the page may be closed, and updates itself; the attempt ("2. deneme (en fazla 3)") only above 1. No
+  progress bar: the duration is not known.
+- **D-1g** (`/deck/more-information`): a stop state. The evaluation needs more information and the
+  founder will be contacted; no form (the question format is not known, and no question content reaches
+  the founder).
+- **D-1c** (company form): no AI badges, page references, cross-check block, flagged-values block,
+  "Terminal AI" title suggestions or "Başka dosya yükle" (a new deck no longer fills the form). Values
+  marked `profile` carry a quiet "Ön bilgilerinizden"; the founder's own still say "Kontrol edildi".
+  The NACE editor offers the profile's activity area's codes ("Faaliyet alanınıza uygun"). Title and
+  codes start empty; the mock refuses a submit without a title ("Şirket unvanını yazınız.").
+- **D-1f** and **D-1e**: wording no longer speaks of reading or comparing the deck.
+
+### The mock
+
+`MockApi.uploadDeck` refuses like the API (both ticks, a profile, `validation_failed` with fields), keeps
+the files' names and sizes, and counts the deck's pages when it can read them (uncompressed PDFs, like
+the sample deck): outside 3–40 the evaluation ends `rejected`. Otherwise the demo panel's new
+"Sunum değerlendirmesi nasıl bitsin?" decides (`done` by default; `questions`, `failed`, `rejected`). The
+evaluation is a 6-second timer (`DURATION.evaluation`). Seeding `review` or later fills the title and
+codes itself. Saved mock data from before is upgraded: an application at `scanning` goes back to
+`verified` without its deck; `crossCheck`, `ai` / `check` marks and `deckName` are dropped.
+
+### Wording to be confirmed by the owner
+
+- The two consent labels (`shared/deck-consents.ts`): **placeholders**; the notice text does not exist
+  and the evaluation service is not named.
+- D-1a's lead and the three notices after `failed`, `rejected`, `cancelled`; D-1b's and D-1g's texts;
+  D-1c's lead and the "Ön bilgilerinizden" hint.
+- Terminal AI's answers on the deck step (mock only).
+
 ## Step 1 over HTTP (since 2026-11-25, piece 5)
 
-**Connected:** `submitProfile`, `uploadDeck`, `resolveCrossCheck`, `updateReview`, `submitReview`,
-`chooseTitle`, `reference`, and the background-work capability `work` (polling). Every write answers
+**Connected:** `submitProfile`, `uploadDeck`, `updateReview`, `submitReview`,
+`chooseTitle`, `reference`, `evaluationReference` (piece 9; `resolveCrossCheck` was removed with the
+cross-check), and the background-work capability `work` (polling). Every write answers
 with an empty body (204/202); `HttpApi` then reads the application again (`fresh()`: the status read,
 then `GET /api/application`, mapped). Step 2 came in piece 6, step 3 with the second factor in
 piece 7, and steps 4 and 5 in piece 8 (below).
@@ -103,9 +195,8 @@ piece 7, and steps 4 and 5 in piece 8 (below).
 
 ```
 Profile (D-1e)    PUT  /api/application/profile {brand,sector,funding,nationality,phone,country}  204
-Deck (D-1a)       POST /api/application/deck  multipart: file, noticeAcknowledged, aiConsent       202
+Deck (D-1a)       POST /api/application/deck  multipart (see "The deck step: outside evaluation")     202
                   (FormData; the browser sets the multipart Content-Type; the ticks are sent as given)
-Difference        POST /api/application/cross-checks/{key} {choice:"stated"|"read"}                 204
 Review edit       PATCH /api/application/review {fields:{<key>: value}}                              204
                   only the fields that differ from the last read review (toReviewFields); nothing
                   is sent when nothing differs (the API refuses an empty change)
@@ -120,9 +211,8 @@ Polling           GET  /api/application/status  → {stage, changedAt}
 | API stage | Portal stage | Screen | What ends it |
 | --- | --- | --- | --- |
 | `profile` | `profile` | D-1e `/details` | the founder saves the profile |
-| `verified` | `verified` | D-1a `/deck` (D-1e still open) | the founder uploads a deck |
-| `scanning` (`deck.status: "reading"`) | `scanning` | D-1b `/deck/scan` | the Worker: `review`, or `verified` with `deck.status: "failed"` (polled) |
-| `verified` + `deck.status: "failed"` | `verified` | D-1a, with "… okunamadı" and a new upload | the founder uploads again |
+| `verified` | `verified` | D-1a `/deck` (D-1e still open) | the founder uploads the deck, the CV and the answers |
+| `evaluating`, `evaluationQuestions`, `verified` + an ended evaluation | see "The deck step: outside evaluation" | | |
 | `review` | `review` | D-1c `/deck/review` | the founder submits |
 | `titleChecking` (`titleCheck.status: "checking"`) | `titleChecking` | D-1f `/deck/name-check` (new) | staff: `titleConflict`, or `eligibility` (foreign) / `declaration` (resident) (polled) |
 | `titleConflict` (`titleCheck: {status:"conflict", candidate, reason}`) | `titleConflict` | D-1d `/deck/name-rejected`; D-1c also opens | the founder chooses a title (back to `titleChecking`) or submits the review again |
@@ -137,7 +227,7 @@ Polling           GET  /api/application/status  → {stage, changedAt}
   of `Api` (the API has no such routes); `completeIdentity` and `completeCall` stay on `Api` because
   the API has founder routes of those names (later pieces).
 - **`server`** (HttpApi): `status()`, `application()` and `seen()`. While the stage is in
-  `SERVER_WAITING_STAGES` (`scanning`, `titleChecking`; later pieces add more) and someone is signed in,
+  `SERVER_WAITING_STAGES` (`evaluating`, `evaluationQuestions`, `titleChecking`; later pieces add more) and someone is signed in,
   the store runs a `StatusPoller`. Each tick reads `GET /api/application/status`; only when its `stage`
   or `changedAt` differs from `seen()` does it read `GET /api/application`.
   - **Why:** the full read decrypts the founder's data and writes `audit.data_access` rows on every
@@ -152,9 +242,8 @@ Polling           GET  /api/application/status  → {stage, changedAt}
   - **Stops** when the stage is no longer a waiting one, on sign-out, and on a 401 (which signs out
     through `sessionLost`). Other errors are logged (code only) and the next tick tries again.
   - A poll answer that started before one of the founder's own writes is dropped (the write wins).
-- **The deck being read** (D-1b): the animation still moves with time, but in server mode it uses
-  `openEndedProgress` (timeline.ts), which slows down and never passes 95%; only the server's next
-  stage ends the screen. `completeScan` is never called in HTTP mode (HttpApi does not have it).
+- **The evaluation** (D-1b): a status page with no progress at all; only the server's next stage ends
+  it. `completeEvaluation` is the mock's own (HttpApi does not have it).
 - **409 `wrong_stage`** from any write: the store reads the application again, so the screen moves to
   where the application really is; the refusal's sentence stays on screen.
 
@@ -165,14 +254,12 @@ Polling           GET  /api/application/status  → {stage, changedAt}
 | D-1e | Save | connected | |
 | D-1e | Sector and funding choices | from `Api.reference()` | exactly what the API accepts |
 | D-1e | "Demo: örnek bilgileri doldur" | still shown (fills the form only) | not gated before; left as it was |
-| D-1a | Upload | connected | |
-| D-1a | "Ön bilgileri düzenle" | shown only while no deck exists (both modes) | the API refuses a profile after any deck, also after a failed reading |
-| D-1a | "… okunamadı" notice | shown when `deck.status` is `failed` | the API's failed reading |
-| D-1c | Difference choices | connected | |
+| D-1a | Upload (deck, CV, answers) | connected (piece 9, not yet run against the API) | |
+| D-1a | "Ön bilgileri düzenle" | shown only while no deck exists (both modes) | the API refuses a profile after any deck, also after an evaluation that ended badly |
+| D-1a | notice after an ended evaluation | shown when `evaluation.status` is `failed`, `rejected` or `cancelled` at `verified` | |
 | D-1c | Title, NACE, founder, contact, funding editors | connected; only changed fields sent | API refuses empty changes and empty values |
 | D-1c | NACE search and suggestions | only codes from `Api.reference()` (10 today) | |
 | D-1c | Logo replacement | offered only when a logo exists (the mock's); hidden in HTTP mode | the API keeps no logo |
-| D-1c | "Başka dosya yükle" | connected; **hidden after a refused title** (both modes) | after a rejection the API keeps the rejected reservation as the latest, so a new deck would be read and land on `titleConflict` again |
 | D-1c | "Başka unvan seç" | shown only after a refused title; back to D-1d | |
 | D-1c | Submit | connected | |
 | D-1d | Suggestions and own title | connected (`chooseTitle`) | suggestions are the portal's own (`titleAlternatives`), not the API's |
@@ -184,11 +271,13 @@ Polling           GET  /api/application/status  → {stage, changedAt}
 ### Errors at fields
 
 A refusal with `errors` sets `ApplicationStore.fieldErrors` (API field names). D-1e shows each message
-under its field (`brand`, `sector`, `funding`, `nationality`, `country`, `phone`); D-1c shows them
+under its field (`brand`, `sector`, `funding`, `nationality`, `country`, `phone`); D-1a under its fields
+(`deck`, `cv`, `summary`, `activityGroupId`, `activityId`, `businessModelIds`, `revenueModelIds`,
+`productTypeIds`); D-1c shows them
 under the review row (`REVIEW_ROWS`: e.g. "Ad eksik. Soyad eksik." under Kurucu after a submit) and
 under the inputs of the open editor (`REVIEW_INPUTS`); D-1d under the own-title field (`title`). The
 banner shows the field's sentence when there is exactly one, the problem's title otherwise ("Eksik
-bilgileri tamamlayınız."). The mock never names fields, so mock mode shows only the banner.
+bilgileri tamamlayınız."). The mock names fields only for the deck upload; elsewhere mock mode shows only the banner.
 
 ## What HttpApi did first (since 2026-11-25, piece 3)
 
@@ -629,8 +718,9 @@ minutes, and are repeated once after it (walked for the call start and for the r
 | (no session) | `null` | D-0a `/login`, D-0b `/register` | no | sign-in, registration |
 | (registered, code not confirmed) | `registered` | D-0c `/verify-email` | no | the code |
 | `profile` | `profile` | D-1e `/details` | no | the founder saves the profile |
-| `verified` | `verified` | D-1a `/deck` | no | deck upload |
-| `scanning` | `scanning` | D-1b `/deck/scan` | yes | the Worker |
+| `verified` | `verified` | D-1a `/deck` | no | deck, CV and answers upload |
+| `evaluating` | `evaluating` | D-1b `/deck/evaluating` | yes | the outside evaluation (minutes) |
+| `evaluationQuestions` | `evaluationQuestions` | D-1g `/deck/more-information` | yes (slow) | people (unknown) |
 | `review` | `review` | D-1c `/deck/review` | no | submit |
 | `titleChecking` | `titleChecking` | D-1f `/deck/name-check` | yes | staff |
 | `titleConflict` | `titleConflict` | D-1d `/deck/name-rejected` | no | a new title |
@@ -653,7 +743,7 @@ minutes, and are repeated once after it (walked for the call start and for the r
 | `setup` with steps | `setup` | D-5a, the server's steps, tasks and results | yes (settles at 15 s) | staff complete the institution tasks |
 | `done` | `done` | D-5a's finishing moment, then D-5b `/setup/complete` | **no** | — |
 
-`SERVER_WAITING_STAGES` is now `scanning`, `titleChecking`, `screening`, `manual`, `setup`;
+`SERVER_WAITING_STAGES` is now `evaluating`, `evaluationQuestions`, `titleChecking`, `screening`, `manual`, `setup`;
 `waitsForServer(app)` adds the identity step (as before) and `calling` for a resident, after the call was
 reported ended, or when the portal cannot tell (no call start in the timeline). `done` is never polled.
 
@@ -834,13 +924,15 @@ Everything the portal shows against the real API that is not the API's, or that 
 - **Logo:** the API keeps no logo; D-1c's logo replacement and D-5b's logo are absent.
 - **Capital:** the API sends none; the portal shows its constant (250 000 TL) where needed (D-1c), and
   D-5b leaves out the blocked-capital line.
-- **Deck pages and reading:** `pages` is null with the development reader; D-1b lists no fields while the
-  deck is read; a failed reading was not walked.
+- **Deck evaluation (piece 9):** the founder sees no findings (none reach the portal) and cannot answer
+  follow-up questions: `evaluationQuestions` is a stop screen with no form. The deck step was built from
+  the contract and **not yet run against the API**; its fixtures are hand-written. The mock's evaluation is
+  a 6-second timer whose end the demo panel chooses.
 - **Title suggestions (D-1d):** the portal's own (`titleAlternatives`).
 - **Timeline codes:** the view carries Turkish texts only; the mapper reads times from them (`LOG_TEXTS`).
 - **Rejected founder:** the next sign-in creates a new application (the API cannot tell "closed").
-- **Consents:** the register screen's KVKK and terms ticks are not sent; the deck consents' labels are
-  placeholders.
+- **Consents:** the register screen's KVKK and terms ticks are not sent; the deck consents' labels
+  (deck, CV and answers to an outside evaluation service) are placeholders.
 - **"Bu cihazda 30 gün oturumu açık tut":** does nothing (12-hour sessions).
 - **Landing page fees:** the portal's `FEES`, not the API's.
 - **D-2b/D-2e:** no per-list screening results or score (the API reports none).
@@ -850,6 +942,9 @@ Everything the portal shows against the real API that is not the API's, or that 
   three-year `nes_standard` for it).
 
 ## Flow: the mock walks the API's path up to the review (since 2026-11-25)
+
+**Superseded in part by piece 9** ("The deck step: outside evaluation"): the deck rows and the
+cross-check below describe the AI reader, which was removed.
 
 Piece 2 made the portal's step 1 follow the API's flow, still on the mock, so that both modes walk
 the same path once `HttpApi` is filled in:
@@ -898,10 +993,10 @@ in piece 3.)
   and store tests on hand-built fixtures (`IDENTITY_FAILED`, `IDENTITY_FAILED_TWICE`).
 - Step 2: the view has no codes for its timeline lines; the mapper reads times from their Turkish text.
 - The rejected founder's next sign-in creates a new application (API gap above).
-- D-1b in HTTP mode lists no fields while the deck is read (the API sends them only once it is read),
-  so "Okunan bilgiler" shows 0 / 0 until the next screen.
-- A deck that fails to be read was not walked end to end (the development reader does not fail);
-  the mapper and D-1a's notice are checked with a fixture built from captured JSON.
+- The deck step with the outside evaluation (piece 9) was not run against the API; it waits for the
+  API agent's side, then `capture.sh step1` (which already sends the new upload and waits up to 15
+  minutes for `review`) replaces the hand-written fixtures. `questions`, `failed`, `rejected` cannot be
+  caused from the script and stay hand-written.
 - Registering an address that already has an account: the API answers 202 and tells the owner by
   e-mail; the mock still says "Bu e-posta adresiyle bir hesap zaten var." (kept because its spec
   expects it). To align when the owner decides.
