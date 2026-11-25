@@ -10,6 +10,23 @@ import { FundingSource } from './models';
 /** Largest address document the declaration screen takes. */
 export const ADDRESS_DOC_MAX = 10 * 1024 * 1024;
 
+/** Largest deck the API takes (UploadDeckHandler.MaxBytes). */
+export const DECK_MAX = 25 * 1024 * 1024;
+
+/** The API's refusal when either deck consent is missing; the screen shows the same text. */
+export const DECK_CONSENT_ERROR = 'Devam etmek için aydınlatma metnini ve yapay zekâ ile işleme onayını işaretleyiniz.';
+
+/**
+ * The deck's size and type, in the API's order and words. The API also checks the file's content,
+ * not only its name; that cannot be repeated here.
+ */
+export function deckFileError(file: { name: string; size: number }): string | null {
+  if (file.size === 0) return 'Sunum dosyanızı yükleyiniz.';
+  if (file.size > DECK_MAX) return 'Dosya 25 MB’tan büyüktür.';
+  if (!/\.(pdf|pptx)$/i.test(file.name)) return 'Sunum PDF veya PPTX biçiminde olmalıdır.';
+  return null;
+}
+
 export function luhn(num: string) {
   const d = num.replace(/\D/g, '');
   let sum = 0;

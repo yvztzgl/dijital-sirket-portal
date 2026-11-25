@@ -1,14 +1,11 @@
-import { computed, inject, signal } from '@angular/core';
+import { computed, effect, inject, signal, untracked } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApplicationStore } from '../../core/application.store';
 import { followFlow } from '../../core/follow';
 import { tl0 } from '../../core/format';
-import { FUNDING_OPTIONS } from '../../core/rules';
-import { CAPITAL, FUNDING_LABELS, FundingSource } from '../../core/models';
+import { DECK_CONSENT_ERROR, deckFileError, FUNDING_OPTIONS } from '../../core/rules';
+import { CAPITAL, CrossKey, FUNDING_LABELS, FundingSource, Profile, Sector, SECTORS } from '../../core/models';
 import { companyPurpose, naceName, searchNace } from '../../core/nace';
-
-const ACCEPT = /\.(pdf|pptx|key)$/i;
-const MAX_BYTES = 50 * 1024 * 1024;
 
 type CardId = 'founder' | 'contact' | 'funding';
 /** What the pencil on a row of the confirm screen opens. */
@@ -20,6 +17,21 @@ const FUNDING_HINTS: Record<string, string> = {
   investor: 'Yatırım sözleşmesiyle gelen sermaye',
   'third-party': 'Başka bir kişi veya şirketten · uyum ekibi elle inceler',
 };
+
+/** One line under each activity area in the D-1e picker. */
+const SECTOR_HINTS: Record<Sector, string> = {
+  software: 'Yazılım, veri işleme ve bulut hizmetleri',
+  ecommerce: 'İnternet üzerinden ürün veya hizmet satışı',
+  consulting: 'İşletme ve yönetim danışmanlığı',
+  design: 'Tasarım, reklam ve iletişim',
+  education: 'Eğitim ve kurs hizmetleri',
+  other: 'Yukarıdakilerin dışında bir alan',
+};
+
+type ProfileDraft = Omit<Profile, 'at' | 'sector' | 'funding'> & { sector: Sector | ''; funding: FundingSource | '' };
+
+/** Which review row a compared item stands for, so that a difference is not also listed as "kontrol edilmesi gereken". */
+const CROSS_ROW: Record<CrossKey, string> = { brand: 'title', sector: 'nace', funding: 'funding', nationality: 'nationality', phone: 'phone', country: 'address' };
 
 interface EditField {
   key: string;
@@ -39,6 +51,10 @@ export class KarsilamaData {
   constructor() {
     this.store.clearError();
     followFlow();
+    // Once both ticks are given, the message asking for them has done its job.
+    effect(() => {
+      if (this.consentsGiven() && untracked(this.fileError) === DECK_CONSENT_ERROR) this.fileError.set(null);
+    });
   }
 
   // --------------------------------------------------------------------------- D-00 welcome
@@ -54,10 +70,77 @@ export class KarsilamaData {
     { k: '03', t: 'İletişim ve fon kaynağı', d: 'E-posta, telefon, adres ve sermayenin kaynağı.' },
   ];
 
+  // --------------------------------------------------------------------------- D-1e profile
+
+  protected readonly sectorOptions = (Object.keys(SECTORS) as Sector[]).map((v) => ({ value: v, label: SECTORS[v].label, hint: SECTOR_HINTS[v] }));
+  protected readonly founderName = computed(() => {
+    const a = this.store.app();
+    return a ? `${a.founder.firstName} ${a.founder.lastName}`.trim() : '';
+  });
+  /** True when the founder came back to change a profile they saved before. */
+  protected readonly profileSaved = computed(() => !!this.store.app()?.profile);
+  /** Starts from what was saved before, when the founder comes back to change it. */
+  protected readonly profileDraft = signal<ProfileDraft>(
+    (() => {
+      const p = this.store.app()?.profile;
+      return p
+        ? { brand: p.brand, sector: p.sector, funding: p.funding, nationality: p.nationality, phone: p.phone, country: p.country }
+        : { brand: '', sector: '', funding: '', nationality: '', phone: '', country: '' };
+    })(),
+  );
+  protected readonly profileReady = computed(() => {
+    const p = this.profileDraft();
+    const digits = p.phone.replace(/\D/g, '').length;
+    return p.brand.trim().length >= 2 && !!p.sector && !!p.funding && !!p.nationality && !!p.country && digits >= 8 && digits <= 15;
+  });
+
+  protected setProfile(key: keyof ProfileDraft, value: string) {
+    this.profileDraft.update((p) => ({ ...p, [key]: value }));
+  }
+
+  /** Saving moves the stage to `verified`, which this screen also shows, so the move to D-1a is made here. */
+  protected async submitProfile() {
+    const p = this.profileDraft();
+    if (!p.sector || !p.funding) return;
+    if (await this.store.submitProfile({ ...p, sector: p.sector, funding: p.funding })) void this.router.navigateByUrl('/deck');
+  }
+
+  /**
+   * Demo: values for the downloadable sample deck (Lumora Analytics). The phone number differs from
+   * the one on the deck's contact page on purpose, so that D-1c shows how a difference is decided.
+   */
+  protected useSampleProfile() {
+    this.profileDraft.set({ brand: 'Lumora Analytics', sector: 'software', funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
+  }
+
   // ---------------------------------------------------------------------------- D-1a upload
 
   protected readonly dragging = signal(false);
   protected readonly fileError = signal<string | null>(null);
+  /**
+   * The two ticks the upload needs. They start unticked on every screen and are sent with this one
+   * upload only; "Başka dosya yükle" on D-1c asks for them again (the API records both per upload).
+   */
+  protected readonly noticeAcknowledged = signal(false);
+  protected readonly aiConsent = signal(false);
+  protected readonly consentsGiven = computed(() => this.noticeAcknowledged() && this.aiConsent());
+  /** D-1c: the re-upload panel with its own ticks is open. */
+  protected readonly reuploadOpen = signal(false);
+
+  /** Opens the file picker only after both ticks; otherwise says what is missing. */
+  protected pickFile(input: HTMLInputElement) {
+    if (!this.consentsGiven()) return this.fileError.set(DECK_CONSENT_ERROR);
+    this.fileError.set(null);
+    input.click();
+  }
+
+  /** D-1c "Başka dosya yükle": opens the panel with both ticks cleared. */
+  protected openReupload() {
+    this.noticeAcknowledged.set(false);
+    this.aiConsent.set(false);
+    this.fileError.set(null);
+    this.reuploadOpen.set(!this.reuploadOpen());
+  }
 
   protected onFileInput(e: Event) {
     const input = e.target as HTMLInputElement;
@@ -79,10 +162,11 @@ export class KarsilamaData {
   }
 
   private async upload(f: File) {
-    if (!ACCEPT.test(f.name)) return this.fileError.set('Yalnızca PDF, PowerPoint (.pptx) veya Keynote (.key) dosyası yüklenebilir.');
-    if (f.size > MAX_BYTES) return this.fileError.set('Dosya 50 MB’tan büyüktür. Daha küçük bir sürüm yükleyiniz.');
+    if (!this.consentsGiven()) return this.fileError.set(DECK_CONSENT_ERROR);
+    const error = deckFileError(f);
+    if (error) return this.fileError.set(error);
     this.fileError.set(null);
-    await this.store.uploadDeck({ name: f.name, size: f.size });
+    await this.store.uploadDeck(f, { noticeAcknowledged: this.noticeAcknowledged(), aiConsent: this.aiConsent() });
   }
 
   // ------------------------------------------------------------------------------ D-1b scan
@@ -306,7 +390,30 @@ export class KarsilamaData {
     ];
   });
   protected readonly okRows = computed(() => this.rows().filter((r) => !r.flag));
-  protected readonly flagRows = computed(() => this.rows().filter((r) => r.flag));
+  /** Flagged rows, less those already asked about as a difference from the profile. */
+  protected readonly flagRows = computed(() => {
+    const asked = new Set(this.crossOpen().map((c) => CROSS_ROW[c.key]));
+    return this.rows().filter((r) => r.flag && !asked.has(r.key));
+  });
+
+  // ------------------------------------------- D-1c: the profile (D-1e) compared with the deck
+
+  protected readonly cross = computed(() => this.store.app()?.crossCheck ?? []);
+  protected readonly crossMatched = computed(() => this.cross().filter((c) => c.match));
+  /** Differences, each with the deck page its value was read from. */
+  protected readonly crossDiffs = computed(() => {
+    const fields = this.store.app()?.deck?.fields ?? [];
+    const field: Record<CrossKey, string> = { brand: 'title', sector: 'nace', funding: 'funding', nationality: 'nationality', phone: 'phone', country: 'postal' };
+    return this.cross()
+      .filter((c) => !c.match)
+      .map((c) => ({ ...c, page: fields.find((f) => f.key === field[c.key])?.page ?? null }));
+  });
+  /** Differences still waiting for the founder's choice; the review cannot be submitted while any remain. */
+  protected readonly crossOpen = computed(() => this.crossDiffs().filter((c) => !c.choice));
+
+  protected resolveCross(key: CrossKey, choice: 'stated' | 'read') {
+    void this.store.resolveCrossCheck(key, choice);
+  }
 
   protected readonly fundingOptions = FUNDING_OPTIONS.map((v) => ({ value: v, label: FUNDING_LABELS[v], hint: FUNDING_HINTS[v] }));
 

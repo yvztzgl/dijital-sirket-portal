@@ -8,7 +8,8 @@ export type FounderType = 'foreign' | 'resident';
  */
 export type Stage =
   | 'registered' // account created, e-mail not verified
-  | 'verified' // ready to upload a pitch deck
+  | 'profile' // step 1, first screen: the founder states the basics before the deck is read (D-1e)
+  | 'verified' // profile saved, ready to upload a pitch deck (the profile can still be changed)
   | 'scanning' // AI Reviewer reading the deck
   | 'review' // founder checks extracted fields
   | 'titleConflict' // MERSİS could not reserve the title
@@ -26,7 +27,7 @@ export type Stage =
   | 'done';
 
 export const STAGE_ORDER: Stage[] = [
-  'registered', 'verified', 'scanning', 'review', 'titleConflict', 'eligibility', 'declaration', 'screening', 'eligible', 'manual',
+  'registered', 'profile', 'verified', 'scanning', 'review', 'titleConflict', 'eligibility', 'declaration', 'screening', 'eligible', 'manual',
   'payment', 'threeDs', 'signing', 'calling', 'signed', 'setup', 'done',
 ];
 
@@ -34,6 +35,7 @@ export const STAGE_ORDER: Stage[] = [
 export function stepOf(stage: Stage): number {
   switch (stage) {
     case 'registered':
+    case 'profile':
     case 'verified':
     case 'scanning':
     case 'review':
@@ -65,6 +67,55 @@ export const FUNDING_LABELS: Record<FundingSource, string> = {
   investor: 'Yatırımcı sermayesi (sözleşmeli)',
   'third-party': 'Üçüncü taraf transferi',
 };
+
+/** Activity area the founder states on D-1e, with the NACE codes it stands for (the API's table; compared with the codes read from the deck). */
+export type Sector = 'software' | 'ecommerce' | 'consulting' | 'design' | 'education' | 'other';
+
+export const SECTORS: Record<Sector, { label: string; nace: string[] }> = {
+  software: { label: 'Yazılım ve bilişim', nace: ['62.01', '62.02', '63.11'] },
+  ecommerce: { label: 'E-ticaret', nace: ['47.91'] },
+  consulting: { label: 'Danışmanlık', nace: ['70.22'] },
+  design: { label: 'Tasarım ve reklam', nace: ['74.10', '73.11'] },
+  education: { label: 'Eğitim', nace: ['85.59'] },
+  other: { label: 'Diğer', nace: [] },
+};
+
+/** What the founder states before uploading the deck (D-1e). Same shape as the API's `profile`. */
+export interface Profile {
+  brand: string;
+  sector: Sector;
+  funding: FundingSource;
+  nationality: string;
+  phone: string;
+  country: string;
+  at: string;
+}
+
+/** The pieces of the profile that are compared with what was read from the deck. */
+export type CrossKey = 'brand' | 'sector' | 'funding' | 'nationality' | 'phone' | 'country';
+
+/**
+ * One comparison between the profile and the deck, made when the scan finishes. Same shape as an
+ * item of the API's `crossCheck`. `stated` and `read` are display texts (`read` is "—" when the
+ * deck gave nothing). A difference needs the founder's decision before the review can be
+ * submitted: `stated` (use what they wrote on D-1e), `read` (keep the deck's value) or `edited`
+ * (they typed another value in the review).
+ */
+export interface CrossCheck {
+  key: CrossKey;
+  label: string;
+  stated: string;
+  read: string;
+  match: boolean;
+  choice: null | 'stated' | 'read' | 'edited';
+  at: string | null;
+}
+
+/** The two acts the deck upload needs (D-1a); both must be the founder's own ticks. */
+export interface DeckConsents {
+  noticeAcknowledged: boolean;
+  aiConsent: boolean;
+}
 
 /** Badge state per reviewable field: read by AI, needs a check, or edited by the founder. */
 export type FieldMark = 'ai' | 'check' | 'edited';
@@ -119,7 +170,15 @@ export interface Application {
   };
   funding: FundingSource;
   marks: Record<string, FieldMark>;
-  deck?: { fileName: string; sizeKb: number; pages: number; startedAt: string; fields: ScanField[] };
+  /** Stated by the founder on D-1e before the deck is uploaded; each save replaces the last. */
+  profile?: Profile;
+  /**
+   * `noticeAt` / `aiConsentAt`: when the founder ticked the privacy notice and the AI-processing
+   * consent for this deck (absent on decks uploaded before 2026-11-25).
+   */
+  deck?: { fileName: string; sizeKb: number; pages: number; startedAt: string; fields: ScanField[]; noticeAt?: string; aiConsentAt?: string };
+  /** The profile compared with the deck, from the end of the scan; empty until both exist. */
+  crossCheck: CrossCheck[];
   titleCheck?: { status: 'ok' | 'conflict'; candidate: string; conflictWith?: string; alternatives?: string[] };
   /**
    * `consentAt`: when the founder ticked the consent on D-2a's pre-information view (absent on

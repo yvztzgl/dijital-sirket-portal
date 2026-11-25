@@ -10,6 +10,7 @@ import { DocItem } from '../core/models';
 
 export type SidePanelTab = 'ai' | 'docs' | 'log';
 export type SidePanelCtx =
+  | 'profile'
   | 'upload'
   | 'scan'
   | 'review'
@@ -35,6 +36,9 @@ const Q = {
   read: ['search', 'Okunan bilgiler', 'Sunumdan hangi bilgiler okunur?'],
   fix: ['pencil', 'Düzeltme', 'Okunan bilgiler düzeltilebilir mi?'],
   privacy: ['lock', 'Gizlilik', 'Sunum gizli tutulur mu?'],
+  why: ['help', 'Ön bilgiler', 'Ön bilgiler neden isteniyor?'],
+  source: ['landmark', 'Sermaye kaynağı', 'Sermaye kaynağı ne demektir?'],
+  differ: ['list-checks', 'Farklı bilgiler', 'Ön bilgilerle sunum farklıysa ne olur?'],
   type: ['building', 'Şirket türü', 'Şirket türü neden anonim şirkettir?'],
   nace: ['list-checks', 'Faaliyet kodları', 'NACE kodu nedir?'],
   title: ['search', 'Şirket unvanı', 'Unvan nasıl rezerve edilir?'],
@@ -62,9 +66,10 @@ const Q = {
  * ANSWERS. The greeting itself ("Selam …, sana nasıl yardımcı olabilirim?") is the owner's wording.
  */
 const AI: Record<SidePanelCtx, { step: string; opts: Opt[] }> = {
+  profile: { step: 'Ön bilgiler', opts: [Q.why, Q.source, Q.nace] },
   upload: { step: 'Sunum', opts: [Q.formats, Q.read, Q.privacy] },
   scan: { step: 'Sunum', opts: [Q.read, Q.fix, Q.privacy] },
-  review: { step: 'Sunum', opts: [Q.read, Q.nace, Q.title] },
+  review: { step: 'Sunum', opts: [Q.differ, Q.nace, Q.title] },
   title: { step: 'Sunum', opts: [Q.title, Q.type, Q.nace] },
   aml: { step: 'Kimlik', opts: [Q.mrz, Q.lists, Q.camera] },
   declare: { step: 'Kimlik', opts: [Q.address, Q.lists, Q.review] },

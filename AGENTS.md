@@ -49,12 +49,19 @@ anything a later reader needs in a temporary directory or only in chat.
   "Selam …, sana nasıl yardımcı olabilirim?" is the owner's own wording and stays informal), one
   request per screen stated in the heading. The sign-in screens (D-0a to D-0d) still have the
   earlier look. The design import would overwrite the rebuilt templates.
-- Step 1 starts at the deck upload (D-1a, stage `verified`), then the scan (D-1b) and the check
-  (D-1c). The profile form D-1e and its comparison with the deck were removed on 2026-11-20,
-  because the deck format now carries everything the form asked. On 2026-11-25 the owner reversed
-  this: the profile form comes back in front of the deck (the API requires a profile first); see
-  Decisions in PROJECT_LOG.md. Until that piece lands the screens still start at the deck.
-  Applications saved at the old `profile` stage continue at D-1a (`upgrade` in mock-api.ts).
+- Step 1 starts with the profile form (D-1e `/details`, stage `profile`), then the deck upload
+  (D-1a, stage `verified`), the scan (D-1b) and the check (D-1c). The form was removed on
+  2026-11-20 and brought back on 2026-11-25 by the owner's decision, because the API requires a
+  profile before the deck and compares the two (see Decisions in PROJECT_LOG.md). The profile can
+  be saved again from D-1a ("Ön bilgileri düzenle") until the deck is uploaded; D-1e therefore
+  accepts both `profile` and `verified`. On D-1c every difference between the profile and the deck
+  (`crossCheck`, `match: false`) needs the founder's choice before the review can be submitted.
+  Old mock data at `verified` without a profile is sent back to the form (`upgrade` in mock-api.ts).
+- The deck upload needs two unticked boxes the founder ticks for that upload: privacy notice
+  acknowledged and consent to AI processing (`app-deck-consents`, `src/app/shared/deck-consents.ts`).
+  D-1c's "Başka dosya yükle" asks for them again. The labels are placeholders until the legal
+  wording is decided. Decks are PDF or PPTX, at most 25 MB (`deckFileError` in rules.ts, the API's
+  rule); Keynote and 50 MB are gone.
 - The deck follows our own format, not a form: `src/app/core/deck-format.json` lists the 16
   required pages, their exact titles and what is read from each (it carries the integrator's
   evaluation fields from `1-basvuru.pdf`). The "Sunum formatı" dialog on D-1a

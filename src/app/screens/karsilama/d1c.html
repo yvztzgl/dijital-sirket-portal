@@ -1,10 +1,55 @@
-<app-step-page [step]="1" [part]="2" [parts]="2" sub="Kontrol" ctx="review" label="D-1c İnceleme" [width]="840">
+<app-step-page [step]="1" [part]="3" [parts]="3" sub="Kontrol" ctx="review" label="D-1c İnceleme" [width]="840">
   <div class="wz-head">
     <span class="wz-chip"><app-icon name="check" size="13px" [stroke]="2.6" />{{ scanFile() }} okundu</span>
     <h1 class="wz-h1">Okunan bilgileri kontrol ediniz</h1>
     <p class="wz-lead">Sunumunuzdan okunan bilgileri kontrol ediniz ve hataları düzeltiniz.</p>
   </div>
-  <input #deck type="file" accept=".pdf,.pptx,.key,application/pdf" (change)="onFileInput($event)" hidden>
+  <input #deck type="file" accept=".pdf,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" (change)="onFileInput($event)" hidden>
+
+  @if (cross().length) {
+    <!-- The founder's own statement (D-1e) against the deck. Each difference needs a choice before "Onayla ve devam et". -->
+    <section class="wz-card wz-cross" [class.clear]="!crossOpen().length" aria-labelledby="cross-h">
+      <header>
+        <span class="ic" aria-hidden="true"><app-icon [name]="crossOpen().length ? 'list-checks' : 'check'" size="18px" [stroke]="2.2" /></span>
+        <span class="t">
+          <h2 id="cross-h">Ön bilgilerle karşılaştırma</h2>
+          <small>
+            @if (!crossDiffs().length) {Sunumdaki bilgiler ön bilgilerinizle uyuşmaktadır.}
+            @else if (crossOpen().length) {<span>{{ crossOpen().length }} bilgi ön bilgilerinizden farklıdır. Doğru olanı seçiniz.</span>}
+            @else {Farklı bilgiler için seçiminiz kaydedildi.}
+          </small>
+        </span>
+        <span class="score" [attr.aria-label]="cross().length + ' bilginin ' + crossMatched().length + ' tanesi uyuşuyor'">{{ crossMatched().length }} / {{ cross().length }}<small>uyuşuyor</small></span>
+      </header>
+
+      <ul class="same" aria-label="Uyuşan bilgiler">
+        @for (c of crossMatched(); track c.key) {<li><app-icon name="check" size="12px" [stroke]="3" />{{ c.label }}</li>}
+      </ul>
+
+      @for (c of crossDiffs(); track c.key) {
+        <div class="diff" [class.done]="!!c.choice" role="group" [attr.aria-label]="c.label">
+          <b class="lbl">{{ c.label }}</b>
+          @if (c.choice) {
+            <p class="picked"><app-icon name="check" size="14px" [stroke]="2.6" />
+              @if (c.choice === 'edited') {<span>Düzelttiğiniz değer kullanılıyor.</span>}
+              @else {<span>{{ c.choice === 'stated' ? 'Ön bilgilerinizdeki değer' : 'Sunumdaki değer' }} kullanılıyor: <b>{{ c.choice === 'stated' ? c.stated : c.read }}</b></span>}
+            </p>
+          } @else {
+            <div class="pair">
+              <button type="button" class="opt" (click)="resolveCross(c.key, 'stated')" [disabled]="store.busy()" [attr.aria-label]="c.label + ': ön bilgilerinizdeki değeri kullan, ' + c.stated">
+                <small>Ön bilgilerinizde</small><b>{{ c.stated }}</b><span class="use">Bunu kullan</span>
+              </button>
+              <span class="vs" aria-hidden="true">≠</span>
+              <button type="button" class="opt" (click)="resolveCross(c.key, 'read')" [disabled]="store.busy()" [attr.aria-label]="c.label + ': sunumdaki değeri kullan, ' + c.read">
+                <small>Sunumda{{ c.page ? ', sayfa ' + c.page : '' }}</small><b>{{ c.read }}</b><span class="use">Bunu kullan</span>
+              </button>
+            </div>
+          }
+        </div>
+      }
+    </section>
+  }
+
 
   <section class="wz-card wz-review" aria-label="Sunumdan okunan bilgiler">
     <header class="co">
@@ -115,10 +160,25 @@
     }
   </section>
 
+  @if (reuploadOpen()) {
+    <!-- A new deck replaces this one and is read again; the two ticks are asked again for it. -->
+    <section class="wz-card wz-reupload" aria-labelledby="reupload-h">
+      <h2 id="reupload-h" class="wz-card-h">Başka sunum yükleyiniz</h2>
+      <p>Yeni sunum yeniden okunur ve bu ekrandaki bilgilerin yerini alır. PDF veya PPTX, en fazla 25 MB.</p>
+      <app-deck-consents [(notice)]="noticeAcknowledged" [(ai)]="aiConsent" />
+      @if (fileError()) {<app-form-error [message]="fileError()" />}
+      <div class="end">
+        <button type="button" class="wz-link" (click)="reuploadOpen.set(false)">Vazgeç</button>
+        <button type="button" class="wz-btn wz-btn--sm" (click)="pickFile(deck)" [disabled]="!consentsGiven() || store.busy()">{{ store.busy() ? 'Dosya yükleniyor…' : 'Dosya seç' }}</button>
+      </div>
+    </section>
+  }
+
   <app-form-error />
   <div class="wz-actions">
-    <button type="button" class="wz-link" (click)="deck.click()">Başka dosya yükle</button>
-    <button type="button" class="wz-btn" (click)="submitReview()" [disabled]="store.busy()">{{ store.busy() ? 'MERSİS’te sorgulanıyor…' : 'Onayla ve devam et' }}</button>
+    <button type="button" class="wz-link" (click)="openReupload()" [attr.aria-expanded]="reuploadOpen()">Başka dosya yükle</button>
+    <button type="button" class="wz-btn" (click)="submitReview()" [disabled]="store.busy() || crossOpen().length > 0">{{ store.busy() ? 'MERSİS’te sorgulanıyor…' : 'Onayla ve devam et' }}</button>
   </div>
+  @if (crossOpen().length) {<p class="wz-hold">Devam etmek için farklı bilgilerde doğru değeri seçiniz.</p>}
   <p class="wz-foot"><app-icon name="info" size="13px" [stroke]="2" />Onayınızın ardından şirket unvanı MERSİS’te sorgulanır ve rezerve edilir.</p>
 </app-step-page>

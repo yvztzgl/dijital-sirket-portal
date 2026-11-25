@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { environment } from '../../environments/environment';
-import { Account, Application, FounderType, FundingSource, PhoneLinkStatus, Stage } from './models';
+import { Account, Application, CrossKey, DeckConsents, FounderType, FundingSource, PhoneLinkStatus, Profile, Stage } from './models';
 
 /**
  * What the portal needs from the platform backend. The store and Terminal AI inject `Api` and
@@ -31,12 +31,17 @@ export abstract class Api {
   abstract verifyEmail(email: string, code: string): Promise<Session>;
   abstract requestPasswordReset(email: string): Promise<void>;
 
-  // step 1 · deck
-  abstract uploadDeck(email: string, file: { name: string; size: number }): Promise<Application>;
+  // step 1 · profile and deck
+  /** D-1e: saved while no deck is uploaded (stage `profile` or `verified`); each save replaces the last. */
+  abstract submitProfile(email: string, input: Omit<Profile, 'at'>): Promise<Application>;
+  /** D-1a: refused without a profile or without both consents. The HTTP client sends the file itself. */
+  abstract uploadDeck(email: string, file: File, consents: DeckConsents): Promise<Application>;
   abstract completeScan(email: string): Promise<Application>;
   abstract updateReview(email: string, patch: ReviewPatch, edited: string[]): Promise<Application>;
   abstract submitReview(email: string): Promise<Application>;
   abstract chooseTitle(email: string, title: string): Promise<Application>;
+  /** D-1c: which value to keep where the profile and the deck differ. */
+  abstract resolveCrossCheck(email: string, key: CrossKey, choice: 'stated' | 'read'): Promise<Application>;
 
   // step 2 · eligibility
   abstract startEligibility(email: string, consent: boolean): Promise<Application>;

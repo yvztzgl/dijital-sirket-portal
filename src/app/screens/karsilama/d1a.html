@@ -1,19 +1,21 @@
-<app-step-page [step]="1" [part]="1" [parts]="2" sub="Sunum" ctx="upload" label="D-1a Yükleme">
+<app-step-page [step]="1" [part]="2" [parts]="3" sub="Sunum" ctx="upload" label="D-1a Yükleme">
   <div class="wz-head">
     <h1 class="wz-h1">Yatırımcı sunumunuzu yükleyiniz</h1>
-    <p class="wz-lead">Bu adımda sizden yalnızca bir dosya istenmektedir: Terminal Şirket sunum formatında hazırlanmış yatırımcı sunumunuz. Başvuru, şirket ve kurucu bilgileri bu dosyadan okunur.</p>
+    <p class="wz-lead">Bu adımda sizden yalnızca bir dosya istenmektedir: Terminal Şirket sunum formatında hazırlanmış yatırımcı sunumunuz. Başvuru, şirket ve kurucu bilgileri bu dosyadan okunur ve ön bilgilerinizle karşılaştırılır.</p>
   </div>
 
-  <input #deck type="file" accept=".pdf,.pptx,.key,application/pdf" (change)="onFileInput($event)" hidden>
-  <div class="wz-drop" [class.over]="dragging()" role="button" tabindex="0" aria-label="Sunum dosyası seç" (click)="deck.click()" (keydown.enter)="deck.click()" (keydown.space)="$event.preventDefault(); deck.click()" (dragover)="onDragOver($event)" (dragleave)="dragging.set(false)" (drop)="onDrop($event)">
+  <!-- Both ticks are the founder's own act for this upload; the drop area opens only after them. -->
+  <app-deck-consents [(notice)]="noticeAcknowledged" [(ai)]="aiConsent" />
+
+  <input #deck type="file" accept=".pdf,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" (change)="onFileInput($event)" hidden>
+  <div class="wz-drop" [class.over]="dragging()" [class.off]="!consentsGiven()" role="button" tabindex="0" aria-label="Sunum dosyası seç" [attr.aria-disabled]="!consentsGiven()" (click)="pickFile(deck)" (keydown.enter)="pickFile(deck)" (keydown.space)="$event.preventDefault(); pickFile(deck)" (dragover)="onDragOver($event)" (dragleave)="dragging.set(false)" (drop)="onDrop($event)">
     <ul class="wz-types" aria-label="Kabul edilen dosya türleri">
       <li><i></i><i></i><b>PDF</b></li>
       <li class="lg"><i></i><i></i><i></i><b>PPTX</b></li>
-      <li><i></i><i></i><b>KEY</b></li>
     </ul>
     <div class="t">
       <strong>{{ store.busy() ? 'Dosya yükleniyor…' : dragging() ? 'Dosyayı bu alana bırakınız' : 'Sunum dosyanızı bu alana sürükleyiniz' }}</strong>
-      <span>veya bilgisayarınızdan seçiniz. Dosya boyutu en fazla 50 MB olabilir.</span>
+      <span>veya bilgisayarınızdan seçiniz. PDF veya PPTX, en fazla 25 MB.</span>
     </div>
     <span class="wz-btn" aria-hidden="true">Bilgisayardan dosya seç</span>
   </div>
@@ -24,11 +26,12 @@
     <ol>
       <li><span class="pic" aria-hidden="true"><img src="/assets/illustrations/upload-read.webp" alt=""><span class="num">1</span></span><b>Sunumunuz okunur</b><small>Dosya, Terminal AI tarafından incelenir.</small></li>
       <li><span class="pic" aria-hidden="true"><img src="/assets/illustrations/upload-fill.webp" alt=""><span class="num">2</span></span><b>Bilgiler forma aktarılır</b><small>Bulunan bilgiler ilgili alanlara yazılır.</small></li>
-      <li><span class="pic" aria-hidden="true"><img src="/assets/illustrations/upload-check.webp" alt=""><span class="num">3</span></span><b>Kontrol edip onaylarsınız</b><small>Okunan bilgileri kontrol eder, gerekirse düzeltirsiniz.</small></li>
+      <li><span class="pic" aria-hidden="true"><img src="/assets/illustrations/upload-check.webp" alt=""><span class="num">3</span></span><b>Kontrol edip onaylarsınız</b><small>Ön bilgilerinizden farklı olanlarda doğru değeri seçersiniz.</small></li>
     </ol>
   </section>
 
   <div class="wz-actions">
+    <a class="wz-link" routerLink="/details"><app-icon name="pencil" size="15px" [stroke]="2" />Ön bilgileri düzenle</a>
     <button type="button" class="wz-link" (click)="formatOpen.set(true)" aria-haspopup="dialog"><app-icon name="file" size="15px" [stroke]="2" />Sunum formatını inceleyiniz</button>
     <a class="wz-link" href="/assets/samples/lumora-analytics-pitch.pptx" download="ornek-sunum-lumora-analytics.pptx"><app-icon name="download" size="15px" [stroke]="2" />Örnek sunumu indir (PPTX, 16 sayfa)</a>
   </div>

@@ -8,17 +8,23 @@ import {
   Account,
   Application,
   CAPITAL,
+  CrossCheck,
+  CrossKey,
+  DeckConsents,
   FEE_TOTAL,
   FieldMark,
   FUNDING_LABELS,
   FounderType,
   FundingSource,
   LogEntry,
+  Profile,
   ScanField,
   PhoneLinkStatus,
+  Sector,
+  SECTORS,
   Stage,
 } from './models';
-import { ADDRESS_DOC_MAX, validateCard, validTckn } from './rules';
+import { ADDRESS_DOC_MAX, DECK_CONSENT_ERROR, deckFileError, FUNDING_OPTIONS, validateCard, validTckn } from './rules';
 import { DURATION, identityEvents, screeningEvents, setupEvents, signatureDocs, titleDocs } from './timeline';
 
 /**
@@ -174,9 +180,58 @@ export class MockApi implements Api {
 
   // ------------------------------------------------------------------------- step 1 · sunum
 
-  async uploadDeck(email: string, file: { name: string; size: number }) {
+  /**
+   * D-1e: what the founder states before the deck is read. Kept as given, so that after the scan
+   * the deck can be checked against it (see `crossCheck`). It may be saved again until a deck is
+   * uploaded; each save replaces the last (the API keeps every version with its time).
+   * Same rules and messages as the API's SubmitProfileHandler.
+   */
+  async submitProfile(email: string, input: Omit<Profile, 'at'>) {
+    await this.wait(400);
+    const brand = input.brand.trim().replace(/\s+/g, ' ');
+    if (brand.length < 2 || brand.length > 120) throw new ApiError('Şirketinizin veya markanızın adını yazınız.');
+    if (!(input.sector in SECTORS)) throw new ApiError('Faaliyet alanını seçiniz.');
+    if (!FUNDING_OPTIONS.includes(input.funding)) throw new ApiError('Sermaye kaynağını seçiniz.');
+    if (!input.nationality.trim() || input.nationality.length > 60) throw new ApiError('Uyruğunuzu seçiniz.');
+    if (!input.country.trim() || input.country.length > 60) throw new ApiError('Yaşadığınız ülkeyi seçiniz.');
+    const digits = input.phone.replace(/\D/g, '').length;
+    if (digits < 8 || digits > 15) throw new ApiError('Telefon numaranızı eksiksiz yazınız.');
+    return this.mutate(email, ['profile', 'verified'], (app) => {
+      const again = !!app.profile;
+      app.profile = { brand, sector: input.sector, funding: input.funding, nationality: input.nationality.trim(), phone: input.phone.trim(), country: input.country.trim(), at: nowIso() };
+      app.stage = 'verified';
+      log(app, again ? 'Ön bilgiler güncellendi' : 'Ön bilgiler kaydedildi', 'u');
+    });
+  }
+
+  /**
+   * D-1c: the founder decides a difference between the profile and the deck. `stated` writes the
+   * profile's value into the application; `read` keeps the deck's. Either way it is their decision
+   * and is logged as theirs.
+   */
+  async resolveCrossCheck(email: string, key: CrossKey, choice: 'stated' | 'read') {
+    return this.mutate(email, ['review', 'titleConflict'], (app) => {
+      const item = app.crossCheck.find((c) => c.key === key);
+      if (!item || item.match || !app.profile) throw new ApiError('Bu bilgi için seçim gerekmemektedir.');
+      if (choice === 'stated') applyStated(app, app.profile, key);
+      item.choice = choice;
+      item.at = nowIso();
+      log(app, `${item.label}: ${choice === 'stated' ? 'ön bilgilerdeki değer' : 'sunumdaki değer'} seçildi`, 'u');
+    });
+  }
+
+  /**
+   * D-1a (and "Başka dosya yükle" on D-1c): the deck, with the founder's two ticks for this upload.
+   * Refused without both, as the API does, which records them as consent rows. The mock keeps only
+   * the file's name and size; the HTTP client sends the file itself.
+   */
+  async uploadDeck(email: string, file: File, consents: DeckConsents) {
     await this.wait(500);
-    return this.mutate(email, ['verified', 'review', 'titleConflict', 'scanning'], (app, acc) => {
+    if (!consents.noticeAcknowledged || !consents.aiConsent) throw new ApiError(DECK_CONSENT_ERROR);
+    const fileError = deckFileError(file);
+    if (fileError) throw new ApiError(fileError);
+    return this.mutate(email, ['profile', 'verified', 'review', 'titleConflict', 'scanning'], (app, acc) => {
+      if (!app.profile) throw new ApiError('Önce ön bilgileri doldurunuz.');
       const brand = brandFromFile(file.name);
       const root = brand.split(' ')[0];
       const prof = deckProfile(file.name, acc.founderType);
@@ -199,9 +254,13 @@ export class MockApi implements Api {
         { key: 'funding', label: 'Fon kaynağı', value: FUNDING_LABELS[prof.funding], page: pg.funding },
         { key: 'postal', label: 'Posta kodu · Ülke', value: `${app.contact.postalCode} · ${app.contact.country}`, page: pg.contact },
       ];
-      app.deck = { fileName: file.name, sizeKb: Math.max(1, Math.round(file.size / 1024)), pages: pg.total ?? 10 + (file.name.length % 5), startedAt: nowIso(), fields };
+      const at = nowIso();
+      app.deck = { fileName: file.name, sizeKb: Math.max(1, Math.round(file.size / 1024)), pages: pg.total ?? 10 + (file.name.length % 5), startedAt: at, fields, noticeAt: at, aiConsentAt: at };
       app.titleCheck = undefined;
+      app.crossCheck = [];
       app.stage = 'scanning';
+      log(app, 'Aydınlatma metni okundu (sunum)', 'u');
+      log(app, 'Sunumun yapay zekâ ile işlenmesine onay verildi', 'u');
       log(app, `Sunum yüklendi · ${file.name}`, 'u');
     });
   }
@@ -210,6 +269,11 @@ export class MockApi implements Api {
     return this.mutate(email, ['scanning'], (app) => {
       app.stage = 'review';
       log(app, `AI Reviewer ${(app.deck?.fields.length ?? 10) + 3} alan çıkardı`, 'a');
+      if (app.profile) {
+        app.crossCheck = crossCheck(app, app.profile);
+        const diff = app.crossCheck.filter((c) => !c.match).length;
+        log(app, `Ön bilgilerle karşılaştırıldı: ${app.crossCheck.length - diff} bilgi uyuşuyor, ${diff} bilgi farklı`, 'a');
+      }
     });
   }
 
@@ -223,6 +287,13 @@ export class MockApi implements Api {
         funding: patch.funding ?? app.funding,
       });
       edited.forEach((k) => (app.marks[k] = 'edited'));
+      // A difference the founder settled by typing another value counts as decided.
+      for (const c of app.crossCheck) {
+        if (!c.match && !c.choice && crossValue(app, c.key) !== c.read) {
+          c.choice = 'edited';
+          c.at = nowIso();
+        }
+      }
     });
   }
 
@@ -230,6 +301,7 @@ export class MockApi implements Api {
   async submitReview(email: string) {
     await this.wait(1_200);
     return this.mutate(email, ['review', 'titleConflict'], (app) => {
+      if (app.crossCheck.some((c) => !c.match && !c.choice)) throw new ApiError('Ön bilgilerinizle uyuşmayan bilgilerde doğru değeri seçiniz.');
       this.reserveAndStart(app);
     });
   }
@@ -679,13 +751,14 @@ function newApplication(acc: Account): Application {
   const app: Application = {
     id: `DS-${String(new Date().getFullYear()).slice(2)}-${String(Math.floor(1000 + Math.random() * 9000))}`,
     createdAt: nowIso(),
-    stage: 'verified',
+    stage: 'profile',
     founderType: acc.founderType,
     founder: { firstName: acc.firstName, lastName: acc.lastName, nationality: '', passportNo: String(Math.floor(10_000_000 + Math.random() * 89_999_999)), tckn: acc.tckn },
     contact: { email: acc.email, phone: '', address: '', postalCode: '', country: '' },
     company: { deckName: '', root: '', activity: '', nace: [], suggestedNace: [], capital: CAPITAL },
     funding: 'own-abroad',
     marks: {},
+    crossCheck: [],
     docs: [],
     logs: [],
   };
@@ -694,14 +767,14 @@ function newApplication(acc: Account): Application {
 }
 
 /**
- * Applications saved before 2026-11-20 may sit at the removed `profile` stage (D-1e) or carry its
- * statement and comparison; they continue at the deck upload with those dropped.
+ * Applications saved between 2026-11-20 and 2026-11-25 were made without the profile form: one
+ * waiting at the deck upload without a profile goes back to the form, since the deck now needs
+ * one. Any application without a comparison gets an empty one. Later stages are left as they are.
  */
 function upgrade(db: Db): Db {
-  for (const app of Object.values(db.apps) as unknown as Record<string, unknown>[]) {
-    if (app['stage'] === 'profile') app['stage'] = 'verified';
-    delete app['profile'];
-    delete app['crossCheck'];
+  for (const app of Object.values(db.apps)) {
+    if (app.stage === 'verified' && !app.profile) app.stage = 'profile';
+    app.crossCheck ??= [];
   }
   return db;
 }
@@ -723,6 +796,100 @@ export function edevletIdentity(tckn: string) {
   const firstName = FIRST[(d[1] + d[3] + d[5]) % FIRST.length];
   const lastName = LAST[(d[2] + d[4] + d[6] + d[7]) % LAST.length];
   return { firstName, lastName, email: `${asciiLower(firstName)}.${asciiLower(lastName)}@ornek.com.tr` };
+}
+
+/** The deck's value for a compared item, as shown to the founder ("—" when the deck gave nothing). */
+function crossValue(app: Application, key: CrossKey): string {
+  const value = (() => {
+    switch (key) {
+      case 'brand':
+        return app.company.deckName;
+      case 'sector': {
+        const s = sectorOf(app.company.nace);
+        return s ? SECTORS[s].label : app.company.nace.join(', ');
+      }
+      case 'funding':
+        return FUNDING_LABELS[app.funding];
+      case 'nationality':
+        return app.founder.nationality;
+      case 'phone':
+        return app.contact.phone;
+      case 'country':
+        return app.contact.country;
+    }
+  })();
+  return value || '—';
+}
+
+/** The first activity area any of these NACE codes belongs to. */
+export function sectorOf(codes: string[]): Sector | null {
+  return (Object.keys(SECTORS) as Sector[]).find((s) => SECTORS[s].nace.some((c) => codes.includes(c))) ?? null;
+}
+
+const fold = (v: string) => v.toLocaleLowerCase('tr-TR').replace(/[^\p{L}\p{N}]/gu, '');
+
+/** Labels of the compared items, as the API names them (Wizard.CrossLabels). */
+const CROSS_LABELS: Record<CrossKey, string> = {
+  brand: 'Şirket / marka adı',
+  sector: 'Faaliyet alanı',
+  funding: 'Sermaye kaynağı',
+  nationality: 'Uyruk',
+  phone: 'Telefon',
+  country: 'Yaşadığınız ülke',
+};
+
+/** Compares the profile with what was read from the deck; one item per compared piece. */
+export function crossCheck(app: Application, p: Profile): CrossCheck[] {
+  const item = (key: CrossKey, stated: string, match: boolean): CrossCheck => ({ key, label: CROSS_LABELS[key], stated, read: crossValue(app, key), match, choice: null, at: null });
+  const [a, b] = [fold(p.brand), fold(app.company.deckName)];
+  const digits = (v: string) => v.replace(/\D/g, '').slice(-9);
+  return [
+    item('brand', p.brand, !!a && !!b && (a.includes(b) || b.includes(a))),
+    item('sector', SECTORS[p.sector].label, p.sector === 'other' || SECTORS[p.sector].nace.some((c) => app.company.nace.includes(c))),
+    item('funding', FUNDING_LABELS[p.funding], p.funding === app.funding),
+    item('nationality', p.nationality, fold(p.nationality) === fold(app.founder.nationality)),
+    item('phone', p.phone, digits(p.phone) === digits(app.contact.phone)),
+    item('country', p.country, fold(p.country) === fold(app.contact.country)),
+  ];
+}
+
+/** Writes the profile's value for `key` into the application, as if the founder had typed it in the review. */
+function applyStated(app: Application, p: Profile, key: CrossKey) {
+  switch (key) {
+    case 'brand':
+      app.company.deckName = p.brand;
+      app.company.root = p.brand;
+      app.company.logo = deckLogo(p.brand);
+      app.marks['title'] = 'edited';
+      break;
+    case 'sector':
+      app.company.nace = SECTORS[p.sector].nace.slice(0, 2);
+      app.marks['nace'] = 'edited';
+      break;
+    case 'funding':
+      app.funding = p.funding;
+      app.marks['funding'] = 'edited';
+      break;
+    case 'nationality':
+      app.founder.nationality = p.nationality;
+      app.marks['name'] = 'edited';
+      break;
+    case 'phone':
+      app.contact.phone = p.phone;
+      app.marks['phone'] = 'edited';
+      break;
+    case 'country':
+      app.contact.country = p.country;
+      app.marks['address'] = 'edited';
+      break;
+  }
+}
+
+/** A real `File` that reports a given size without holding the bytes; the mock reads only name and size. */
+export function demoFile(name: string, size: number): File {
+  const file = new File([], name);
+  Object.defineProperty(file, 'size', { value: size });
+  return file;
 }
 
 /** "acme-cloud-pitch_v3.pdf" → "Acme Cloud" */
@@ -815,12 +982,24 @@ export function deckProfile(fileName: string, founderType: FounderType): DeckPro
 
 /** Drives the real API methods in order until the application reaches `want`. */
 async function fastForward(api: MockApi, email: string, want: Stage) {
-  if (want === 'registered' || want === 'verified') return;
+  if (want === 'registered' || want === 'profile') return;
   const resident = JSON.parse(localStorage.getItem(DB_KEY)!).apps[email].founderType === 'resident';
-  await api.uploadDeck(email, { name: 'acme-cloud-pitch.pdf', size: 4_812_000 });
+  // The demo profile agrees with the demo deck except for the phone number, so D-1c shows one difference.
+  await api.submitProfile(email, {
+    brand: 'Acme Cloud',
+    sector: 'software',
+    funding: 'own-abroad',
+    nationality: resident ? 'Türkiye' : 'Birleşik Krallık',
+    phone: resident ? '+90 532 410 2699' : '+44 7700 900456',
+    country: resident ? 'Türkiye' : 'Birleşik Krallık',
+  });
+  if (want === 'verified') return;
+  // Seeding stands in for the founder's ticks on D-1a, so that later stages have a deck to show.
+  await api.uploadDeck(email, demoFile('acme-cloud-pitch.pdf', 4_812_000), { noticeAcknowledged: true, aiConsent: true });
   if (want === 'scanning') return;
-  await api.completeScan(email);
+  const scanned = await api.completeScan(email);
   if (want === 'review') return;
+  for (const c of scanned.crossCheck) if (!c.match) await api.resolveCrossCheck(email, c.key, 'read');
   // The demo deck's first title clashes in MERSİS; pick a free alternative unless we want the conflict.
   if (want === 'titleConflict') {
     await api.submitReview(email);
@@ -886,7 +1065,9 @@ async function backdate(email: string, which: 'identity' | 'screening' | 'setup'
  */
 const ANSWERS: [RegExp, string][] = [
   [/sermaye kaynağı/i, 'Sermaye kaynağı, şirkete konacak paranın nereden geldiğini gösterir: kendi hesabınız, bir yatırımcı veya üçüncü bir taraf. Üçüncü taraf transferleri uyum ekibince incelenir.'],
-  [/format|pdf|pptx|keynote|dosya/i, 'PDF, PowerPoint (.pptx) ve Keynote (.key) dosyaları kabul edilir; dosya boyutu en fazla 50 MB olabilir.'],
+  [/farklı/i, 'Farklı olan her bilgi için ön bilgilerinizdeki veya sunumdaki değeri seçersiniz; dilerseniz başka bir değer yazabilirsiniz. Seçimleriniz işlem kaydına eklenir.'],
+  [/[öÖ]n bilgi/, 'Ön bilgileriniz, sunumunuzdan okunan bilgilerle karşılaştırılır. Uyuşmayan bilgiler inceleme ekranında gösterilir ve hangisinin doğru olduğunu siz seçersiniz.'],
+  [/format|pdf|pptx|dosya/i, 'PDF ve PowerPoint (.pptx) dosyaları kabul edilir; dosya boyutu en fazla 25 MB olabilir.'],
   [/gizli|kvkk|saklan|veri/i, 'Sunumunuz yalnızca başvurunuz kapsamında işlenir, KVKK uyarınca Türkiye’deki sunucularda şifreli olarak saklanır ve kurumlarla yalnızca gerekli alanlar paylaşılır.'],
   [/adres belgesi/i, 'Son üç ay içinde düzenlenmiş fatura, banka hesap özeti veya yerleşim yeri belgesi kabul edilir. Belge üzerinde adınız ve beyan ettiğiniz adres okunmalıdır.'],
   [/okun/i, 'Şirket adı, faaliyet alanı, kurucu, iletişim ve sermaye bilgileri okunur. Okunan her bilgi bir sonraki ekranda düzeltilebilir.'],

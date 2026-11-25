@@ -89,7 +89,7 @@ export class GirisData {
       this.store.error.set('6 haneli kodu girin.');
       return;
     }
-    if (await this.store.verifyEmail(code)) void this.router.navigateByUrl('/deck');
+    if (await this.store.verifyEmail(code)) void this.router.navigateByUrl(this.store.resumeRoute());
   }
 
   protected async resend() {

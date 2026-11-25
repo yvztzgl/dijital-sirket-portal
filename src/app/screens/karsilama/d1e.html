@@ -1,0 +1,41 @@
+<app-step-page [step]="1" [part]="1" [parts]="3" sub="Ön bilgiler" ctx="profile" label="D-1e Ön bilgiler">
+  @let p = profileDraft();
+  <div class="wz-head">
+    <h1 class="wz-h1">Şirketiniz hakkında ön bilgi veriniz</h1>
+    <p class="wz-lead">Sunumunuzu yüklemeden önce temel bilgileri giriniz. Sunumunuz okunduktan sonra bu bilgilerle karşılaştırılır.</p>
+  </div>
+
+  <form class="wz-card wz-profile" (submit)="$event.preventDefault(); submitProfile()">
+    <p class="why"><app-icon name="list-checks" size="16px" [stroke]="2" />Sunumdan okunan bilgiler bu bilgilerle uyuşmazsa, inceleme ekranında hangisinin doğru olduğunu siz seçersiniz.</p>
+
+    <section aria-labelledby="pf-co">
+      <h2 id="pf-co" class="wz-card-h">Şirket bilgileri</h2>
+      <div class="grid">
+        <label class="wz-field wide">Şirket veya marka adı
+          <input class="wz-input" [value]="p.brand" (input)="setProfile('brand', $any($event.target).value)" placeholder="Örneğin Acme Cloud" autocomplete="organization">
+        </label>
+        <div class="wz-field"><span>Faaliyet alanı</span><app-select label="Faaliyet alanı" [options]="sectorOptions" [value]="p.sector" (valueChange)="setProfile('sector', $event)" placeholder="Seçiniz" /></div>
+        <div class="wz-field"><span>Sermaye kaynağı</span><app-select label="Sermaye kaynağı" [options]="fundingOptions" [value]="p.funding" (valueChange)="setProfile('funding', $event)" placeholder="Seçiniz" /></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="pf-fo">
+      <h2 id="pf-fo" class="wz-card-h">Kurucu bilgileri</h2>
+      <p class="who"><app-icon name="user" size="15px" [stroke]="2" /><b>{{ founderName() }}</b><small>Hesabınızdan alınmıştır.</small></p>
+      <div class="grid">
+        <div class="wz-field"><span>Uyruk</span><app-country-select label="Uyruk" [value]="p.nationality" (valueChange)="setProfile('nationality', $event)" /></div>
+        <div class="wz-field"><span>Yaşadığınız ülke</span><app-country-select label="Yaşadığınız ülke" [value]="p.country" (valueChange)="setProfile('country', $event)" /></div>
+        <div class="wz-field wide"><span>Telefon</span><app-phone-input label="Telefon" [value]="p.phone" [defaultCountry]="p.country" (valueChange)="setProfile('phone', $event)" /></div>
+      </div>
+    </section>
+
+    <app-form-error />
+    <div class="end">
+      @if (profileSaved()) {<a class="wz-link" routerLink="/deck">Değiştirmeden sunuma dön</a>}
+      <button type="submit" class="wz-btn" [disabled]="!profileReady() || store.busy()">{{ store.busy() ? 'Kaydediliyor…' : 'Kaydet ve devam et' }}</button>
+    </div>
+  </form>
+  @if (!profileReady()) {<button type="button" class="wz-link wz-link--sm" (click)="useSampleProfile()">Demo: örnek bilgileri doldur</button>}
+
+  <p class="wz-foot"><app-icon name="lock" size="13px" [stroke]="2" />Bilgileriniz yalnızca bu başvuru kapsamında işlenir ve KVKK uyarınca saklanır.</p>
+</app-step-page>

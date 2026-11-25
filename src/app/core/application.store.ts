@@ -4,7 +4,7 @@ import { ApiError } from './api-error';
 import { Clock } from './clock';
 import { pdfBytes, zipBytes } from './files';
 import { dateTime, initials } from './format';
-import { Account, Application, DocItem, FounderType, LogEntry, PhoneLinkStatus, Stage, stepOf } from './models';
+import { Account, Application, CrossKey, DeckConsents, DocItem, FounderType, LogEntry, PhoneLinkStatus, Profile, Stage, stepOf } from './models';
 import {
   callView,
   DURATION,
@@ -27,6 +27,8 @@ export function routeFor(stage: Stage | null, founderType: FounderType = 'foreig
       return '/login';
     case 'registered':
       return '/verify-email';
+    case 'profile':
+      return '/details';
     case 'verified':
       return '/deck';
     case 'scanning':
@@ -82,7 +84,7 @@ export class ApplicationStore {
   // ------------------------------------------------------------------------------ derived
 
   readonly signedIn = computed(() => !!this.account());
-  readonly stage = computed<Stage | null>(() => this.app()?.stage ?? (this.account() ? (this.account()!.verified ? 'verified' : 'registered') : null));
+  readonly stage = computed<Stage | null>(() => this.app()?.stage ?? (this.account() ? (this.account()!.verified ? 'profile' : 'registered') : null));
   readonly step = computed(() => {
     const s = this.stage();
     return s ? stepOf(s) : 1;
@@ -219,10 +221,15 @@ export class ApplicationStore {
   resendEmailCode = () => this.run(() => this.api.resendEmailCode(this.email()));
   requestPasswordReset = (email: string) => this.run(() => this.api.requestPasswordReset(email));
 
-  uploadDeck = (file: { name: string; size: number }) => this.update(() => this.api.uploadDeck(this.email(), file));
+  /** D-1e: the founder's statement before the deck; may be saved again until a deck is uploaded. */
+  submitProfile = (input: Omit<Profile, 'at'>) => this.update(() => this.api.submitProfile(this.email(), input));
+  /** D-1a: the deck with the founder's two ticks for this upload. */
+  uploadDeck = (file: File, consents: DeckConsents) => this.update(() => this.api.uploadDeck(this.email(), file, consents));
   updateReview = (patch: ReviewPatch, edited: string[]) => this.update(() => this.api.updateReview(this.email(), patch, edited));
   submitReview = () => this.update(() => this.api.submitReview(this.email()));
   chooseTitle = (title: string) => this.update(() => this.api.chooseTitle(this.email(), title));
+  /** D-1c: which value to keep where the profile and the deck differ. */
+  resolveCrossCheck = (key: CrossKey, choice: 'stated' | 'read') => this.update(() => this.api.resolveCrossCheck(this.email(), key, choice));
   /** D-2a: the founder read the pre-information, ticked the consent and starts the identity check. */
   startEligibility = (consent: boolean) => this.update(() => this.api.startEligibility(this.email(), consent));
   /** D-2d: the address document and the confirmed declaration; the list search starts. */

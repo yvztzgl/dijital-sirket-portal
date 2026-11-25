@@ -18,7 +18,7 @@ screens ─► ApplicationStore ─► Api (abstract class, used as the injectio
 | `src/app/core/api-error.ts` | `ApiError`: `message` (Turkish, shown as is), optional `code`, `status`, `fields`. |
 | `src/app/core/mock-api.ts` | `MockApi implements Api`: data in `localStorage` (`dsp.db.v1`), simulated delays, demo tools. |
 | `src/app/core/http-api.ts` | `HttpApi implements Api`, the `request()` helper, `toApiError()`, the `markApiWrites` interceptor. |
-| `src/app/core/rules.ts` | Pure checks the screens use (card, T.C. kimlik no, password strength, address document size, funding options). Not part of either implementation. |
+| `src/app/core/rules.ts` | Pure checks the screens use (card, T.C. kimlik no, password strength, address document size, deck size and type, funding options). Not part of either implementation. |
 | `src/environments/environment.ts` | Default (mock) mode: names `MockApi`, no extra providers. |
 | `src/environments/environment.http.ts` | HTTP mode: names `HttpApi`, provides `HttpClient` with the interceptor. |
 | `proxy.conf.json` | Dev server: `/api` → `http://localhost:5149`. |
@@ -87,6 +87,41 @@ What is in place for the next pieces:
   refuses writes without it (a cross-site HTML form cannot set a custom header).
 - `ApplicationStore.run()` still shows only `message`; showing `fields` next to form fields comes
   with the screens that need it.
+
+## Flow: the mock walks the API's path up to the review (since 2026-11-25)
+
+Piece 2 made the portal's step 1 follow the API's flow, still on the mock, so that both modes walk
+the same path once `HttpApi` is filled in:
+
+| | Portal (mock) | API |
+| --- | --- | --- |
+| After e-mail or e-Devlet sign-up | stage `profile`, screen D-1e `/details` | status `draft` without a profile = stage `profile` |
+| `submitProfile` | allowed at `profile` and `verified`, each save replaces the last; then `verified` | `PUT /profile`, allowed while `draft`; every version kept |
+| Profile rules | brand 2–120 (spaces collapsed), sector, funding, nationality and country 1–60, phone 8–15 digits; the API's Turkish messages | `SubmitProfileHandler.Validate` |
+| `uploadDeck` | `File` + `{ noticeAcknowledged, aiConsent }`; refused without both, without a profile ("Önce ön bilgileri doldurunuz."), over 25 MB or not PDF/PPTX | `POST /deck` multipart; records two consent rows per upload |
+| After the scan | `crossCheck`: six items, `{ key, label, stated, read, match, choice, at }` | `formation.cross_check`, same JSON |
+| `resolveCrossCheck(key, 'stated' \| 'read')` | refused on an item that matches; `stated` writes the profile's value | `POST /cross-checks/{key}` |
+| Typing another value in the review | counts as `choice: 'edited'` | same (`UpdateReviewHandler`) |
+| `submitReview` | refused while a difference has no choice | same |
+
+Choices made in this piece:
+
+- There is no "edit profile" call that moves the stage back: the API derives `profile`/`verified`
+  from whether a profile exists. D-1a links to `/details`, which the guard opens at both stages.
+- Consents on a re-upload: the D-1c "Başka dosya yükle" panel shows both boxes again, unticked,
+  and sends only what the founder ticked there. Nothing is remembered from the first upload,
+  because the API records consent per upload.
+- The checkbox labels ("Sunumumla ilgili aydınlatma metnini okudum." / "Sunumumun yapay zekâ ile
+  işlenmesine onay veriyorum.") are **wording to be confirmed**; the notice text does not exist yet,
+  so nothing links to it.
+- The mock keeps the consent times on `deck.noticeAt` / `deck.aiConsentAt` and logs both ticks as
+  the founder's acts.
+- The demo seed states a profile whose phone differs from the demo deck, and D-1e's "Demo: örnek
+  bilgileri doldur" one whose phone differs from the sample deck (Lumora), so D-1c shows a
+  difference in demos. Seeding a stage after the review chooses the deck's value.
+
+Still different from the API (not part of this piece): the `titleChecking` stage, `eligible`
+folded into `payment`, slow stages driven by the server, and the `email` parameters on `Api`.
 
 ## Known gaps for later pieces
 

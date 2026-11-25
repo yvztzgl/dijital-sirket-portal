@@ -5,6 +5,7 @@ import {
   alternativesFor,
   ApiError,
   brandFromFile,
+  demoFile,
   luhn,
   MockApi,
   passwordStrength,
@@ -13,6 +14,7 @@ import {
   validTckn,
 } from './mock-api';
 import { FEE_TOTAL } from './models';
+import { DECK_CONSENT_ERROR, deckFileError } from './rules';
 import { setupEvents, setupView } from './timeline';
 
 describe('business rules', () => {
@@ -83,13 +85,21 @@ describe('MockApi flow', () => {
 
   const lastCode = () => inbox.messages()[0].code!;
 
-  /** Registers and verifies the e-mail, so the founder is at the deck upload (D-1a). */
-  async function verifiedFounder(email = 'ayse@novalab.io') {
+  /** Both ticks of D-1a, as the founder gives them. */
+  const CONSENTS = { noticeAcknowledged: true, aiConsent: true };
+  /** A deck file of a given size; the mock reads only name and size. */
+  const deck = (name: string, size = 1000) => demoFile(name, size);
+  /** The statement on D-1e that agrees with the generic demo deck for a foreign founder. */
+  const PROFILE = { brand: 'Novalab', sector: 'software', funding: 'own-abroad', nationality: 'Birleşik Krallık', phone: '+44 7700 900123', country: 'Birleşik Krallık' } as const;
+
+  /** Registers, verifies the e-mail and fills in the profile, so the founder is at the deck upload (D-1a). */
+  async function verifiedFounder(email = 'ayse@novalab.io', brand = 'Novalab') {
     await api.register({ firstName: 'Ayşe', lastName: 'Kaya', email, password: 'Nova-Lab-2026!' });
-    await expect(api.uploadDeck(email, { name: 'x.pdf', size: 1 })).rejects.toThrow('bulunamadı');
+    await expect(api.uploadDeck(email, deck('x.pdf', 1), CONSENTS)).rejects.toThrow('bulunamadı');
     await expect(api.verifyEmail(email, '000000')).rejects.toBeInstanceOf(ApiError);
     const { app } = await api.verifyEmail(email, lastCode());
-    return app;
+    expect(app!.stage).toBe('profile');
+    return api.submitProfile(email, { ...PROFILE, brand });
   }
 
   it('registers, verifies by e-mail code and creates an application', async () => {
@@ -102,8 +112,8 @@ describe('MockApi flow', () => {
 
   it('carries the founder into the scanned fields and hits a MERSİS conflict for an existing title', async () => {
     const email = 'ayse@novalab.io';
-    await verifiedFounder(email);
-    let app = await api.uploadDeck(email, { name: 'acme-cloud-pitch.pdf', size: 1000 });
+    await verifiedFounder(email, 'Acme Cloud');
+    let app = await api.uploadDeck(email, deck('acme-cloud-pitch.pdf', 1000), CONSENTS);
     expect(app.stage).toBe('scanning');
     expect(app.deck!.fields.find((f) => f.key === 'name')!.value).toBe('Ayşe Kaya');
     app = await api.completeScan(email);
@@ -118,7 +128,7 @@ describe('MockApi flow', () => {
   it('hands the identity check to a phone through a short-lived link', async () => {
     const email = 'ayse@novalab.io';
     await verifiedFounder(email);
-    await api.uploadDeck(email, { name: 'novalab-deck.pdf', size: 1000 });
+    await api.uploadDeck(email, deck('novalab-deck.pdf', 1000), CONSENTS);
     await api.completeScan(email);
     await api.submitReview(email);
     expect(await api.phoneLinkStatus('nope')).toEqual({ state: 'invalid' });
@@ -153,7 +163,7 @@ describe('MockApi flow', () => {
   it('lets a phone link run out, and cancels it when the check starts on the computer', async () => {
     const email = 'ayse@novalab.io';
     await verifiedFounder(email);
-    await api.uploadDeck(email, { name: 'novalab-deck.pdf', size: 1000 });
+    await api.uploadDeck(email, deck('novalab-deck.pdf', 1000), CONSENTS);
     await api.completeScan(email);
     await api.submitReview(email);
     let app = await api.createPhoneLink(email);
@@ -189,7 +199,7 @@ describe('MockApi flow', () => {
   it('sends third-party funding to manual review, and runs payment with 3-D Secure', async () => {
     const email = 'ayse@novalab.io';
     await verifiedFounder(email);
-    await api.uploadDeck(email, { name: 'novalab-deck.pdf', size: 1000 });
+    await api.uploadDeck(email, deck('novalab-deck.pdf', 1000), CONSENTS);
     await api.completeScan(email);
     await api.updateReview(email, { funding: 'third-party' }, ['funding']);
     let app = await api.submitReview(email);
@@ -240,32 +250,16 @@ describe('MockApi flow', () => {
     expect(first.created).toBe(true);
     expect(first.account.firstName).toBe('Mehmet');
     expect(first.account.founderType).toBe('resident');
-    expect(first.app.stage).toBe('verified');
+    expect(first.app.stage).toBe('profile');
     const again = await api.edevlet('10000000146');
     expect(again.created).toBe(false);
     expect(again.app.id).toBe(first.app.id);
   });
 
-  it('starts at the deck upload and moves an application saved at the removed profile form there', async () => {
-    const email = 'ayse@novalab.io';
-    expect((await verifiedFounder(email)).stage).toBe('verified');
-    // An application saved before 2026-11-20, waiting on D-1e with a statement and its comparison.
-    const db = JSON.parse(localStorage.getItem('dsp.db.v1')!);
-    Object.assign(db.apps[email], { stage: 'profile', profile: { brand: 'Novalab' }, crossCheck: [] });
-    localStorage.setItem('dsp.db.v1', JSON.stringify(db));
-    const { app } = await api.login(email, 'Nova-Lab-2026!');
-    expect(app!.stage).toBe('verified');
-    expect('profile' in app!).toBe(false);
-    expect('crossCheck' in app!).toBe(false);
-    await api.uploadDeck(email, { name: 'novalab-deck.pdf', size: 1000 });
-    await api.completeScan(email);
-    expect((await api.submitReview(email)).stage).toBe('eligibility');
-  });
-
   it('reads the downloadable sample deck exactly as written on its slides', async () => {
     const email = 'ayse@novalab.io';
     await verifiedFounder(email);
-    const app = await api.uploadDeck(email, { name: 'lumora-analytics-pitch.pptx', size: 57_000 });
+    const app = await api.uploadDeck(email, deck('lumora-analytics-pitch.pptx', 57_000), CONSENTS);
     expect(app.company.deckName).toBe('Lumora Analytics');
     expect(app.company.nace).toEqual(['62.01', '63.11', '62.02']);
     expect(app.founder.nationality).toBe('Almanya');
@@ -290,6 +284,169 @@ describe('MockApi flow', () => {
     const email = 'ayse@novalab.io';
     await verifiedFounder(email);
     await expect(api.startSetup(email, true)).rejects.toThrow('adımında');
+  });
+
+  // ------------------------------------------------ profile, cross-check, deck consents (2026-11-25)
+
+  it('checks the profile with the API’s rules and messages', async () => {
+    const email = 'ayse@novalab.io';
+    await api.register({ firstName: 'Ayşe', lastName: 'Kaya', email, password: 'Nova-Lab-2026!' });
+    await api.verifyEmail(email, lastCode());
+    const refused = (patch: Record<string, string>, message: string) =>
+      expect(api.submitProfile(email, { ...PROFILE, ...patch } as typeof PROFILE)).rejects.toThrow(message);
+    await refused({ brand: ' A ' }, 'Şirketinizin veya markanızın adını yazınız.');
+    await refused({ brand: 'x'.repeat(121) }, 'Şirketinizin veya markanızın adını yazınız.');
+    await refused({ sector: 'mining' }, 'Faaliyet alanını seçiniz.');
+    await refused({ funding: 'gift' }, 'Sermaye kaynağını seçiniz.');
+    await refused({ nationality: ' ' }, 'Uyruğunuzu seçiniz.');
+    await refused({ nationality: 'x'.repeat(61) }, 'Uyruğunuzu seçiniz.');
+    await refused({ country: '' }, 'Yaşadığınız ülkeyi seçiniz.');
+    await refused({ country: 'x'.repeat(61) }, 'Yaşadığınız ülkeyi seçiniz.');
+    await refused({ phone: '+44 7700 9' }, 'Telefon numaranızı eksiksiz yazınız.');
+    await refused({ phone: '+44 7700 9001 2345 678' }, 'Telefon numaranızı eksiksiz yazınız.');
+    // Repeated spaces collapse before the length is counted, as on the API.
+    const app = await api.submitProfile(email, { ...PROFILE, brand: '  Nova    Lab ' });
+    expect(app.stage).toBe('verified');
+    expect(app.profile).toMatchObject({ ...PROFILE, brand: 'Nova Lab' });
+    expect(app.profile!.at).toBeTruthy();
+    expect(app.logs.at(-1)).toMatchObject({ text: 'Ön bilgiler kaydedildi', who: 'u' });
+  });
+
+  it('asks for the profile before the deck, and takes a new profile only until the deck is uploaded', async () => {
+    const email = 'ayse@novalab.io';
+    await api.register({ firstName: 'Ayşe', lastName: 'Kaya', email, password: 'Nova-Lab-2026!' });
+    const { app: created } = await api.verifyEmail(email, lastCode());
+    expect(created!.stage).toBe('profile');
+    expect(created!.crossCheck).toEqual([]);
+    await expect(api.uploadDeck(email, deck('novalab-deck.pdf'), CONSENTS)).rejects.toThrow('Önce ön bilgileri doldurunuz.');
+    let app = await api.submitProfile(email, PROFILE);
+    expect(app.stage).toBe('verified');
+    // Saved again from D-1a's "Ön bilgileri düzenle": the new statement replaces the old one.
+    app = await api.submitProfile(email, { ...PROFILE, brand: 'Novalab Labs' });
+    expect(app.stage).toBe('verified');
+    expect(app.profile!.brand).toBe('Novalab Labs');
+    expect(app.logs.at(-1)!.text).toBe('Ön bilgiler güncellendi');
+    await api.uploadDeck(email, deck('novalab-deck.pdf'), CONSENTS);
+    await expect(api.submitProfile(email, PROFILE)).rejects.toThrow('adımında');
+  });
+
+  it('checks the deck against the profile and waits for the founder to decide each difference', async () => {
+    const email = 'ayse@novalab.io';
+    await verifiedFounder(email);
+    // Changed before the deck: the phone and the capital source no longer agree with the deck.
+    let app = await api.submitProfile(email, { ...PROFILE, phone: '+44 7700 900999', funding: 'investor' });
+    await api.uploadDeck(email, deck('novalab-deck.pdf'), CONSENTS);
+    expect((await api.login(email, 'Nova-Lab-2026!')).app!.crossCheck).toEqual([]);
+    app = await api.completeScan(email);
+    expect(app.crossCheck.length).toBe(6);
+    expect(app.crossCheck.filter((c) => !c.match).map((c) => c.key)).toEqual(['funding', 'phone']);
+    expect(app.crossCheck.find((c) => c.key === 'phone')).toEqual({
+      key: 'phone', label: 'Telefon', stated: '+44 7700 900999', read: '+44 7700 900123', match: false, choice: null, at: null,
+    });
+    expect(app.logs.at(-1)!.text).toBe('Ön bilgilerle karşılaştırıldı: 4 bilgi uyuşuyor, 2 bilgi farklı');
+    await expect(api.submitReview(email)).rejects.toThrow('Ön bilgilerinizle uyuşmayan bilgilerde doğru değeri seçiniz.');
+    await expect(api.resolveCrossCheck(email, 'brand', 'read')).rejects.toThrow('Bu bilgi için seçim gerekmemektedir.');
+    // The profile's capital source is written into the application; the deck's phone is kept.
+    app = await api.resolveCrossCheck(email, 'funding', 'stated');
+    expect(app.funding).toBe('investor');
+    expect(app.marks['funding']).toBe('edited');
+    app = await api.resolveCrossCheck(email, 'phone', 'read');
+    expect(app.contact.phone).toBe('+44 7700 900123');
+    const phone = app.crossCheck.find((c) => c.key === 'phone')!;
+    expect(phone.choice).toBe('read');
+    expect(phone.at).toBeTruthy();
+    expect(app.logs.at(-1)).toMatchObject({ text: 'Telefon: sunumdaki değer seçildi', who: 'u' });
+    expect((await api.submitReview(email)).stage).toBe('eligibility');
+  });
+
+  it('counts a difference as decided when the founder types another value in the review', async () => {
+    const email = 'ayse@novalab.io';
+    await verifiedFounder(email);
+    await api.submitProfile(email, { ...PROFILE, nationality: 'İrlanda' });
+    await api.uploadDeck(email, deck('novalab-deck.pdf'), CONSENTS);
+    await api.completeScan(email);
+    const app = await api.updateReview(email, { founder: { nationality: 'Kanada' } }, ['name']);
+    expect(app.crossCheck.find((c) => c.key === 'nationality')!.choice).toBe('edited');
+    expect((await api.submitReview(email)).stage).toBe('eligibility');
+  });
+
+  it('shows "—" for a compared value the deck did not give', async () => {
+    const email = 'ayse@novalab.io';
+    await verifiedFounder(email);
+    await api.uploadDeck(email, deck('novalab-deck.pdf'), CONSENTS);
+    // A deck without a phone number on its contact page.
+    const db = JSON.parse(localStorage.getItem('dsp.db.v1')!);
+    db.apps[email].contact.phone = '';
+    localStorage.setItem('dsp.db.v1', JSON.stringify(db));
+    const app = await api.completeScan(email);
+    expect(app.crossCheck.find((c) => c.key === 'phone')).toMatchObject({ read: '—', match: false });
+  });
+
+  it('shows the sample deck with the sample profile as one difference, the phone', async () => {
+    const email = 'ayse@novalab.io';
+    await api.register({ firstName: 'Ayşe', lastName: 'Kaya', email, password: 'Nova-Lab-2026!' });
+    await api.verifyEmail(email, lastCode());
+    // The values of D-1e's "Demo: örnek bilgileri doldur".
+    await api.submitProfile(email, { brand: 'Lumora Analytics', sector: 'software', funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
+    await api.uploadDeck(email, deck('lumora-analytics-pitch.pptx', 57_000), CONSENTS);
+    const app = await api.completeScan(email);
+    expect(app.crossCheck.filter((c) => !c.match).map((c) => c.key)).toEqual(['phone']);
+  });
+
+  it('seeds the demo founder with one difference open at the review and decided after it', async () => {
+    const review = await api.seed('review');
+    expect(review.app!.crossCheck.filter((c) => !c.match).map((c) => [c.key, c.choice])).toEqual([['phone', null]]);
+    const later = await api.seed('eligibility');
+    expect(later.app!.crossCheck.find((c) => c.key === 'phone')!.choice).toBe('read');
+    expect((await api.seed('profile')).app!.stage).toBe('profile');
+    expect((await api.seed('verified')).app!.profile).toBeTruthy();
+  });
+
+  it('takes the deck only with both ticks, as PDF or PPTX of at most 25 MB', async () => {
+    const email = 'ayse@novalab.io';
+    await verifiedFounder(email);
+    const pdf = deck('novalab-deck.pdf');
+    await expect(api.uploadDeck(email, pdf, { noticeAcknowledged: false, aiConsent: true })).rejects.toThrow(DECK_CONSENT_ERROR);
+    await expect(api.uploadDeck(email, pdf, { noticeAcknowledged: true, aiConsent: false })).rejects.toThrow(DECK_CONSENT_ERROR);
+    await expect(api.uploadDeck(email, deck('novalab.key'), CONSENTS)).rejects.toThrow('Sunum PDF veya PPTX biçiminde olmalıdır.');
+    await expect(api.uploadDeck(email, deck('novalab.ppt'), CONSENTS)).rejects.toThrow('Sunum PDF veya PPTX biçiminde olmalıdır.');
+    await expect(api.uploadDeck(email, deck('novalab.pdf', 25 * 1024 * 1024 + 1), CONSENTS)).rejects.toThrow('Dosya 25 MB’tan büyüktür.');
+    expect((await api.login(email, 'Nova-Lab-2026!')).app!.deck).toBeUndefined();
+    const app = await api.uploadDeck(email, deck('novalab.PPTX', 25 * 1024 * 1024), CONSENTS);
+    expect(app.stage).toBe('scanning');
+    expect(app.deck!.noticeAt).toBe(app.deck!.startedAt);
+    expect(app.deck!.aiConsentAt).toBe(app.deck!.startedAt);
+    expect(app.logs.slice(-3).map((l) => l.who)).toEqual(['u', 'u', 'u']);
+    expect(app.logs.at(-2)!.text).toContain('yapay zekâ');
+    // The same checks the screen makes before sending.
+    expect(deckFileError({ name: 'a.pdf', size: 1 })).toBeNull();
+    expect(deckFileError({ name: 'a.key', size: 1 })).toContain('PDF veya PPTX');
+    expect(deckFileError({ name: 'a.pdf', size: 26 * 1024 * 1024 })).toContain('25 MB');
+  });
+
+  it('sends an application left at the deck upload without a profile back to the profile form', async () => {
+    const email = 'ayse@novalab.io';
+    await api.register({ firstName: 'Ayşe', lastName: 'Kaya', email, password: 'Nova-Lab-2026!' });
+    await api.verifyEmail(email, lastCode());
+    const other = await api.seed('review');
+    // Saved between 2026-11-20 and 2026-11-25: no profile, no comparison.
+    const db = JSON.parse(localStorage.getItem('dsp.db.v1')!);
+    Object.assign(db.apps[email], { stage: 'verified' });
+    delete db.apps[email].crossCheck;
+    delete db.apps[other.account.email].profile;
+    delete db.apps[other.account.email].crossCheck;
+    localStorage.setItem('dsp.db.v1', JSON.stringify(db));
+    const { app } = await api.login(email, 'Nova-Lab-2026!');
+    expect(app!.stage).toBe('profile');
+    expect(app!.crossCheck).toEqual([]);
+    // A later stage stays where it is, with an empty comparison that blocks nothing.
+    const later = (await api.login(other.account.email, other.account.password)).app!;
+    expect(later.stage).toBe('review');
+    expect(later.crossCheck).toEqual([]);
+    await api.submitProfile(email, PROFILE);
+    await api.uploadDeck(email, deck('novalab-deck.pdf'), CONSENTS);
+    await api.completeScan(email);
+    expect((await api.submitReview(email)).stage).toBe('eligibility');
   });
 
   it('seeds the demo founder at any stage, including the finished company', async () => {

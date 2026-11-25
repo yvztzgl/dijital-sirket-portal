@@ -6,6 +6,8 @@ import { FounderType, Stage } from './models';
 /** Which application stages may show each screen. Screens not listed are public. */
 export const SCREEN_STAGES: Record<string, { stages: Stage[]; founder?: FounderType }> = {
   d0c: { stages: ['registered'] },
+  // The profile form stays open after it is saved, until the deck is uploaded (the API allows a new save until then).
+  d1e: { stages: ['profile', 'verified'] },
   d1a: { stages: ['verified'] },
   d1b: { stages: ['scanning'] },
   d1c: { stages: ['review'] },

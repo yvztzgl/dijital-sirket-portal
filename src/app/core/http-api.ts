@@ -31,12 +31,14 @@ export class HttpApi implements Api {
   verifyEmail(): Promise<Session> { return notConnected(); }
   requestPasswordReset(): Promise<void> { return notConnected(); }
 
-  // step 1 · deck
+  // step 1 · profile and deck
+  submitProfile(): Promise<Application> { return notConnected(); }
   uploadDeck(): Promise<Application> { return notConnected(); }
   completeScan(): Promise<Application> { return notConnected(); }
   updateReview(): Promise<Application> { return notConnected(); }
   submitReview(): Promise<Application> { return notConnected(); }
   chooseTitle(): Promise<Application> { return notConnected(); }
+  resolveCrossCheck(): Promise<Application> { return notConnected(); }
 
   // step 2 · eligibility
   startEligibility(): Promise<Application> { return notConnected(); }

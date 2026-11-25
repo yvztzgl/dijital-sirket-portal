@@ -2,7 +2,7 @@
 
 Angular implementation of the Claude Design screens (login/register, welcome, and the five-step
 wizard: Sunum → Uygunluk → Ödeme → e-İmza → Kuruluş). Run `ng serve` and open `/screens` for an
-index of all 24 screens; a floating pill at the bottom-left steps through them in order.
+index of all screens; a floating pill at the bottom-left steps through them in order.
 Templates are generated — see `tools/design-import/README.md`.
 
 ### How the data works

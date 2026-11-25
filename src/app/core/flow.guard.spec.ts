@@ -38,6 +38,19 @@ describe('flowGuard', () => {
     expect(TestBed.inject(Router).serializeUrl(run('d4a') as UrlTree)).toBe('/e-signature/turkish-citizen');
   });
 
+  it('keeps the profile form open until the deck is uploaded', async () => {
+    const store = TestBed.inject(ApplicationStore);
+    const router = TestBed.inject(Router);
+    await store.seed('profile');
+    expect(run('d1e')).toBe(true);
+    expect(router.serializeUrl(run('d1a') as UrlTree)).toBe('/details');
+    await store.seed('verified');
+    expect(run('d1e')).toBe(true);
+    expect(run('d1a')).toBe(true);
+    await store.seed('scanning');
+    expect(router.serializeUrl(run('d1e') as UrlTree)).toBe('/deck/scan');
+  });
+
   it('every stage has a screen that accepts it', () => {
     for (const stage of STAGE_ORDER) {
       const path = routeFor(stage);

@@ -24,9 +24,10 @@ export const SCREENS: ScreenInfo[] = [
   { id: 'd0c', code: 'D-0c', title: 'E-posta doğrulama', desc: '6 haneli kod. Doğrulanınca başvuru açılır ve Karşılama\'ya (D-00) geçilir.', path: 'verify-email', group: 'giris' },
   { id: 'd0d', code: 'D-0d', title: 'Şifre sıfırlama', desc: 'Bağlantı gönderildi durumu. Hesabın var olup olmadığını açıklamaz.', path: 'reset-password', group: 'giris' },
   { id: 'd00', code: 'D-00', title: 'Karşılama', desc: 'Başlık ve dünya haritası; şehirlerden İstanbul’a yaylar uzanır. Kaydırınca harita İstanbul’a yaklaşır ve beş adım açılır: solda adım listesi, sağda her adımın görseli ve ekranından bir parça.', path: '', group: 'karsilama' },
-  { id: 'd1a', code: 'D-1a', title: 'Proje sunumu yükleme', desc: 'Tek istek: sunum dosyası. Yükleme alanı, kabul edilen dosya türleri ve yüklemeden sonra olacaklar.', path: 'deck', group: 'karsilama' },
+  { id: 'd1e', code: 'D-1e', title: 'Ön bilgiler', desc: 'Adım 1’in ilk ekranı. Sunumdan önce kurucu şirket adını, faaliyet alanını, sermaye kaynağını, uyruğunu, ülkesini ve telefonunu yazar; sunum okunduktan sonra bunlarla karşılaştırılır. Sunum yüklenene kadar yeniden düzenlenebilir.', path: 'details', group: 'karsilama' },
+  { id: 'd1a', code: 'D-1a', title: 'Proje sunumu yükleme', desc: 'Tek istek: sunum dosyası. Aydınlatma metni ve yapay zekâ ile işleme onayı, yükleme alanı (PDF veya PPTX, en fazla 25 MB), yüklemeden sonra olacaklar ve ön bilgileri düzenleme bağlantısı.', path: 'deck', group: 'karsilama' },
   { id: 'd1b', code: 'D-1b', title: 'AI taraması', desc: 'Okunan sayfa (bulununca şirketin logosu ve adıyla) ve tek tek gelen bilgiler.', path: 'deck/scan', group: 'karsilama' },
-  { id: 'd1c', code: 'D-1c', title: 'Bulunanları inceleyin', desc: 'Tek kart: şirket, kurucu, iletişim ve fon kaynağı; her bölüm yerinde düzenlenir.', path: 'deck/review', group: 'karsilama' },
+  { id: 'd1c', code: 'D-1c', title: 'Bulunanları inceleyin', desc: 'Üstte ön bilgilerle karşılaştırma: uyuşanlar ve farklı olanlar; her fark için kurucu ön bilgideki veya sunumdaki değeri seçer. Altında tek kart: şirket, kurucu, iletişim ve fon kaynağı; her bölüm yerinde düzenlenir.', path: 'deck/review', group: 'karsilama' },
   { id: 'rejection', code: 'D-1d', title: 'MERSİS ret durumu', desc: 'Tek istek: başka bir unvan. Seçilen ve kayıtlı unvan yan yana, üç öneri ve kendi unvanını yazma; seçilen hemen yeniden sorgulanır.', path: 'deck/name-rejected', group: 'karsilama' },
   { id: 'd2a', code: 'D-2a', title: 'Kimlik doğrulama', desc: 'Adım 2’nin ilk ekranı. Önce ön bilgilendirme: gerekenler, dikkat edilecekler, açık rıza onayı ve “Doğrulamayı başlat”; ya da “Telefonla devam et” ile QR kod. Başlayınca kamera alanı otomatik kontrolü izler: pasaport, yüz, bekleme.', path: 'eligibility', group: 'uygunluk' },
   { id: 'd2m', code: 'D-2a-m', title: 'Kimlik doğrulama · telefon', desc: 'D-2a’daki QR kodla telefonda açılan, yalnızca bu adıma ait sayfa: uyarılar, açık rıza, kamera kontrolü, “bilgisayarınıza dönünüz”. Oturum gerektirmez.', path: 'eligibility/phone', group: 'uygunluk' },
@@ -80,6 +81,13 @@ export const screenRoutes: Routes = [
     canActivate: [flowGuard],
     // The landing rebuilt from an empty page on 2026-11-16; the earlier one is at /welcome-v1 (app.routes.ts).
     loadComponent: () => import('./karsilama/landing').then((m) => m.ScreenLanding),
+  },
+  {
+    path: 'details',
+    title: 'Ön bilgiler · Terminal Şirket',
+    data: { screen: 'd1e' },
+    canActivate: [flowGuard],
+    loadComponent: () => import('./karsilama/d1e').then((m) => m.ScreenD1e),
   },
   {
     path: 'deck',
