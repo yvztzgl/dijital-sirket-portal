@@ -55,7 +55,10 @@ anything a later reader needs in a temporary directory or only in chat.
   request per screen stated in the heading. The sign-in screens (D-0a to D-0d) still have the
   earlier look. The design import would overwrite the rebuilt templates.
 - Step 1 starts with the profile form (D-1e `/details`, stage `profile`), then the deck upload
-  (D-1a, stage `verified`), the scan (D-1b) and the check (D-1c). The form was removed on
+  (D-1a, stage `verified`), the scan (D-1b), the check (D-1c) and the trade-name check (D-1f
+  `/deck/name-check`, stage `titleChecking`, done by staff on the API, so it can take hours), which
+  ends in D-1d (refused) or step 2. Waiting stages are polled in HTTP mode (`Api.work`,
+  docs/api-client.md). The form was removed on
   2026-11-20 and brought back on 2026-11-25 by the owner's decision, because the API requires a
   profile before the deck and compares the two (see Decisions in PROJECT_LOG.md). The profile can
   be saved again from D-1a ("Ön bilgileri düzenle") until the deck is uploaded; D-1e therefore
