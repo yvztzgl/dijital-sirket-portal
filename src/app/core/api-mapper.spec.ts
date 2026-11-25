@@ -1,5 +1,6 @@
-import { LOG_TEXTS, splitNace, toAccount, toApplication, toReviewFields, toStage } from './api-mapper';
-import { CAPTURED, DECK_FAILED, IDENTITY_FAILED, IDENTITY_FAILED_TWICE, ME, NEW_APPLICATION, REVIEW_APPLICATION } from './testing/api-fixtures';
+import { callStartedAt, LOG_TEXTS, splitNace, toAccount, toApplication, toReviewFields, toStage } from './api-mapper';
+import { CAPTURED, DECK_FAILED, IDENTITY_FAILED, IDENTITY_FAILED_TWICE, ME, NEW_APPLICATION, REVIEW_APPLICATION, SIGNATURE_EXPIRED } from './testing/api-fixtures';
+import { AGENCIES } from './timeline';
 
 describe('api-mapper', () => {
   const account = toAccount(ME);
@@ -75,7 +76,7 @@ describe('api-mapper', () => {
         stage: 'signed',
         titleCheck: { status: 'conflict', candidate: 'Lumora Veri Analitiği', reason: 'Benzer unvan kayıtlı.' },
         payment: { ...REVIEW_APPLICATION.payment, status: 'captured', last4: '4242', paidAt: '2026-11-25T10:00:00+00:00' },
-        signature: { kind: 'daily', serial: 'ESHS-2611-AAAA', issuedAt: '2026-11-25T10:10:00+00:00', validUntil: '2026-11-26T10:10:00+00:00' },
+        signature: { kind: 'nes_daily', serial: 'ESHS-2611-AAAA', issuedAt: '2026-11-25T10:10:00+00:00', validUntil: '2026-11-26T10:10:00+00:00' },
         callConsentAt: '2026-11-25T10:05:00+00:00',
       },
       account,
@@ -87,7 +88,8 @@ describe('api-mapper', () => {
       alternatives: ['Lumora Bulut Yazılım', 'Lumoranova Bilişim', 'Lumora Cloudline Teknoloji'],
     });
     expect(app.payment).toEqual({ holder: '', last4: '4242', amount: 12_750, paidAt: '2026-11-25T10:00:00+00:00' });
-    expect(app.signature).toEqual({ method: 'eshs', serial: 'ESHS-2611-AAAA', holder: 'Ayşe Kaya-Berg', issuedAt: '2026-11-25T10:10:00+00:00', validUntil: '2026-11-26T10:10:00+00:00' });
+    // The holder is the account's name (the API sends none), not the review's ("Kaya-Berg").
+    expect(app.signature).toEqual({ method: 'eshs', serial: 'ESHS-2611-AAAA', holder: 'Ayşe Kaya', issuedAt: '2026-11-25T10:10:00+00:00', validUntil: '2026-11-26T10:10:00+00:00' });
     expect(app.callConsentAt).toBe('2026-11-25T10:05:00+00:00');
     expect(toApplication({ ...REVIEW_APPLICATION, titleCheck: { status: 'checking', candidate: 'X A.Ş.', reason: null } }, account).titleCheck).toEqual({
       status: 'checking',
@@ -371,5 +373,131 @@ describe('api-mapper on captured API answers, step 3', () => {
     expect(CAPTURED.stepUpWrongCode).toMatchObject({ status: 400, code: 'validation_failed', errors: { code: ['Kod hatalı veya süresi dolmuş.'] } });
     expect(CAPTURED.cardDeclined).toMatchObject({ status: 422, code: 'card_declined', title: 'Kartınızdan ödeme alınamadı. Lütfen başka bir kart deneyiniz.' });
     expect(CAPTURED.threeDsWrongCode).toMatchObject({ status: 422, code: '3ds_failed', title: 'Doğrulama kodu hatalı.' });
+  });
+});
+
+describe('api-mapper on captured API answers, steps 4 and 5', () => {
+  const account = toAccount({ firstName: 'Deneme', lastName: 'Kurucu', email: 'kurucu@example.test', founderType: 'foreign', verified: true });
+  const resident = { ...account, founderType: 'resident' as const };
+  const map = (key: keyof typeof CAPTURED, options = {}, who = account) => toApplication(CAPTURED[key] as never, who, options);
+
+  it('signing: the consent is the server\'s, there is no call and no certificate', () => {
+    expect(map('esignSigning')).toMatchObject({ stage: 'signing', callConsentAt: undefined, call: undefined, signature: undefined, setup: undefined });
+    expect(map('esignConsent').callConsentAt).toBe(CAPTURED.esignConsent.callConsentAt);
+    expect(CAPTURED.esignConsentMissing).toMatchObject({ status: 409, code: 'consent_missing', title: 'Görüşme başlamadan önce ön bilgilendirmeyi onaylayınız.' });
+  });
+
+  it('a call open: calling, its start from the timeline; hung up: signing again', () => {
+    const open = map('esignCallOpen');
+    const started = CAPTURED.esignCallOpen.logs.filter((l) => l.text === LOG_TEXTS.callStarted).at(-1)!.at;
+    expect(open.stage).toBe('calling');
+    expect(open.call).toEqual({ startedAt: started });
+    expect(callStartedAt(CAPTURED.esignCallOpen)).toBe(started);
+    const ended = map('esignCallEnded');
+    expect(ended.stage).toBe('signing');
+    expect(ended.call).toBeUndefined();
+    expect(ended.logs.some((l) => l.text === 'Görüşme tamamlanmadan sonlandırıldı')).toBe(true);
+    expect(CAPTURED.esignNoOpenCall).toMatchObject({ status: 409, code: 'no_open_call', title: 'Açık bir görüşme yok.' });
+  });
+
+  it('after the call was completed the API still says calling; only what HttpApi remembers tells it is issuing', () => {
+    const started = callStartedAt(CAPTURED.esignIssuing)!;
+    expect(CAPTURED.esignIssuing.stage).toBe('calling');
+    expect(map('esignIssuing').call).toEqual({ startedAt: started });
+    expect(map('esignIssuing', { callCompleted: started }).call).toEqual({ startedAt: started, completed: true });
+    // A remembered earlier call does not mark a new one.
+    expect(map('esignIssuing', { callCompleted: '2026-01-01T00:00:00+00:00' }).call!.completed).toBeUndefined();
+  });
+
+  it('signed: the certificate as the API sent it, the holder from the account, nes_daily as the call\'s method', () => {
+    const app = map('esignSigned');
+    const s = CAPTURED.esignSigned.signature!;
+    expect(app.stage).toBe('signed');
+    expect(app.signature).toEqual({ method: 'eshs', serial: s.serial, holder: 'Deneme Kurucu', issuedAt: s.issuedAt, validUntil: s.validUntil });
+    expect(Date.parse(s.validUntil) - Date.parse(s.issuedAt)).toBe(24 * 3600_000);
+  });
+
+  it('an expired certificate: the API is back at signing and the view still names it', () => {
+    const app = toApplication(SIGNATURE_EXPIRED, account);
+    expect(app.stage).toBe('signing');
+    expect(Date.parse(app.signature!.validUntil)).toBeLessThan(Date.now());
+  });
+
+  it('set-up started: steps null until the Worker creates them, the start time from the timeline', () => {
+    const app = map('setupStarted');
+    expect(app.stage).toBe('setup');
+    expect(CAPTURED.setupStarted.setup).toBeNull();
+    expect(app.setup).toEqual({
+      startedAt: CAPTURED.setupStarted.logs.find((l) => l.text === 'Kuruluş başlatıldı')!.at,
+      signConsentAt: CAPTURED.setupStarted.logs.find((l) => l.text === 'Kuruluş belgelerinin e-imza ile imzalanması onaylandı')!.at,
+      steps: null,
+    });
+    expect(app.results).toBeUndefined();
+    expect(CAPTURED.statusSetup.stage).toBe('setup');
+  });
+
+  it('the nine server steps line up with the portal\'s nine agencies, by number and title', () => {
+    const steps = map('setupSteps').setup!.steps!;
+    expect(steps.map((s) => s.no)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    // Eight titles are word for word the portal's; the ninth differs in wording only.
+    expect(steps.map((s) => s.title).slice(0, 8)).toEqual(AGENCIES.slice(0, 8).map((a) => a.t));
+    expect([steps[8].title, AGENCIES[8].t]).toEqual(['Mali Müşavir Eşleştirme', 'Müşavir Yönlendirme']);
+    expect(steps.map((s) => s.status)).toEqual(['completed', 'completed', 'completed', 'pending', 'pending', 'pending', 'pending', 'pending', 'pending']);
+    // The first institution task is already with the institution while its step still says pending.
+    expect(steps[3].tasks).toEqual([{ code: 'registration.submit', title: 'Ticaret sicili tescil edildi', status: 'waiting' }]);
+    expect(steps[4].tasks.map((t) => t.status)).toEqual(['pending', 'exempt']);
+  });
+
+  it('results as they arrive, under the portal\'s names; nothing the API did not send', () => {
+    const app = map('setupResults');
+    expect(app.stage).toBe('setup');
+    const r = CAPTURED.setupResults.results!;
+    expect(app.results).toEqual({ mersis: r['mersis_no'], registryNo: r['tescil_no'] });
+    expect(app.setup!.steps![3].status).toBe('completed');
+  });
+
+  it('done: every step completed, the identifiers, no advisor, the finishing time from the timeline', () => {
+    const app = map('setupDone');
+    const r = CAPTURED.setupDone.results!;
+    expect(app.stage).toBe('done');
+    expect(app.results).toEqual({
+      vkn: r['vkn'],
+      taxOffice: r['vergi_dairesi'],
+      mersis: r['mersis_no'],
+      registryNo: r['tescil_no'],
+      iban: r['iban'],
+      eInvoiceNo: r['e_fatura_no'],
+      sgkNo: r['sgk_isyeri_no'],
+    });
+    expect(app.results!.advisor).toBeUndefined();
+    expect(app.setup!.steps!.every((s) => s.status === 'completed')).toBe(true);
+    expect(app.setup!.finishedAt).toBe(CAPTURED.setupDone.logs.find((l) => l.text === 'Şirketiniz kuruldu')!.at);
+    expect(CAPTURED.statusDone.stage).toBe('done');
+  });
+
+  it('documents: exactly the API\'s list, by readable Turkish names', () => {
+    expect(map('setupDone').docs.map((d) => [d.group, d.name])).toEqual([
+      ['1 · Başvuru & Uygunluk', 'Sunum'],
+      ['1 · Başvuru & Uygunluk', 'Adres belgesi'],
+    ]);
+    const other = toApplication({ ...CAPTURED.setupDone, documents: [{ id: 'x', type: 'vergi_levhasi', sizeKb: 3, at: 't' }, { id: 'y', type: 'yeni_tur', sizeKb: 1, at: 't' }] }, account);
+    expect(other.docs.map((d) => [d.group, d.name])).toEqual([['5 · Vergi', 'Vergi levhası'], ['Diğer belgeler', 'yeni_tur']]);
+  });
+
+  it('a resident: calling while the provider verifies, with no call; nes_existing as "existing"', () => {
+    expect(map('residentSigning', {}, resident).stage).toBe('signing');
+    const issuing = map('residentIssuing', {}, resident);
+    expect(issuing.stage).toBe('calling');
+    expect(issuing.founderType).toBe('resident');
+    expect(issuing.call).toBeUndefined();
+    const signed = map('residentSigned', {}, resident);
+    expect(signed.signature).toMatchObject({ method: 'existing', serial: CAPTURED.residentSigned.signature!.serial, holder: 'Deneme Kurucu' });
+    expect(map('residentSetupSteps', {}, resident).setup!.steps!).toHaveLength(9);
+  });
+
+  it('no T.C. kimlik no and no real address in the captured files', () => {
+    const all = JSON.stringify([CAPTURED.residentSigning, CAPTURED.residentIssuing, CAPTURED.residentSigned, CAPTURED.residentSetupSteps]);
+    expect(all).not.toMatch(/\b\d{11}\b/);
+    expect(all).not.toContain('edevlet.test');
   });
 });

@@ -23,9 +23,10 @@ export const SCREEN_STAGES: Record<string, { stages: Stage[]; founder?: FounderT
   d3a: { stages: ['payment'] },
   d3b: { stages: ['threeDs'] },
   d4a: { stages: ['signing'], founder: 'foreign' },
-  d4b: { stages: ['calling'] },
+  d4b: { stages: ['calling'], founder: 'foreign' },
   d4c: { stages: ['signed'] },
-  d4d: { stages: ['signing'], founder: 'resident' },
+  // HTTP mode: a resident's `calling` is the provider verifying their e-signature; D-4d shows it waiting.
+  d4d: { stages: ['signing', 'calling'], founder: 'resident' },
   d5a: { stages: ['setup'] },
   d5b: { stages: ['done'] },
 };

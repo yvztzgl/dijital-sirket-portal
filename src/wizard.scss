@@ -783,5 +783,6 @@ span.logo { cursor: default; }
 .wz-checks .wait { flex: none; display: grid; place-items: center; width: 26px; height: 26px; box-sizing: border-box; border: 2px solid var(--bd-C7D5F7); border-radius: 50%; background: var(--bg-EFF4FF); color: var(--fg-0C217E); }
 .wz-checks .next { flex: none; width: 26px; height: 26px; box-sizing: border-box; border: 2px dashed var(--bd-D6DEEE); border-radius: 50%; }
 .wz-checks .t b.pending { color: var(--fg-0C217E); }
+.wz-checks .t b.mono { font-family: $mono; font-weight: 500; overflow-wrap: anywhere; }
 .wz-checks .note { margin: 0; display: flex; flex-direction: column; gap: 6px; padding: 16px 22px; background: var(--bg-F7F9FE); font: 400 13.5px/19px $sans; color: var(--fg-3B4660); }
 .wz-checks .note b { font-weight: 600; color: var(--fg-061262); }

@@ -4,8 +4,10 @@ import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { ApiError } from './api-error';
 import { HttpApi, markApiWrites } from './http-api';
-import { ApplicationWire } from './api-types';
-import { CAPTURED, IDENTITY_FAILED, ME, NEW_APPLICATION } from './testing/api-fixtures';
+import { callStartedAt } from './api-mapper';
+import { ApplicationWire, MeWire } from './api-types';
+import { Application } from './models';
+import { CAPTURED, IDENTITY_FAILED, ME, NEW_APPLICATION, NO_VALID_SIGNATURE } from './testing/api-fixtures';
 
 describe('HttpApi', () => {
   let api: HttpApi;
@@ -35,7 +37,7 @@ describe('HttpApi', () => {
 
   it('has no demo tools and rejects a call that is not connected yet', async () => {
     expect(api.demo).toBeNull();
-    const error = await api.startSetup().catch((e: unknown) => e);
+    const error = await api.ask().catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).message).toBe('Bu işlem henüz sunucuya bağlanmadı.');
     expect((error as ApiError).code).toBe('not_connected');
@@ -778,5 +780,116 @@ describe('HttpApi second factor and step 3', () => {
     ok.flush(...empty(204));
     await read(CAPTURED.paymentCaptured, 't4');
     expect((await pending).stage).toBe('signing');
+  });
+});
+
+describe('HttpApi steps 4 and 5', () => {
+  let api: HttpApi;
+  let backend: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(withInterceptors([markApiWrites])), provideHttpClientTesting()],
+    });
+    api = TestBed.inject(HttpApi);
+    backend = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => backend.verify());
+
+  async function next(method: string, url: string) {
+    await new Promise((resolve) => setTimeout(resolve));
+    const req = backend.expectOne(url);
+    expect(req.request.method).toBe(method);
+    return req;
+  }
+
+  async function read(view: ApplicationWire, changedAt = 't1') {
+    (await next('GET', '/api/application/status')).flush({ stage: view.stage, changedAt });
+    (await next('GET', '/api/application')).flush(view);
+  }
+
+  async function signedInAt(view: ApplicationWire, me: MeWire = { ...ME, firstName: 'Deneme', lastName: 'Kurucu', email: 'kurucu@example.test' }) {
+    const pending = api.restore();
+    (await next('GET', '/api/me')).flush(me);
+    await read(view);
+    await pending;
+  }
+
+  const empty = (status: number) => [null, { status, statusText: 'x' }] as const;
+  const problem = (p: { status: number; title?: string; code?: string; requestId?: string }) => [p, { status: p.status, statusText: 'x' }] as const;
+
+  /** Sends one write, checks its body and the CSRF header, answers it, and answers the fresh read with `after`. */
+  async function write(call: () => Promise<Application>, url: string, body: unknown, status: number, after: ApplicationWire, changedAt: string) {
+    const pending = call();
+    const post = await next('POST', url);
+    expect(post.request.body).toEqual(body);
+    expect(post.request.headers.get('X-DSP-Request')).toBe('1');
+    post.flush(...empty(status));
+    await read(after, changedAt);
+    return pending;
+  }
+
+  it('the call: consent as ticked, start, hang up, start again and complete; a read after each', async () => {
+    await signedInAt(CAPTURED.esignSigning);
+    expect((await write(() => api.acceptCallTerms(true), '/api/application/esign/consent', { consent: true }, 204, CAPTURED.esignConsent, 't2')).callConsentAt).toBeTruthy();
+    const open = await write(() => api.startCall(), '/api/application/esign/call/start', null, 204, CAPTURED.esignCallOpen, 't3');
+    expect(open.stage).toBe('calling');
+    expect(open.call!.completed).toBeUndefined();
+    expect((await write(() => api.endCall(), '/api/application/esign/call/end', null, 204, CAPTURED.esignCallEnded, 't4')).stage).toBe('signing');
+    await write(() => api.startCall(), '/api/application/esign/call/start', null, 204, CAPTURED.esignIssuing, 't5');
+    const issuing = await write(() => api.completeCall(), '/api/application/esign/call/complete', null, 202, CAPTURED.esignIssuing, 't5');
+    expect(issuing.call).toEqual({ startedAt: callStartedAt(CAPTURED.esignIssuing), completed: true });
+  });
+
+  it('a call already completed before a reload: the 409 no_open_call means the certificate is being issued', async () => {
+    await signedInAt(CAPTURED.esignIssuing);
+    const pending = api.completeCall();
+    (await next('POST', '/api/application/esign/call/complete')).flush(...problem(CAPTURED.esignNoOpenCall));
+    await read(CAPTURED.esignIssuing, 't6');
+    expect((await pending).call!.completed).toBe(true);
+  });
+
+  it('sends an unticked consent as false and passes on the refusal of a call without it', async () => {
+    await signedInAt(CAPTURED.esignSigning);
+    const refused = api.startCall().catch((e: unknown) => e);
+    (await next('POST', '/api/application/esign/call/start')).flush(...problem(CAPTURED.esignConsentMissing));
+    expect(await refused).toMatchObject({ code: 'consent_missing', message: 'Görüşme başlamadan önce ön bilgilendirmeyi onaylayınız.' });
+    const unticked = api.acceptCallTerms(false).catch((e: unknown) => e);
+    const post = await next('POST', '/api/application/esign/consent');
+    expect(post.request.body).toEqual({ consent: false });
+    post.flush(...problem({ status: 400, title: 'x', code: 'validation_failed', requestId: 'r' }));
+    expect(await unticked).toMatchObject({ code: 'validation_failed' });
+  });
+
+  it('a resident signs with the chosen method; the API reports calling while the provider answers', async () => {
+    const resident = { ...ME, firstName: 'Deneme', lastName: 'Kurucu', founderType: 'resident' as const };
+    await signedInAt(CAPTURED.residentSigning, resident);
+    const app = await write(() => api.signResident('existing'), '/api/application/esign/resident', { method: 'existing' }, 202, CAPTURED.residentIssuing, 't2');
+    expect(app.stage).toBe('calling');
+    expect(app.call).toBeUndefined();
+  });
+
+  it('starts the set-up with the tick as given; passes on no_valid_signature', async () => {
+    await signedInAt(CAPTURED.esignSigned);
+    const app = await write(() => api.startSetup(true), '/api/application/setup', { confirmed: true }, 202, CAPTURED.setupStarted, 't2');
+    expect(app.stage).toBe('setup');
+    expect(app.setup!.steps).toBeNull();
+    const refused = api.startSetup(true).catch((e: unknown) => e);
+    (await next('POST', '/api/application/setup')).flush(...problem(NO_VALID_SIGNATURE));
+    expect(await refused).toMatchObject({ code: 'no_valid_signature', status: 409 });
+  });
+
+  it('forgets the completed call at sign-out', async () => {
+    await signedInAt(CAPTURED.esignIssuing);
+    const pending = api.completeCall();
+    (await next('POST', '/api/application/esign/call/complete')).flush(...empty(202));
+    await read(CAPTURED.esignIssuing, 't2');
+    await pending;
+    expect(api['callCompleted']).not.toBeNull();
+    const out = api.logout();
+    (await next('POST', '/api/auth/logout')).flush(...empty(204));
+    await out;
+    expect(api['callCompleted']).toBeNull();
   });
 });

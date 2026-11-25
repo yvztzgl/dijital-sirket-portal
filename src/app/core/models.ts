@@ -159,6 +159,26 @@ export interface DocItem {
   at: string;
 }
 
+/**
+ * One step of the formation as the server reports it (HTTP mode). The nine steps are the same as the
+ * portal's `AGENCIES` (timeline.ts), by number and title; their tasks are the server's own, fewer
+ * than the mock's sub-steps. Statuses the portal does not know are kept as `other`.
+ */
+export interface SetupStep {
+  no: number;
+  code: string;
+  title: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'other';
+  tasks: SetupTask[];
+}
+
+/** `waiting`: the task has been handed to the institution (the API's `waiting_external`); staff do it there. */
+export interface SetupTask {
+  code: string;
+  title: string;
+  status: 'pending' | 'in_progress' | 'waiting' | 'done' | 'exempt' | 'other';
+}
+
 export interface Application {
   id: string;
   createdAt: string;
@@ -262,11 +282,46 @@ export interface Application {
   fees?: { code: string; label: string; amount: number }[];
   /** D-4a pre-information: when the founder accepted that the call is recorded and an e-signature is issued in their name. */
   callConsentAt?: string;
-  call?: { startedAt: string };
+  /**
+   * The video call (stage `calling`, foreign founders). `startedAt`: the call's start; the portal's
+   * scripted call runs from it. `completed` (HTTP mode only): this page has told the server the call
+   * ended (or the server said no call is open any more) and the e-signature provider is issuing the
+   * certificate; the API reports `calling` for both, so only the portal can tell them apart.
+   */
+  call?: { startedAt: string; completed?: boolean };
+  /**
+   * The e-signature. `method`: `eshs` for the daily certificate of the video call, `existing` /
+   * `edevlet` for a resident's own. `holder` is the signed-in founder's name (the API sends none).
+   * The API keeps reporting the newest certificate after it has expired, with the stage back at
+   * `signing`; the screens then say it expired.
+   */
   signature?: { method: 'eshs' | 'existing' | 'edevlet'; serial: string; holder: string; issuedAt: string; validUntil: string };
-  /** `signConsentAt`: when the founder confirmed on D-4c that the formation documents are signed with their e-signature. */
-  setup?: { startedAt: string; signConsentAt?: string; finishedAt?: string };
-  results?: { vkn: string; mersis: string; iban: string; advisor: string; advisorFirm: string; taxOffice: string };
+  /**
+   * Step 5. `signConsentAt`: when the founder confirmed on D-4c that the formation documents are
+   * signed with their e-signature. `steps`: absent in the mock (its set-up is a scripted animation
+   * over the portal's own agency list, `AGENCIES`); in HTTP mode the server's steps and tasks, or
+   * null while the server has not created them yet.
+   */
+  setup?: { startedAt: string; signConsentAt?: string; finishedAt?: string; steps?: SetupStep[] | null };
+  /**
+   * The company's numbers. The mock fills all of them at the end; the API reports each one as the
+   * institution task that issues it is completed, so in HTTP mode any of them may be missing, and the
+   * advisor's name and firm never come (the API does not send them).
+   */
+  results?: {
+    vkn?: string;
+    mersis?: string;
+    iban?: string;
+    taxOffice?: string;
+    /** Ticaret sicili tescil no (HTTP mode). */
+    registryNo?: string;
+    /** e-Fatura kayıt no (HTTP mode). */
+    eInvoiceNo?: string;
+    /** SGK işyeri sicil no (HTTP mode). */
+    sgkNo?: string;
+    advisor?: string;
+    advisorFirm?: string;
+  };
   docs: DocItem[];
   logs: LogEntry[];
 }

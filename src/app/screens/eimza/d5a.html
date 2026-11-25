@@ -1,7 +1,14 @@
 <app-step-page [step]="5" ctx="setup" label="D-5a Kuruluyor" [width]="760">
   <div class="wz-head">
     <h1 class="wz-h1">{{ rise().finished ? 'Şirketiniz kuruldu' : 'Şirketiniz kuruluyor' }}</h1>
-    <p class="wz-lead">{{ rise().finished ? 'Tüm adımlar tamamlandı.' : 'Sizden başka bir işlem beklenmemektedir. Bu sayfayı kapatabilirsiniz; her aşamada e-posta ile bilgilendirilirsiniz.' }}</p>
+    @if (rise().finished) {
+      <p class="wz-lead">Tüm adımlar tamamlandı.</p>
+    } @else if (serverDecides) {
+      <!-- HTTP mode: a status page. Staff and the institutions do this work; it can take days. -->
+      <p class="wz-lead">Kurum işlemleri ekibimiz ve ilgili kurumlar tarafından yürütülmektedir; bu süreç birkaç gün sürebilir. Sizden başka bir işlem beklenmemektedir. Bu sayfayı kapatabilirsiniz; sayfa açıksa durum kendiliğinden güncellenir.</p>
+    } @else {
+      <p class="wz-lead">Sizden başka bir işlem beklenmemektedir. Bu sayfayı kapatabilirsiniz; her aşamada e-posta ile bilgilendirilirsiniz.</p>
+    }
   </div>
 
   @let r = rise();
@@ -21,16 +28,28 @@
     }
   </section>
 
+  @if (preparing()) {
+    <!-- HTTP mode: the stage is setup but the server has not created the steps yet (seconds, normally). -->
+    <section class="wz-card wz-checks" role="status" aria-live="polite">
+      <ul>
+        <li>
+          <span class="wait" aria-hidden="true"><app-icon name="clock" size="13px" [stroke]="2.4" /></span>
+          <span class="t"><b class="pending">Kuruluş adımlarınız hazırlanıyor</b><small>Adımlar oluşturulduğunda burada listelenir.</small></span>
+        </li>
+      </ul>
+    </section>
+  } @else {
   <button type="button" class="wz-btn wz-btn--pale wz-btn--sm" (click)="listOpen.set(!listOpen())" [attr.aria-expanded]="listOpen()" aria-controls="setup-steps">{{ listOpen() ? 'Detayı gizle' : 'Detayı gör' }}<app-icon [name]="listOpen() ? 'chevron-up' : 'chevron-down'" size="15px" [stroke]="2" /></button>
 
   @if (listOpen()) {
-    <section id="setup-steps" class="wz-card wz-setup">
+    <section id="setup-steps" class="wz-card wz-setup" [attr.role]="serverDecides ? 'status' : null" [attr.aria-live]="serverDecides ? 'polite' : null">
       <div class="top">
         <div class="now">
           <h2 class="wz-card-h">Tamamlanan işlem: {{ doneCount() }} / {{ agency().length }}</h2>
-          <p>{{ current()?.t }}: {{ current()?.sub }}</p>
+          @if (!serverDecides) {<p>{{ current()?.t }}: {{ current()?.sub }}</p>}
         </div>
-        <strong>%{{ current()?.percent }}</strong>
+        <!-- No percentage in HTTP mode: the work is done by people, at no pace the portal can know. -->
+        @if (!serverDecides) {<strong>%{{ current()?.percent }}</strong>}
       </div>
       <div class="segs" aria-hidden="true">@for (a of agency(); track $index) {<span [class.done]="a.done" [class.cur]="a.cur"></span>}</div>
 
@@ -38,14 +57,14 @@
         @for (a of agency(); track $index) {
           <li [class.done]="a.done" [class.cur]="a.cur">
             <span class="st" aria-hidden="true">@if (a.done) {<app-icon name="check" size="13px" [stroke]="3" />} @else if (a.cur) {<i></i>} @else {<span>{{ $index + 1 }}</span>}</span>
-            <span class="t"><b>{{ a.t }}</b><small>{{ a.ag }}</small></span>
-            <span class="s">{{ a.done ? 'Tamamlandı' : a.cur ? 'İşlemde' : 'Sırada' }}</span>
+            <span class="t"><b>{{ a.t }}</b>@if (a.ag) {<small>{{ a.ag }}</small>}</span>
+            <span class="s">{{ a.label }}</span>
           </li>
         }
       </ol>
 
       <div class="more">
-        <button type="button" class="wz-link" (click)="detailsOpen.set(!detailsOpen())" [attr.aria-expanded]="detailsOpen()">{{ detailsOpen() ? 'Alt adımları gizle' : 'Alt adımları göster' }} ({{ store.setup()?.done }} / {{ totalSubs }})</button>
+        <button type="button" class="wz-link" (click)="detailsOpen.set(!detailsOpen())" [attr.aria-expanded]="detailsOpen()">{{ detailsOpen() ? 'Alt adımları gizle' : 'Alt adımları göster' }} ({{ subCount().done }} / {{ subCount().total }})</button>
         @if (detailsOpen()) {
           <div class="subs">
             @for (d of details(); track d.n) {
@@ -57,6 +76,21 @@
           </div>
         }
       </div>
+    </section>
+  }
+  }
+
+  @if (serverDecides && arrived().length) {
+    <!-- HTTP mode: the company's numbers as they arrive, each when its institution task is completed. -->
+    <section class="wz-card wz-checks" aria-label="Alınan bilgiler">
+      <ul>
+        @for (r of arrived(); track r.k) {
+          <li>
+            <span class="ok" aria-hidden="true"><app-icon name="check" size="13px" [stroke]="3" /></span>
+            <span class="t"><b class="mono">{{ r.v }}</b><small>{{ r.k }}</small></span>
+          </li>
+        }
+      </ul>
     </section>
   }
 

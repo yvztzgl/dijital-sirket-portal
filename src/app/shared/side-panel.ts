@@ -5,7 +5,7 @@ import { ApplicationStore } from '../core/application.store';
 import { Assistant } from '../core/assistant';
 import { DocPreview } from '../core/doc-preview';
 import { saveBytes } from '../core/files';
-import { time } from '../core/format';
+import { date, time } from '../core/format';
 import { DocItem } from '../core/models';
 
 export type SidePanelTab = 'ai' | 'docs' | 'log';
@@ -310,6 +310,7 @@ export class SidePanel {
     this.docPreview.open(d);
   }
 
+  /** Mock only: the browser-made placeholder PDF. Not offered in HTTP mode (`vals().canOpen`). */
   protected download(d: DocItem) {
     saveBytes(this.store.documentPdf(d), `${d.name}.pdf`, 'application/pdf');
   }
@@ -326,6 +327,12 @@ export class SidePanel {
       if (!grp) {
         grp = { title: d.group, n: 0, docs: [] };
         groups.push(grp);
+      }
+      // HTTP mode: exactly what the API lists, named by its type, with its size and date. Nothing is
+      // said about format or signature the API does not report, and nothing is marked as being made.
+      if (this.store.serverDecides) {
+        grp.docs.push({ doc: d, name: d.name, meta: `${d.sizeKb} KB · ${date(d.at)}`, fresh: false });
+        return;
       }
       const fresh = settingUp && i === allDocs.length - 1;
       grp.docs.push({ doc: d, name: d.name + '.pdf', meta: fresh ? 'Az önce oluşturuldu, imzalanıyor…' : `PDF, ${d.sizeKb} KB, e-imzalı`, fresh });
@@ -354,6 +361,8 @@ export class SidePanel {
       groups,
       docCount: allDocs.length,
       noDocs: allDocs.length === 0,
+      // Preview and download exist only in the mock (placeholder PDFs); the API has no download route yet.
+      canOpen: !this.store.serverDecides,
       logs,
     };
   });

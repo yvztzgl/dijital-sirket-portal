@@ -1,4 +1,25 @@
-<app-step-page [step]="4" ctx="call" label="D-4b Görüşme" [width]="1040">
+<app-step-page [step]="4" ctx="call" label="D-4b Görüşme" [width]="issuing() ? 760 : 1040">
+  @if (issuing()) {
+    <!-- HTTP mode: the scripted call ended and was reported; the provider issues the certificate and
+         the page polls until the stage is signed. Nothing to do here, and the call cannot be ended any more. -->
+    <div class="wz-head">
+      <span class="wz-chip"><app-icon name="check" size="13px" [stroke]="2.6" />Görüşme tamamlandı</span>
+      <h1 class="wz-h1">E-imzanız düzenleniyor</h1>
+      <p class="wz-lead">E-imza sağlayıcısı sertifikanızı düzenlemektedir. Sertifikanız hazır olduğunda bu sayfa kendiliğinden güncellenir.</p>
+    </div>
+    <section class="wz-card wz-checks" role="status" aria-live="polite">
+      <ul>
+        <li>
+          <span class="ok" aria-hidden="true"><app-icon name="check" size="13px" [stroke]="3" /></span>
+          <span class="t"><b>Görüntülü görüşme</b><small>Görüşme tamamlandı.</small></span>
+        </li>
+        <li>
+          <span class="wait" aria-hidden="true"><app-icon name="clock" size="13px" [stroke]="2.4" /></span>
+          <span class="t"><b class="pending">E-imza sertifikası</b><small>Sertifikanız düzenleniyor.</small></span>
+        </li>
+      </ul>
+    </section>
+  } @else {
   <div class="wz-head">
     <h1 class="wz-h1">Operatörün yönlendirmelerini izleyiniz</h1>
   </div>
@@ -36,4 +57,5 @@
   </section>
 
   <p class="wz-foot"><app-icon name="info" size="13px" [stroke]="2" />Görüşme, yasal gereklilik uyarınca kayıt altına alınır.</p>
+  }
 </app-step-page>

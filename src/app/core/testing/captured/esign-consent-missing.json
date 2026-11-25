@@ -1,0 +1,7 @@
+{
+  "type": "https://httpstatuses.io/409",
+  "title": "Görüşme başlamadan önce ön bilgilendirmeyi onaylayınız.",
+  "status": 409,
+  "code": "consent_missing",
+  "requestId": "01a21289-c090-700f-9a4d-12ac2e57d03a"
+}

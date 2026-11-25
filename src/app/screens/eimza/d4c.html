@@ -8,12 +8,13 @@
   <section class="wz-card wz-cert" aria-label="E-imza sertifikası">
     <header>
       <span class="ic" aria-hidden="true"><app-icon name="badge-check" size="22px" [stroke]="1.9" /></span>
-      <span class="t"><b>Günlük e-imza</b><small>Nitelikli elektronik sertifika</small></span>
+      <span class="t"><b>{{ certName() }}</b><small>Nitelikli elektronik sertifika</small></span>
     </header>
     <dl>
       <div><dt>Sahibi</dt><dd>{{ holderLine() }}</dd></div>
       <div><dt>Seri no</dt><dd class="mono">{{ sig()?.serial }}</dd></div>
-      <div><dt>Kapsam</dt><dd>Yalnızca {{ store.title() }} A.Ş. kuruluş belgeleri</dd></div>
+      <!-- The scope is the mock's statement; the API reports none, so HTTP mode leaves it out. -->
+      @if (!serverDecides) {<div><dt>Kapsam</dt><dd>Yalnızca {{ store.title() }} A.Ş. kuruluş belgeleri</dd></div>}
       <div><dt>Geçerlilik</dt><dd>{{ validity() }}</dd></div>
     </dl>
     <div class="left">
@@ -44,5 +45,6 @@
   <div class="wz-actions">
     <button type="button" class="wz-btn" (click)="startSetup()" [disabled]="!signConfirm() || store.busy()">{{ store.busy() ? 'Başlatılıyor…' : 'Kuruluşu başlat' }}</button>
   </div>
-  <p class="wz-foot"><app-icon name="file" size="13px" [stroke]="2" />{{ sig()?.method === 'eshs' ? 'Görüşme tutanağı belgelerinize eklendi.' : 'Taahhütname belgelerinize eklendi.' }}</p>
+  <!-- HTTP mode: the API adds no call record or undertaking to the documents (yet), so nothing is said. -->
+  @if (!serverDecides) {<p class="wz-foot"><app-icon name="file" size="13px" [stroke]="2" />{{ sig()?.method === 'eshs' ? 'Görüşme tutanağı belgelerinize eklendi.' : 'Taahhütname belgelerinize eklendi.' }}</p>}
 </app-step-page>

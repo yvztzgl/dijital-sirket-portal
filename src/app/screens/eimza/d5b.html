@@ -3,7 +3,7 @@
     @if (store.app()?.company?.logo; as logo) {<img class="wz-done-logo" [src]="logo" alt="">}
     <span class="wz-chip"><app-icon name="check" size="13px" [stroke]="2.6" />Kuruluş tamamlandı</span>
     <h1 class="wz-h1">Şirketiniz kuruldu</h1>
-    <p class="wz-lead"><b>{{ store.fullTitle() }}</b><br>{{ registered() }}</p>
+    <p class="wz-lead"><b>{{ store.fullTitle() }}</b>@if (registered()) {<br>{{ registered() }}}</p>
   </div>
 
   <section class="wz-card wz-done" aria-label="Şirket bilgileri">
@@ -17,6 +17,8 @@
     </dl>
   </section>
 
+  <!-- HTTP mode leaves out the next steps: they name the mock's advisor, a capital amount and e-mails the API does not send. -->
+  @if (!serverDecides) {
   <section class="wz-tiles wz-next" aria-labelledby="next-steps">
     <h2 id="next-steps" class="wz-card-h">Sonraki adımlar</h2>
     <ol>
@@ -33,9 +35,21 @@
       }
     </ol>
   </section>
+  }
 
-  <div class="wz-actions">
-    <button type="button" class="wz-btn" (click)="downloadAll()"><app-icon name="download" size="16px" [stroke]="2" />Tüm belgeleri indir (ZIP, {{ store.docs().length }} belge)</button>
-    <button type="button" class="wz-btn wz-btn--ghost" (click)="openPanel()">Şirket paneline git</button>
-  </div>
+  @if (serverDecides) {
+    <!-- HTTP mode: no download and no ZIP. The API has no route to download a document and issues no
+         company documents yet; the browser's placeholders are never offered as real documents.
+         Wording to be confirmed. -->
+    <p class="wz-foot"><app-icon name="file" size="13px" [stroke]="2" />Şirketinize ait belgeler düzenlendiğinde Belgeler bölümünde listelenecektir.</p>
+    <div class="wz-actions">
+      <button type="button" class="wz-btn wz-btn--ghost" (click)="showPanel('docs')">Belgeleri görüntüle</button>
+      <button type="button" class="wz-link" (click)="showPanel('log')">İşlem kaydını görüntüle</button>
+    </div>
+  } @else {
+    <div class="wz-actions">
+      <button type="button" class="wz-btn" (click)="downloadAll()"><app-icon name="download" size="16px" [stroke]="2" />Tüm belgeleri indir (ZIP, {{ store.docs().length }} belge)</button>
+      <button type="button" class="wz-btn wz-btn--ghost" (click)="openPanel()">Şirket paneline git</button>
+    </div>
+  }
 </app-step-page>

@@ -562,3 +562,172 @@ describe('ApplicationStore second factor (step-up)', () => {
     expect(store.signedIn()).toBe(false);
   });
 });
+
+describe('ApplicationStore in steps 4 and 5 (HTTP mode)', () => {
+  const base = { ...SESSION.app!, founderType: 'foreign', founder: { firstName: 'Ayşe', lastName: 'Kaya', nationality: '', passportNo: '' }, logs: [], docs: [] } as unknown as Application;
+  const at = (stage: Application['stage'], extra: Partial<Application> = {}) => ({ ...base, stage, ...extra }) as Application;
+  const stepUpRequired = () => new ApiError('Bu işlem için e-posta adresinize gönderilen kodu girmeniz gerekir.', { code: 'step_up_required', status: 403 });
+
+  /** An Api stand-in in server mode: `current` is what the status read answers, `next` what the full read and the writes answer. */
+  function serverApi(start: Application, extra: Partial<Record<keyof Api, unknown>> = {}) {
+    const api = {
+      demo: null,
+      statusReads: 0,
+      fullReads: 0,
+      current: { stage: start.stage, changedAt: 't1' } as ApplicationStatus,
+      next: start,
+      calls: [] as string[],
+      work: {
+        kind: 'server' as const,
+        status: async () => {
+          api.statusReads++;
+          return api.current;
+        },
+        application: async () => {
+          api.fullReads++;
+          return api.next;
+        },
+        seen: () => ({ stage: start.stage, changedAt: 't1' }),
+      },
+      restore: async () => ({ account: ACCOUNT, app: start }),
+      completeCall: async () => {
+        api.calls.push('completeCall');
+        return api.next;
+      },
+      ...extra,
+    };
+    return api;
+  }
+
+  function setUp(api: ReturnType<typeof serverApi>, account: Account = ACCOUNT) {
+    localStorage.clear();
+    api.restore = async () => ({ account, app: api.next });
+    TestBed.configureTestingModule({ providers: [provideRouter([{ path: '**', children: [] }]), { provide: Api, useValue: api }] });
+    return TestBed.inject(ApplicationStore);
+  }
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('the scripted call: nothing polled while it runs, reported ended once, then the certificate polled for', async () => {
+    const startedAt = new Date().toISOString();
+    const api = serverApi(at('calling', { call: { startedAt } }));
+    const store = setUp(api);
+    await store.restored;
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(10_000);
+    TestBed.tick();
+    expect(api.statusReads).toBe(0);
+    expect(api.calls).toEqual([]);
+    // The script (20 s) ends: the server is told once; the answer says the certificate is being issued.
+    api.next = at('calling', { call: { startedAt, completed: true } });
+    await vi.advanceTimersByTimeAsync(11_000);
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(5_000);
+    TestBed.tick();
+    expect(api.calls).toEqual(['completeCall']);
+    expect(api.statusReads).toBeGreaterThan(0);
+    api.current = { stage: 'signed', changedAt: 't2' };
+    api.next = at('signed', { signature: { method: 'eshs', serial: 'S', holder: 'Ayşe Kaya', issuedAt: startedAt, validUntil: new Date(Date.now() + 86_400_000).toISOString() } });
+    await vi.advanceTimersByTimeAsync(5_000);
+    TestBed.tick();
+    expect(store.stage()).toBe('signed');
+    const reads = api.statusReads;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(api.statusReads).toBe(reads);
+    expect(api.calls).toEqual(['completeCall']);
+  });
+
+  it('a resident at calling waits for the provider: polled, and on to the signed screen', async () => {
+    const api = serverApi(at('calling', { founderType: 'resident' }));
+    const store = setUp(api, { ...ACCOUNT, founderType: 'resident' });
+    await store.restored;
+    TestBed.tick();
+    expect(store.resumeRoute()).toBe('/e-signature/turkish-citizen');
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(api.statusReads).toBe(2);
+    expect(api.calls).toEqual([]);
+    api.current = { stage: 'signed', changedAt: 't2' };
+    api.next = at('signed', { founderType: 'resident' });
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(store.stage()).toBe('signed');
+  });
+
+  it('the three protected actions go through the second-factor dialog and are repeated once', async () => {
+    const startCall = vi.fn().mockRejectedValueOnce(stepUpRequired()).mockResolvedValueOnce(at('calling', { call: { startedAt: new Date().toISOString() } }));
+    const signResident = vi.fn().mockRejectedValueOnce(stepUpRequired()).mockResolvedValueOnce(at('calling', { founderType: 'resident' }));
+    const startSetup = vi.fn().mockRejectedValueOnce(stepUpRequired()).mockResolvedValueOnce(at('setup'));
+    const send = vi.fn(async () => undefined);
+    const api = serverApi(at('signing'), { startCall, signResident, startSetup, sendStepUpCode: send, verifyStepUpCode: async () => undefined });
+    const store = setUp(api);
+    await store.restored;
+    for (const [action, fn] of [[() => store.startCall(), startCall], [() => store.signResident('existing'), signResident], [() => store.startSetup(true), startSetup]] as const) {
+      const result = action();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(store.stepUp()).not.toBeNull();
+      await store.verifyStepUpCode('482913');
+      expect(await result).toBe(true);
+      expect(fn).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(61_000);
+    }
+    expect(signResident).toHaveBeenLastCalledWith('existing');
+    expect(startSetup).toHaveBeenLastCalledWith(true);
+    expect(send).toHaveBeenCalledTimes(3);
+  });
+
+  it('an expired certificate: the set-up refusal re-reads the application, which is back at signing', async () => {
+    const validUntil = new Date(Date.now() + 3_600_000).toISOString();
+    const refused = new ApiError('Geçerli bir e-imzanız yok. Lütfen e-imza adımını yeniden yapınız.', { code: 'no_valid_signature', status: 409 });
+    const api = serverApi(at('signed', { signature: { method: 'eshs', serial: 'S', holder: 'Ayşe Kaya', issuedAt: validUntil, validUntil } }), { startSetup: () => Promise.reject(refused) });
+    const store = setUp(api);
+    await store.restored;
+    api.next = at('signing', { signature: { ...store.app()!.signature! } });
+    expect(await store.startSetup(true)).toBe(false);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.error()).toBe('Geçerli bir e-imzanız yok. Lütfen e-imza adımını yeniden yapınız.');
+    expect(api.fullReads).toBe(1);
+    expect(store.stage()).toBe('signing');
+  });
+
+  it('on the signed screen the application is read once when the certificate runs out', async () => {
+    const validUntil = new Date(Date.now() + 10_000).toISOString();
+    const api = serverApi(at('signed', { signature: { method: 'eshs', serial: 'S', holder: 'Ayşe Kaya', issuedAt: validUntil, validUntil } }));
+    const store = setUp(api);
+    await store.restored;
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(5_000);
+    TestBed.tick();
+    expect(api.fullReads).toBe(0);
+    api.next = at('signing', { signature: store.app()!.signature });
+    await vi.advanceTimersByTimeAsync(6_000);
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(api.fullReads).toBe(1);
+    expect(store.stage()).toBe('signing');
+    await vi.advanceTimersByTimeAsync(60_000);
+    TestBed.tick();
+    expect(api.fullReads).toBe(1);
+    expect(api.statusReads).toBe(0);
+  });
+
+  it('the set-up is polled, settles at the slow pace, and nothing is polled once it is done', async () => {
+    const api = serverApi(at('setup', { setup: { startedAt: 'x', steps: null } }));
+    const store = setUp(api);
+    await store.restored;
+    TestBed.tick();
+    expect(store.setup()).toBeNull();
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    const reads = api.statusReads;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(api.statusReads - reads).toBe(4);
+    expect(api.fullReads).toBe(0);
+    api.current = { stage: 'done', changedAt: 't2' };
+    api.next = at('done', { setup: { startedAt: 'x', steps: [] } });
+    await vi.advanceTimersByTimeAsync(15_000);
+    TestBed.tick();
+    expect(store.stage()).toBe('done');
+    const after = api.statusReads;
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(api.statusReads).toBe(after);
+  });
+});

@@ -1,0 +1,560 @@
+{
+  "id": "01a21289-a7cd-750a-a0e2-9c664900e36b",
+  "referenceNo": "DS-26-46568495",
+  "stage": "setup",
+  "status": "in_formation",
+  "founderType": "foreign",
+  "createdAt": "2026-11-25T11:49:01.006342+00:00",
+  "profile": {
+    "brand": "Lumora",
+    "sector": "software",
+    "funding": "own-abroad",
+    "nationality": "Almanya",
+    "phone": "+49 151 2345 6700",
+    "country": "Almanya",
+    "at": "2026-11-25T11:49:01.160004+00:00"
+  },
+  "deck": {
+    "fileName": "Lumora Sunum.pdf",
+    "sizeKb": 1,
+    "pages": null,
+    "uploadedAt": "2026-11-25T11:49:01.219312+00:00",
+    "status": "read",
+    "fields": [
+      {
+        "key": "trade_name",
+        "label": "Şirket unvanı",
+        "value": "Lumora Veri Analitiği",
+        "page": 1,
+        "confidence": "high"
+      },
+      {
+        "key": "nace_codes",
+        "label": "NACE kodları",
+        "value": "62.01, 63.11",
+        "page": 2,
+        "confidence": "high"
+      },
+      {
+        "key": "shareholding",
+        "label": "Pay sahipliği",
+        "value": "%100",
+        "page": 3,
+        "confidence": "high"
+      },
+      {
+        "key": "given_name",
+        "label": "Ad",
+        "value": "Deneme",
+        "page": 4,
+        "confidence": "high"
+      },
+      {
+        "key": "family_name",
+        "label": "Soyad",
+        "value": "Kurucu",
+        "page": 5,
+        "confidence": "high"
+      },
+      {
+        "key": "nationality",
+        "label": "Uyruk",
+        "value": "Almanya",
+        "page": 6,
+        "confidence": "high"
+      },
+      {
+        "key": "email",
+        "label": "E-posta",
+        "value": "kurucu@example.test",
+        "page": 7,
+        "confidence": "high"
+      },
+      {
+        "key": "phone",
+        "label": "Telefon",
+        "value": "+49 151 2345 6700",
+        "page": 8,
+        "confidence": "high"
+      },
+      {
+        "key": "residence_address",
+        "label": "Adres",
+        "value": "Torstraße 45, 10119 Berlin",
+        "page": 9,
+        "confidence": "high"
+      },
+      {
+        "key": "source_of_funds",
+        "label": "Fon kaynağı",
+        "value": "own-abroad",
+        "page": 10,
+        "confidence": "high"
+      }
+    ]
+  },
+  "crossCheck": [
+    {
+      "key": "brand",
+      "label": "Şirket / marka adı",
+      "stated": "Lumora",
+      "read": "Lumora Veri Analitiği",
+      "match": true,
+      "choice": null,
+      "at": null
+    },
+    {
+      "key": "country",
+      "label": "Yaşadığınız ülke",
+      "stated": "Almanya",
+      "read": "Torstraße 45, 10119 Berlin",
+      "match": false,
+      "choice": "stated",
+      "at": "2026-11-25T11:49:02.371243+00:00"
+    },
+    {
+      "key": "funding",
+      "label": "Sermaye kaynağı",
+      "stated": "Yurt dışı banka transferi",
+      "read": "own-abroad",
+      "match": true,
+      "choice": null,
+      "at": null
+    },
+    {
+      "key": "nationality",
+      "label": "Uyruk",
+      "stated": "Almanya",
+      "read": "Almanya",
+      "match": true,
+      "choice": null,
+      "at": null
+    },
+    {
+      "key": "phone",
+      "label": "Telefon",
+      "stated": "+49 151 2345 6700",
+      "read": "+49 151 2345 6700",
+      "match": true,
+      "choice": null,
+      "at": null
+    },
+    {
+      "key": "sector",
+      "label": "Faaliyet alanı",
+      "stated": "Yazılım ve bilişim",
+      "read": "62.01, 63.11",
+      "match": true,
+      "choice": null,
+      "at": null
+    }
+  ],
+  "review": {
+    "email": {
+      "label": "E-posta",
+      "value": "kurucu@example.test",
+      "mark": "ai"
+    },
+    "family_name": {
+      "label": "Soyad",
+      "value": "Kurucu-Test",
+      "mark": "edited"
+    },
+    "given_name": {
+      "label": "Ad",
+      "value": "Deneme",
+      "mark": "ai"
+    },
+    "nace_codes": {
+      "label": "NACE kodları",
+      "value": "62.01, 63.11",
+      "mark": "ai"
+    },
+    "nationality": {
+      "label": "Uyruk",
+      "value": "Almanya",
+      "mark": "ai"
+    },
+    "phone": {
+      "label": "Telefon",
+      "value": "+49 151 2345 6700",
+      "mark": "ai"
+    },
+    "residence_address": {
+      "label": "Adres",
+      "value": "Torstraße 45, 10119 Berlin",
+      "mark": "ai"
+    },
+    "shareholding": {
+      "label": "Pay sahipliği",
+      "value": "%100",
+      "mark": "ai"
+    },
+    "source_of_funds": {
+      "label": "Fon kaynağı",
+      "value": "own-abroad",
+      "mark": "ai"
+    },
+    "trade_name": {
+      "label": "Şirket unvanı",
+      "value": "Lumora Veri Analitiği",
+      "mark": "ai"
+    },
+    "postal_code": {
+      "label": "Posta kodu",
+      "value": "10119",
+      "mark": "entered"
+    },
+    "residence_country": {
+      "label": "Ülke",
+      "value": "Almanya",
+      "mark": "entered"
+    }
+  },
+  "titleCheck": {
+    "status": "ok",
+    "candidate": "Lumora Veri Analitiği A.Ş.",
+    "reason": null
+  },
+  "eligibility": {
+    "consentAt": "2026-11-25T11:49:04.372184+00:00",
+    "running": false,
+    "identityDone": true,
+    "identityError": null,
+    "declaredAt": "2026-11-25T11:49:05.50668+00:00",
+    "screeningRunning": false,
+    "result": "eligible"
+  },
+  "payment": {
+    "amountMinor": 1275000,
+    "fees": [
+      {
+        "code": "tescil_ilan_harci",
+        "label": "Ticaret sicili tescil ve ilan harçları",
+        "amountMinor": 485000
+      },
+      {
+        "code": "noter_eimza",
+        "label": "Noter onayı ve e-İmza (ESHS)",
+        "amountMinor": 240000
+      },
+      {
+        "code": "sanal_ofis_yil1",
+        "label": "Sanal ofis · ilk yıl",
+        "amountMinor": 360000
+      },
+      {
+        "code": "platform",
+        "label": "Platform hizmet bedeli",
+        "amountMinor": 190000
+      }
+    ],
+    "status": "captured",
+    "last4": null,
+    "paidAt": "2026-11-25T11:49:07.280322+00:00"
+  },
+  "signature": {
+    "kind": "nes_daily",
+    "serial": "ESHS-2611-7CD2-6ED8-A527",
+    "issuedAt": "2026-11-25T11:49:07.736492+00:00",
+    "validUntil": "2026-11-26T11:49:07.736492+00:00"
+  },
+  "callConsentAt": "2026-11-25T11:49:07.421336+00:00",
+  "setup": {
+    "steps": [
+      {
+        "no": 1,
+        "code": "eligibility",
+        "title": "Başvuru & Uygunluk Kontrolü",
+        "status": "completed",
+        "tasks": [
+          {
+            "code": "identity.verify",
+            "title": "Kimlik doğrulandı",
+            "status": "done"
+          },
+          {
+            "code": "declaration.accept",
+            "title": "Beyan onaylandı",
+            "status": "done"
+          },
+          {
+            "code": "screening.run",
+            "title": "Yaptırım taraması tamamlandı",
+            "status": "done"
+          }
+        ]
+      },
+      {
+        "no": 2,
+        "code": "title_address",
+        "title": "Unvan Rezervasyonu & Adres Ataması",
+        "status": "completed",
+        "tasks": [
+          {
+            "code": "trade_name.reserve",
+            "title": "Unvan rezerve edildi",
+            "status": "done"
+          },
+          {
+            "code": "payment.collect",
+            "title": "Ödeme alındı",
+            "status": "done"
+          }
+        ]
+      },
+      {
+        "no": 3,
+        "code": "esign",
+        "title": "e-İmza",
+        "status": "completed",
+        "tasks": [
+          {
+            "code": "esign.issue",
+            "title": "e-İmza düzenlendi",
+            "status": "done"
+          }
+        ]
+      },
+      {
+        "no": 4,
+        "code": "registration",
+        "title": "MERSİS, Tescil, Oda Kaydı & Defter Tasdiki",
+        "status": "completed",
+        "tasks": [
+          {
+            "code": "registration.submit",
+            "title": "Ticaret sicili tescil edildi",
+            "status": "done"
+          }
+        ]
+      },
+      {
+        "no": 5,
+        "code": "tax",
+        "title": "Mükellefiyet Açılışı & Vergi Levhası",
+        "status": "in_progress",
+        "tasks": [
+          {
+            "code": "tax.register",
+            "title": "Vergi mükellefiyeti açıldı",
+            "status": "waiting_external"
+          },
+          {
+            "code": "tax.inspection",
+            "title": "Yoklama tutanağı (sanal ofis)",
+            "status": "exempt"
+          }
+        ]
+      },
+      {
+        "no": 6,
+        "code": "mali_muhur",
+        "title": "Mali Mühür",
+        "status": "pending",
+        "tasks": [
+          {
+            "code": "mali_muhur.apply",
+            "title": "Mali mühür başvurusu",
+            "status": "pending"
+          }
+        ]
+      },
+      {
+        "no": 7,
+        "code": "bank",
+        "title": "Halkbank Hesap Açılışı",
+        "status": "in_progress",
+        "tasks": [
+          {
+            "code": "bank.account_open",
+            "title": "Hesap açıldı ve sermaye bloke edildi",
+            "status": "waiting_external"
+          }
+        ]
+      },
+      {
+        "no": 8,
+        "code": "ebelge_sgk",
+        "title": "e-Belge, SGK & e-Defter",
+        "status": "pending",
+        "tasks": [
+          {
+            "code": "ebelge_sgk.register",
+            "title": "e-Fatura ve SGK işyeri kaydı",
+            "status": "pending"
+          }
+        ]
+      },
+      {
+        "no": 9,
+        "code": "advisor",
+        "title": "Mali Müşavir Eşleştirme",
+        "status": "pending",
+        "tasks": [
+          {
+            "code": "advisor.match",
+            "title": "Mali müşavir atandı",
+            "status": "pending"
+          }
+        ]
+      }
+    ]
+  },
+  "results": {
+    "mersis_no": "0243172010275868",
+    "tescil_no": "348923",
+    "ttsg_sayi": "13485"
+  },
+  "documents": [
+    {
+      "id": "01a21289-a899-7fed-8d20-1e360f62d0b6",
+      "type": "deck",
+      "sizeKb": 1,
+      "at": "2026-11-25T11:49:01.20927+00:00"
+    },
+    {
+      "id": "01a21289-b95b-7b3d-95cc-ce5d83b4bff0",
+      "type": "address_proof",
+      "sizeKb": 1,
+      "at": "2026-11-25T11:49:05.499043+00:00"
+    }
+  ],
+  "logs": [
+    {
+      "at": "2026-11-25T11:49:01.044562+00:00",
+      "text": "Başvuru oluşturuldu",
+      "who": "s"
+    },
+    {
+      "at": "2026-11-25T11:49:01.16165+00:00",
+      "text": "Ön bilgiler kaydedildi",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T11:49:01.222639+00:00",
+      "text": "Sunum yüklendi · Lumora Sunum.pdf",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T11:49:01.521193+00:00",
+      "text": "AI Reviewer 10 alan çıkardı",
+      "who": "a"
+    },
+    {
+      "at": "2026-11-25T11:49:01.529895+00:00",
+      "text": "Ön bilgilerle karşılaştırıldı: 5 bilgi uyuşuyor, 1 bilgi farklı",
+      "who": "a"
+    },
+    {
+      "at": "2026-11-25T11:49:02.371243+00:00",
+      "text": "Yaşadığınız ülke: ön bilgilerdeki değer seçildi",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T11:49:02.399598+00:00",
+      "text": "Sunum bilgileri düzenlendi",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T11:49:02.493543+00:00",
+      "text": "Unvan MERSİS’e soruldu",
+      "who": "s"
+    },
+    {
+      "at": "2026-11-25T11:49:02.496847+00:00",
+      "text": "Başvuru bilgileri onaylandı",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T11:49:03.603845+00:00",
+      "text": "Unvan MERSİS’te rezerve edildi",
+      "who": "k"
+    },
+    {
+      "at": "2026-11-25T11:49:04.372184+00:00",
+      "text": "Açık rıza metni onaylandı (yüz görüntüsü ile kimlik doğrulama)",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T11:49:04.372184+00:00",
+      "text": "Kimlik doğrulama başlatıldı",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T11:49:04.661441+00:00",
+      "text": "Kimlik doğrulandı",
+      "who": "s"
+    },
+    {
+      "at": "2026-11-25T11:49:05.507163+00:00",
+      "text": "Adres belgesi yüklendi · adres-belgesi.pdf",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T11:49:05.507202+00:00",
+      "text": "Bilgilerin doğruluğu beyan edildi",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T11:49:05.706741+00:00",
+      "text": "Yaptırım ve PEP taraması tamamlandı",
+      "who": "s"
+    },
+    {
+      "at": "2026-11-25T11:49:05.70676+00:00",
+      "text": "Uygunluk sonucu: dijital kuruluşa uygun",
+      "who": "s"
+    },
+    {
+      "at": "2026-11-25T11:49:07.246836+00:00",
+      "text": "Ödeme başlatıldı",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T11:49:07.280322+00:00",
+      "text": "Ödeme alındı · 12.750 TL",
+      "who": "k"
+    },
+    {
+      "at": "2026-11-25T11:49:07.421354+00:00",
+      "text": "Görüşme kaydı ve e-imza düzenlenmesi onaylandı",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T11:49:07.473946+00:00",
+      "text": "ESHS görüntülü görüşmesi başladı",
+      "who": "k"
+    },
+    {
+      "at": "2026-11-25T11:49:07.529727+00:00",
+      "text": "Görüşme tamamlanmadan sonlandırıldı",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T11:49:07.603726+00:00",
+      "text": "ESHS görüntülü görüşmesi başladı",
+      "who": "k"
+    },
+    {
+      "at": "2026-11-25T11:49:07.80551+00:00",
+      "text": "Günlük e-imza düzenlendi",
+      "who": "k"
+    },
+    {
+      "at": "2026-11-25T11:49:08.901139+00:00",
+      "text": "Kuruluş belgelerinin e-imza ile imzalanması onaylandı",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T11:49:08.901172+00:00",
+      "text": "Kuruluş başlatıldı",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T11:49:12.147216+00:00",
+      "text": "Ticaret sicili tescil edildi",
+      "who": "k"
+    }
+  ]
+}

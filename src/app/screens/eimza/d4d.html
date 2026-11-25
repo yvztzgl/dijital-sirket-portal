@@ -1,4 +1,25 @@
 <app-step-page [step]="4" ctx="resident" label="D-4d e-İmza TC">
+  @if (verifying()) {
+    <!-- HTTP mode: the API reports `calling` while the provider verifies the resident's e-signature (no
+         call for a resident). The page polls until the stage is signed. -->
+    <div class="wz-head">
+      <span class="wz-chip wz-chip--info"><app-icon name="clock" size="13px" [stroke]="2.2" />Doğrulanıyor</span>
+      <h1 class="wz-h1">E-imzanız doğrulanıyor</h1>
+      <p class="wz-lead">E-imza sağlayıcısının yanıtı bekleniyor. Yanıt geldiğinde bu sayfa kendiliğinden güncellenir.</p>
+    </div>
+    <section class="wz-card wz-checks" role="status" aria-live="polite">
+      <ul>
+        <li>
+          <span class="wait" aria-hidden="true"><app-icon name="clock" size="13px" [stroke]="2.4" /></span>
+          <span class="t"><b class="pending">E-imza</b><small>Doğrulama sürüyor.</small></span>
+        </li>
+      </ul>
+    </section>
+  } @else {
+  @if (expired()) {
+    <!-- HTTP mode: the certificate expired before the formation was started; the API is back at signing. -->
+    <p class="wz-foot" role="status"><app-icon name="alert" size="13px" [stroke]="2" />E-imzanızın süresi doldu. Kuruluşu başlatabilmek için e-imza adımını yeniden yapmanız gerekir.</p>
+  }
   <div class="wz-head">
     <h1 class="wz-h1">İmza yönteminizi seçiniz</h1>
     <p class="wz-lead">Kuruluş belgeleriniz seçtiğiniz e-imza ile imzalanır.</p>
@@ -21,4 +42,5 @@
   <div class="wz-actions">
     <button type="button" class="wz-btn" (click)="signResident()" [disabled]="store.busy()">{{ store.busy() ? 'İmzanız doğrulanıyor…' : 'Devam et' }}</button>
   </div>
+  }
 </app-step-page>

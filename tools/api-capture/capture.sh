@@ -7,6 +7,7 @@
 #   tools/api-capture/capture.sh step1    step 1 only (one founder)
 #   tools/api-capture/capture.sh step2    step 2 only (four founders; step 1's files are left as they are)
 #   tools/api-capture/capture.sh step3    step 3 only (one founder; the other files are left as they are)
+#   tools/api-capture/capture.sh step45   steps 4 and 5 only (two founders; the other files are left as they are)
 #
 # Step 1, one founder:
 #   profile → verified → scanning → review (difference open) → review (decided, fields filled)
@@ -27,13 +28,24 @@
 #   cancel (back to payment) → paid again without a new code (within 15 minutes) → 123456 → signing.
 #   The card is only ever the development token: tok_test_ + four digits (no card number exists here).
 #
-# Staff are played by ../dijital-sirket-api/dev/staff.sh (`staff.sh -a <reference no> title|review …`).
+# Steps 4 and 5 (each founder walks steps 1 to 3 without saving them):
+#   F  foreign: signing → the call refused without the consent → consent → call open (calling) → hung up
+#      (signing) → hanging up again refused → call again → completed (calling while the certificate is
+#      issued) → signed → set-up started (setup null until the Worker creates the steps) → steps created →
+#      staff complete the institution tasks (dev/staff.sh setup, in the background) → a read with some
+#      results while still in setup → done.
+#   R  resident (e-Devlet): signing → `esign/resident {method:"existing"}` → calling (the Worker issuing;
+#      no call for a resident) → signed → set-up started → steps created.
+#
+# Staff are played by ../dijital-sirket-api/dev/staff.sh (`staff.sh -a <reference no> title|review|setup …`).
 #
 # Personal data: the founders are made-up test people ("Deneme Kurucu", @example.test addresses);
 # every e-mail address in the saved JSON is replaced with kurucu@example.test, and the phone link's
 # token is replaced with "<token>" before anything is written. The resident's T.C. kimlik no is
 # generated in the test range 10000000xxx (valid check digits, as the development e-Devlet stand-in
-# requires) and appears in no saved file. Each run leaves its accounts and applications behind in
+# requires) and appears in no saved file (the development e-Devlet gives the account the address
+# <T.C. kimlik no>@edevlet.test, which is replaced with kurucu@example.test like the others, and the
+# run stops if the number is found in a file it wrote). Each run leaves its accounts and applications behind in
 # the development database.
 #
 # The deck is a "PDF" whose bytes are UTF-8 text: it starts with the PDF signature (the API's file
@@ -72,7 +84,8 @@ write() { call "$1" "$2" -X "$3" -H 'X-DSP-Request: 1' -H 'Content-Type: applica
 # temporary folder when that part is not being captured).
 DEST="$OUT"
 keep() {
-  sed -E 's/[A-Za-z0-9._%+-]+@example\.test/kurucu@example.test/g; s/"token": *"[^"]*"/"token":"<token>"/g' "$BODY" | jq . > "$DEST/$1.json"
+  sed -E 's/[A-Za-z0-9._%+-]+@(example|edevlet)\.test/kurucu@example.test/g; s/"token": *"[^"]*"/"token":"<token>"/g' "$BODY" | jq . > "$DEST/$1.json"
+  if [ -n "${TCKN:-}" ] && grep -q "$TCKN" "$DEST/$1.json"; then echo "  [!] the T.C. kimlik no is in $1.json"; rm -f "$DEST/$1.json"; exit 1; fi
 }
 # save <name>: the full read.
 save() {
@@ -115,12 +128,15 @@ test_tckn() {
 # A founder signed in with a new account: e-mail (foreign) or e-Devlet (resident).
 new_founder() {
   rm -f "$JAR"
+  TCKN=""
   if [ "$1" = resident ]; then
-    local tckn; tckn=$(test_tckn)
+    TCKN=$(test_tckn)
     call 200 "GET edevlet/start" "$API/api/auth/edevlet/start"
     local state; state=$(jq -r .redirectUrl "$BODY" | sed -E 's/.*state=([^&]*).*/\1/')
-    write 204 "POST edevlet (test T.C. kimlik no)" POST "{\"code\":\"$tckn\",\"state\":\"$state\"}" /api/auth/edevlet
+    write 204 "POST edevlet (test T.C. kimlik no)" POST "{\"code\":\"$TCKN\",\"state\":\"$state\"}" /api/auth/edevlet
     EMAIL="kurucu@example.test"
+    # Where the development e-Devlet's account receives its codes (the second factor); never saved.
+    CODE_TO="$TCKN@edevlet.test"
   else
     EMAIL="fixture-$(date +%s)-$RANDOM@example.test"
     local password="Fixture-Sifre-$RANDOM-2026" code
@@ -128,6 +144,7 @@ new_founder() {
     sleep 0.5
     code=$( (cd "$API_REPO" && dev/last-code.sh -q "$EMAIL") ) || { echo "  [!] no code in the outbox"; exit 1; }
     write 204 "verify-email" POST "{\"email\":\"$EMAIL\",\"code\":\"$code\"}" /api/auth/verify-email
+    CODE_TO="$EMAIL"
   fi
   call 204 "POST /api/application" -X POST -H 'X-DSP-Request: 1' "$API/api/application"
 }
@@ -236,6 +253,89 @@ if [ "$WHAT" = all ] || [ "$WHAT" = step3 ]; then
   write 204 "POST payment/3ds 123456" POST '{"code":"123456"}' /api/application/payment/3ds
   save payment-captured
   echo "step 3 done"
+fi
+
+# step_up: the second factor for this session (code from the development outbox). Saves nothing.
+step_up() {
+  call 202 "POST auth/step-up" -X POST -H 'X-DSP-Request: 1' "$API/api/auth/step-up"
+  sleep 0.5
+  local code
+  code=$( (cd "$API_REPO" && dev/last-code.sh -q "$CODE_TO") ) || { echo "  [!] no step-up code in the outbox"; exit 1; }
+  write 204 "POST auth/step-up/verify (code from the outbox)" POST "{\"code\":\"$code\"}" /api/auth/step-up/verify
+}
+# pay_quick: from `payment` to `signing` (second factor, development card token, 3-D Secure 123456). Saves nothing.
+pay_quick() {
+  step_up
+  write 204 "POST payment tok_test_4242" POST '{"holder":"DENEME KURUCU","cardToken":"tok_test_4242"}' /api/application/payment
+  write 204 "POST payment/3ds 123456" POST '{"code":"123456"}' /api/application/payment/3ds
+  wait_stage signing 10
+}
+# wait_setup_steps <name>: reads the application until the Worker has created the set-up's steps, then saves it.
+wait_setup_steps() {
+  for _ in $(seq 1 30); do
+    call 200 "GET /api/application (steps yet?)" "$API/api/application"
+    [ "$(jq -r '.setup != null' "$BODY")" = true ] && { keep "$1"; echo "    stage: $(jq -r .stage "$DEST/$1.json")"; return 0; }
+    sleep 1
+  done
+  echo "  [!] the set-up's steps did not appear in 30 s"; exit 1
+}
+
+if [ "$WHAT" = all ] || [ "$WHAT" = step45 ]; then
+  echo "steps 4 and 5 · F: a foreign founder, call and set-up to done"
+  DEST="$WORK"; new_founder foreign; step_one own-abroad no; reserve_title; step_two_quick; pay_quick; DEST="$OUT"
+  save esign-signing
+  # The second factor from the payment is still fresh (15 minutes), so the consent check answers.
+  call 409 "POST esign/call/start (no consent) → esign-consent-missing.json" -X POST -H 'X-DSP-Request: 1' "$API/api/application/esign/call/start"
+  keep_problem esign-consent-missing
+  write 204 "POST esign/consent {consent:true}" POST '{"consent":true}' /api/application/esign/consent
+  save esign-consent
+  call 204 "POST esign/call/start" -X POST -H 'X-DSP-Request: 1' "$API/api/application/esign/call/start"
+  save esign-call-open
+  call 204 "POST esign/call/end" -X POST -H 'X-DSP-Request: 1' "$API/api/application/esign/call/end"
+  save esign-call-ended
+  call 409 "POST esign/call/end (none open) → esign-no-open-call.json" -X POST -H 'X-DSP-Request: 1' "$API/api/application/esign/call/end"
+  keep_problem esign-no-open-call
+  call 204 "POST esign/call/start (again)" -X POST -H 'X-DSP-Request: 1' "$API/api/application/esign/call/start"
+  call 202 "POST esign/call/complete" -X POST -H 'X-DSP-Request: 1' "$API/api/application/esign/call/complete"
+  # The Worker issues within a second or two, so the issuing read is made at once.
+  save esign-issuing
+  wait_stage signed 20
+  save esign-signed
+  write 202 "POST setup {confirmed:true}" POST '{"confirmed":true}' /api/application/setup
+  save setup-started
+  call 200 "GET /api/application/status → status-setup.json" "$API/api/application/status"
+  keep status-setup
+  wait_setup_steps setup-steps
+  # Staff complete the six institution tasks in the background; a read is kept as soon as some
+  # results have arrived while the stage is still setup.
+  (cd "$API_REPO" && dev/staff.sh -a "$REF" setup > "$WORK/staff.log" 2>&1) &
+  STAFF=$!
+  RESULTS=""
+  for _ in $(seq 1 240); do
+    call 200 "GET /api/application (results yet?)" "$API/api/application"
+    if [ -z "$RESULTS" ] && [ "$(jq -r '.stage == "setup" and ((.results // {}) | length) > 0' "$BODY")" = true ]; then
+      keep setup-results; RESULTS=yes; echo "    results: $(jq -c '.results | keys' "$DEST/setup-results.json")"
+    fi
+    [ "$(jq -r .stage "$BODY")" = done ] && break
+    sleep 1
+  done
+  wait "$STAFF" || { echo "  [!] dev/staff.sh setup failed"; cat "$WORK/staff.log"; exit 1; }
+  [ -n "$RESULTS" ] || echo "  [!] no read with partial results was caught (setup-results.json not written)"
+  save setup-done
+  call 200 "GET /api/application/status → status-done.json" "$API/api/application/status"
+  keep status-done
+
+  echo "steps 4 and 5 · R: a resident founder (e-Devlet), method choice and set-up started"
+  DEST="$WORK"; new_founder resident; step_one own-turkey no; reserve_title
+  declare_address; wait_stage payment 30; pay_quick; DEST="$OUT"
+  save resident-signing
+  write 202 "POST esign/resident {method:existing}" POST '{"method":"existing"}' /api/application/esign/resident
+  save resident-issuing
+  wait_stage signed 20
+  save resident-signed
+  write 202 "POST setup {confirmed:true}" POST '{"confirmed":true}' /api/application/setup
+  wait_setup_steps resident-setup-steps
+  echo "steps 4 and 5 done (F: see the files above; R: $REF)"
 fi
 
 [ "$WHAT" = all ] || [ "$WHAT" = step2 ] || exit 0

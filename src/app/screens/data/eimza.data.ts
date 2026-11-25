@@ -6,6 +6,7 @@ import { followFlow } from '../../core/follow';
 import { clock, date, dateTime, tl0 } from '../../core/format';
 import { saveBytes } from '../../core/files';
 import { Inbox } from '../../core/inbox';
+import { SetupStep, SetupTask } from '../../core/models';
 import { AGENCIES, CALL_STEPS, DURATION } from '../../core/timeline';
 
 /** Step 4 e-signature (ESHS call or T.C. e-imza) and step 5 company setup (Ekranlar 3). */
@@ -14,6 +15,12 @@ export class EimzaData {
   private readonly inbox = inject(Inbox);
   private readonly assistant = inject(Assistant);
   private readonly confirmDialog = inject(Confirm);
+
+  /**
+   * HTTP mode: the server reports the call's outcome, the certificate and the formation. The screens
+   * then show only what it reports: no scripted set-up, no browser-made documents, no mock e-mails.
+   */
+  protected readonly serverDecides = this.store.serverDecides;
 
   constructor() {
     this.store.clearError();
@@ -39,6 +46,15 @@ export class EimzaData {
     do: ['Pasaportunuzu yanınızda bulundurunuz.', 'Yüzünüzü açık ve tam görünür tutunuz.', 'Görüşme bitene kadar kameranın karşısında kalınız.'],
     dont: ['Görüşme sırasında başka bir kişiden yardım almayınız.', 'Güneş gözlüğü, şapka veya maske takmayınız.', 'Görüşme tamamlanmadan bağlantıyı kesmeyiniz.'],
   };
+
+  /**
+   * HTTP mode: the certificate has expired. The API then reports `signing` again with the old
+   * certificate still in the view, and refuses the set-up; signing must be done again (D-4a / D-4d).
+   */
+  protected readonly expired = computed(() => {
+    const a = this.store.app();
+    return a?.stage === 'signing' && !!a.signature && Date.parse(a.signature.validUntil) <= this.store.now();
+  });
 
   protected acceptCallTerms() {
     void this.store.acceptCallTerms(this.callConsent());
@@ -68,6 +84,16 @@ export class EimzaData {
   }
 
   // --------------------------------------------------------------------------- D-4b call
+
+  /**
+   * HTTP mode: the scripted call has ended and been reported (or the portal cannot tell whether a call
+   * is open: no call start in the timeline); the provider is issuing the certificate and the page polls.
+   * Also while the page gives way after `signed` arrived, so the call does not flash back for a frame.
+   */
+  protected readonly issuing = computed(() => {
+    const a = this.store.app();
+    return this.serverDecides && (a?.stage !== 'calling' || !a.call || !!a.call.completed);
+  });
 
   protected readonly callTimer = computed(() => clock(this.store.call()?.elapsedMs ?? 0));
   protected readonly captions = computed(() => {
@@ -110,19 +136,29 @@ export class EimzaData {
   // ------------------------------------------------------------------------ D-4c ready
 
   protected readonly sig = computed(() => this.store.app()?.signature ?? null);
+  /** The daily certificate of the video call, or a resident's own (valid for a year or more). */
+  protected readonly certName = computed(() => (this.sig()?.method === 'eshs' ? 'Günlük e-imza' : 'Nitelikli e-imza'));
   protected readonly holderLine = computed(() => {
     const a = this.store.app();
     if (!a || !this.sig()) return '';
+    // HTTP mode: the API sends no identity document for the holder; the name is the account's.
+    if (this.serverDecides) return this.sig()!.holder;
     const doc = a.founderType === 'resident' ? `T.C. ${a.founder.tckn?.slice(0, 3)}●●●●●${a.founder.tckn?.slice(-3)}` : `Pasaport ${a.founder.nationality === 'Birleşik Krallık' ? 'GBR' : a.founder.nationality.slice(0, 3).toLocaleUpperCase('tr-TR')}`;
     return `${this.sig()!.holder} · ${doc}`;
   });
   protected readonly validity = computed(() => (this.sig() ? `${dateTime(this.sig()!.validUntil)} tarihine kadar geçerli` : ''));
   protected readonly leftMs = computed(() => (this.sig() ? Math.max(0, Date.parse(this.sig()!.validUntil) - this.store.now()) : 0));
-  protected readonly leftLabel = computed(() => clock(this.leftMs(), true));
-  /** Share of the signature's 24 hours still left, for the bar on D-4c. */
-  protected readonly leftPct = computed(() => Math.round((this.leftMs() / (24 * 3600_000)) * 100));
+  /** "23:58" (hours and minutes) for the daily certificate; "364 gün" for one valid longer than two days. */
+  protected readonly leftLabel = computed(() => (this.leftMs() > 48 * 3600_000 ? `${Math.floor(this.leftMs() / (24 * 3600_000))} gün` : clock(this.leftMs(), true)));
+  /** The certificate's whole validity (24 hours for the daily one), for the bar on D-4c. */
+  private readonly validMs = computed(() => {
+    const s = this.sig();
+    return s ? Math.max(1, Date.parse(s.validUntil) - Date.parse(s.issuedAt)) : 24 * 3600_000;
+  });
+  /** Share of the signature's validity still left, for the bar on D-4c. */
+  protected readonly leftPct = computed(() => Math.round((this.leftMs() / this.validMs()) * 100));
   /** Countdown ring: 352 ≈ circumference of r=56. */
-  protected readonly ringDash = computed(() => `${Math.round((this.leftMs() / (24 * 3600_000)) * 352)} 352`);
+  protected readonly ringDash = computed(() => `${Math.round((this.leftMs() / this.validMs()) * 352)} 352`);
   protected readonly callSummary = computed(() => {
     const s = this.sig();
     if (!s) return '';
@@ -153,6 +189,17 @@ export class EimzaData {
     void this.store.signResident(this.method());
   }
 
+  /**
+   * HTTP mode: the provider is verifying (or issuing) the resident's e-signature. The API reports
+   * `calling` while its e-signature work item is open, though a resident has no call; D-4d shows a
+   * waiting state and the page polls until `signed`. Which method was chosen is not in the view.
+   * Also while the page gives way after `signed` arrived, so the choice does not flash back for a frame.
+   */
+  protected readonly verifying = computed(() => {
+    const stage = this.store.app()?.stage;
+    return stage === 'calling' || (this.serverDecides && !!stage && stage !== 'signing');
+  });
+
   // ---------------------------------------------------------------------- D-5a setup
 
   /**
@@ -175,6 +222,7 @@ export class EimzaData {
    * (Before this the owner rejected a drawn "seal sheet", a take-off scene and a plain facade.)
    */
   protected readonly rise = computed(() => {
+    if (this.serverDecides) return this.serverRise();
     const v = this.store.setup();
     const lens = AGENCIES.slice(3).map((a) => a.subs.length);
     // The height follows time, not finished sub-steps: where the run stands among all its sub-steps,
@@ -190,6 +238,26 @@ export class EimzaData {
       finished: floor >= 6,
     };
   });
+  /**
+   * HTTP mode: the building stands at the number of formation steps (4 to 9) the server reports
+   * completed, a whole floor each; nothing rises with time. The floors stand for a count, not for a
+   * particular step: on the server several steps run side by side.
+   */
+  private readonly serverRise = computed(() => {
+    const steps = this.runSteps();
+    const done = Math.min(6, steps.filter((s) => s.status === 'completed').length);
+    const finished = this.store.stage() === 'done' || (steps.length > 0 && done >= steps.length);
+    const lv = EimzaData.BUILDING.levels;
+    return { done: finished ? 6 : done, top: lv[finished ? 6 : done], finished };
+  });
+
+  /** HTTP mode: the server's steps; undefined in the mock, null while the server has not created them. */
+  protected readonly serverSteps = computed<SetupStep[] | null | undefined>(() => this.store.app()?.setup?.steps);
+  /** HTTP mode, stage `setup`, no steps yet: "hazırlanıyor". */
+  protected readonly preparing = computed(() => this.serverDecides && this.serverSteps() == null);
+  /** The steps of the formation run itself (4 to 9); 1 to 3 were finished in the earlier wizard steps. */
+  private readonly runSteps = computed(() => (this.serverSteps() ?? []).filter((s) => s.no >= 4).sort((a, b) => a.no - b.no));
+
   /** How long D-5a stays after the sixth floor is finished, in ms: long enough for the finishing moment below. */
   private static readonly FINISHED_HOLD = 3600;
 
@@ -219,9 +287,10 @@ export class EimzaData {
     };
   });
   /** "Detayı gör": the full list of steps and sub-steps under the illustration. */
-  protected readonly listOpen = signal(false);
+  protected readonly listOpen = signal(this.store.serverDecides);
 
   protected readonly agency = computed(() => {
+    if (this.serverDecides) return this.serverAgency();
     const v = this.store.setup();
     const cur = v?.agency ?? 0;
     return AGENCIES.map((a, i) => {
@@ -234,12 +303,39 @@ export class EimzaData {
         done,
         cur: isCur,
         up: !done && !isCur,
+        label: done ? 'Tamamlandı' : isCur ? 'İşlemde' : 'Sırada',
         bg: isCur ? 'var(--bg-F7F9FE)' : 'transparent',
         weight: isCur ? 600 : 500,
         color: done || isCur ? 'var(--fg-061262)' : 'var(--fg-5B6478)',
       };
     });
   });
+
+  /**
+   * HTTP mode: the rows of D-5a's list are the server's nine steps with their own titles and states.
+   * The server leaves a step `pending` until one of its tasks is completed, even while a task is
+   * already with the institution, so a step counts as running ("İşlemde") when the server says so or
+   * when one of its tasks has started. No institution line under the title: the API sends none.
+   */
+  private readonly serverAgency = computed(() =>
+    (this.serverSteps() ?? []).map((st) => {
+      const done = st.status === 'completed';
+      const cur = !done && (st.status === 'in_progress' || st.tasks.some((t) => t.status === 'waiting' || t.status === 'in_progress' || t.status === 'done'));
+      const held = !done && !cur && st.status === 'other';
+      return {
+        n: String(st.no).padStart(2, '0'),
+        t: st.title,
+        ag: '',
+        done,
+        cur,
+        up: !done && !cur,
+        label: done ? 'Tamamlandı' : cur ? 'İşlemde' : held ? 'Beklemede' : 'Sırada',
+        bg: cur ? 'var(--bg-F7F9FE)' : 'transparent',
+        weight: cur ? 600 : 500,
+        color: done || cur ? 'var(--fg-061262)' : 'var(--fg-5B6478)',
+      };
+    }),
+  );
 
   protected readonly segs = computed(() => {
     const cur = this.store.setup()?.agency ?? 0;
@@ -257,19 +353,27 @@ export class EimzaData {
     return { idx: Math.min(v.agency + 1, AGENCIES.length), total: AGENCIES.length, t: a.t, ag: a.ag, sub: `${sub.t}…`, percent: v.percent };
   });
 
-  /** Agency steps finished so far. */
-  protected readonly doneCount = computed(() => Math.min(this.store.setup()?.agency ?? 0, AGENCIES.length));
+  /** Agency steps finished so far (HTTP mode: the server's completed steps). */
+  protected readonly doneCount = computed(() =>
+    this.serverDecides ? (this.serverSteps() ?? []).filter((s) => s.status === 'completed').length : Math.min(this.store.setup()?.agency ?? 0, AGENCIES.length),
+  );
 
   /** "Belgeleri görüntüle" / "İşlem kaydını görüntüle": open that view in the side panel. */
   protected showPanel(tab: 'docs' | 'log') {
     this.assistant.show(tab);
   }
 
-  protected readonly detailsOpen = signal(false);
-  protected readonly totalSubs = AGENCIES.reduce((s, a) => s + a.subs.length, 0);
+  protected readonly detailsOpen = signal(this.store.serverDecides);
+  /** "Alt adımları göster (12 / 34)": sub-steps finished and in all (HTTP mode: the server's tasks; an exempt one counts as finished). */
+  protected readonly subCount = computed(() => {
+    if (!this.serverDecides) return { done: this.store.setup()?.done ?? 0, total: AGENCIES.reduce((s, a) => s + a.subs.length, 0) };
+    const tasks = (this.serverSteps() ?? []).flatMap((s) => s.tasks);
+    return { done: tasks.filter((t) => t.status === 'done' || t.status === 'exempt').length, total: tasks.length };
+  });
 
   /** Sub-steps of the agencies still running or queued (shown under "Detayları göster"). */
   protected readonly details = computed(() => {
+    if (this.serverDecides) return this.serverDetails();
     const v = this.store.setup();
     if (!v) return [];
     let k = 0;
@@ -287,6 +391,36 @@ export class EimzaData {
     return out;
   });
 
+  /** HTTP mode: the tasks of steps 4 to 9 as the server reports them; `waiting` reads "kurumda bekliyor". */
+  private readonly serverDetails = computed(() =>
+    this.runSteps().map((st) => ({
+      n: String(st.no).padStart(2, '0'),
+      t: st.title,
+      subs: st.tasks.map((task) => {
+        const [i, ic, color] = TASK_LOOK[task.status];
+        return { i, ic, color, t: task.title + TASK_NOTE[task.status], exempt: task.status === 'exempt', deco: task.status === 'exempt' ? 'line-through' : 'none' };
+      }),
+    })),
+  );
+
+  /**
+   * HTTP mode, D-5a: the company's numbers that have arrived so far (each comes when staff complete the
+   * institution task that issues it), and on D-5b all of them. Only what the API sent.
+   */
+  protected readonly arrived = computed(() => {
+    const r = this.store.app()?.results;
+    if (!r) return [];
+    return [
+      { k: 'MERSİS no', v: r.mersis },
+      { k: 'Ticaret sicili tescil no', v: r.registryNo },
+      { k: 'Vergi kimlik no', v: r.vkn },
+      { k: 'Vergi dairesi', v: r.taxOffice },
+      { k: 'IBAN', v: r.iban },
+      { k: 'e-Fatura kayıt no', v: r.eInvoiceNo },
+      { k: 'SGK işyeri sicil no', v: r.sgkNo },
+    ].filter((x): x is { k: string; v: string } => !!x.v);
+  });
+
   // ------------------------------------------------------------------------ D-5b done
 
   protected readonly doneLine = computed(() => {
@@ -296,6 +430,12 @@ export class EimzaData {
     return `${AGENCIES.length}/${AGENCIES.length} KURUM ADIMI TAMAMLANDI · ${mins} DK`;
   });
   protected readonly registered = computed(() => {
+    if (this.serverDecides) {
+      // Only what the API reports: when the formation finished (its timeline) and the registry number.
+      const a = this.store.app();
+      const parts = [a?.setup?.finishedAt ? `Kuruluş ${date(a.setup.finishedAt)}` : '', a?.results?.registryNo ? `Ticaret sicili tescil no ${a.results.registryNo}` : ''];
+      return parts.filter(Boolean).join(' · ');
+    }
     const f = this.store.app()?.setup?.finishedAt;
     return f ? `Tescil ${date(f)} · Gebze Ticaret Sicili Müdürlüğü · Merkez: Terminal İstanbul, Gebze / Kocaeli` : '';
   });
@@ -304,18 +444,30 @@ export class EimzaData {
   protected readonly results = computed(() => {
     const r = this.store.app()?.results;
     if (!r) return [];
+    if (this.serverDecides) {
+      // HTTP mode: the identifiers the API returned, each with copy; no advisor (the API sends no name
+      // or firm) and no blocked-capital line (the API sends no capital).
+      const mono = "600 18px/24px 'IBM Plex Mono',monospace";
+      return [
+        { k: 'Vergi kimlik no', v: r.vkn, s: r.taxOffice ?? '', a: 'Kopyala', font: mono },
+        { k: 'MERSİS no', v: r.mersis, s: r.registryNo ? `Ticaret sicili tescil no ${r.registryNo}` : '', a: 'Kopyala', font: mono },
+        { k: 'IBAN', v: r.iban, s: '', a: 'Kopyala', font: "600 16px/24px 'IBM Plex Mono',monospace" },
+        { k: 'e-Fatura kayıt no', v: r.eInvoiceNo, s: '', a: 'Kopyala', font: mono },
+        { k: 'SGK işyeri sicil no', v: r.sgkNo, s: '', a: 'Kopyala', font: "600 15px/24px 'IBM Plex Mono',monospace" },
+      ].filter((x): x is typeof x & { v: string } => !!x.v);
+    }
     const blocked = tl0((this.store.app()?.company.capital ?? 250_000) * 0.25);
     return [
-      { k: 'Vergi kimlik no', v: r.vkn, s: r.taxOffice, a: 'Kopyala', font: "600 18px/24px 'IBM Plex Mono',monospace" },
-      { k: 'MERSİS no', v: r.mersis, s: 'Ticaret sicili tescil edildi', a: 'Kopyala', font: "600 18px/24px 'IBM Plex Mono',monospace" },
-      { k: 'IBAN · Halkbank', v: r.iban, s: `Sermayenin %25'i (${blocked}) bloke`, a: 'Kopyala', font: "600 16px/24px 'IBM Plex Mono',monospace" },
-      { k: 'Mali müşavir', v: r.advisor, s: r.advisorFirm, a: 'İletişim', font: "600 17px/24px 'IBM Plex Sans',sans-serif" },
+      { k: 'Vergi kimlik no', v: r.vkn ?? '', s: r.taxOffice ?? '', a: 'Kopyala', font: "600 18px/24px 'IBM Plex Mono',monospace" },
+      { k: 'MERSİS no', v: r.mersis ?? '', s: 'Ticaret sicili tescil edildi', a: 'Kopyala', font: "600 18px/24px 'IBM Plex Mono',monospace" },
+      { k: 'IBAN · Halkbank', v: r.iban ?? '', s: `Sermayenin %25'i (${blocked}) bloke`, a: 'Kopyala', font: "600 16px/24px 'IBM Plex Mono',monospace" },
+      { k: 'Mali müşavir', v: r.advisor ?? '', s: r.advisorFirm ?? '', a: 'İletişim', font: "600 17px/24px 'IBM Plex Sans',sans-serif" },
     ];
   });
 
   protected readonly nexts = computed(() => {
     const blocked = tl0((this.store.app()?.company.capital ?? 250_000) * 0.25);
-    const advisor = this.store.app()?.results?.advisor.replace('SMMM ', '') ?? 'Müşaviriniz';
+    const advisor = this.store.app()?.results?.advisor?.replace('SMMM ', '') ?? 'Müşaviriniz';
     return [
       // `img`: that step's scene, cut from the building picture of D-5a (art/README.md, "Building scene"). `tone`: the tag's colour.
       { n: '01', t: 'Sermayenin %25’ini yatırınız', d: `${blocked} tutarını Halkbank hesabınıza transfer ediniz; blokaj tescille kalkar.`, w: '30 gün içinde', tone: 'warn', img: '/assets/illustrations/next-bank.webp' },
@@ -335,11 +487,33 @@ export class EimzaData {
     }
   }
 
+  /** Mock only: the browser-made placeholder documents as one ZIP. Never offered in HTTP mode. */
   protected downloadAll() {
     saveBytes(this.store.documentsZip(), `${this.store.title().replace(/\s+/g, '-')}-belgeler.zip`, 'application/zip');
   }
 
+  /** Mock only: sends a demo e-mail to the Inbox. Hidden in HTTP mode. */
   protected openPanel() {
     this.inbox.send({ kind: 'mail', from: 'no-reply@dijitalsirket.gov.tr', title: 'Şirket paneliniz hazırlanıyor', body: `${this.store.fullTitle()} paneline erişim bilgileri birkaç dakika içinde e-postanıza gönderilecek.` });
   }
 }
+
+/** How each server task state looks in D-5a's sub-step list: [mark, mark colour, text colour]. */
+const TASK_LOOK: Record<SetupTask['status'], [string, string, string]> = {
+  done: ['✓', 'var(--fg-15803D)', 'var(--fg-1F2A44)'],
+  waiting: ['›', 'var(--fg-061262)', 'var(--fg-061262)'],
+  in_progress: ['›', 'var(--fg-061262)', 'var(--fg-061262)'],
+  pending: ['·', 'var(--fg-8A93A6)', 'var(--fg-5B6478)'],
+  exempt: ['–', 'var(--fg-8A93A6)', 'var(--fg-5B6478)'],
+  other: ['·', 'var(--fg-8A93A6)', 'var(--fg-5B6478)'],
+};
+
+/** What follows a server task's title in that list. */
+const TASK_NOTE: Record<SetupTask['status'], string> = {
+  done: '',
+  waiting: ' · kurumda bekliyor',
+  in_progress: ' · işlemde',
+  pending: ' · sırada',
+  exempt: '',
+  other: ' · beklemede',
+};

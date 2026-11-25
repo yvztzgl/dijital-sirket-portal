@@ -1,0 +1,7 @@
+{
+  "type": "https://httpstatuses.io/409",
+  "title": "Açık bir görüşme yok.",
+  "status": 409,
+  "code": "no_open_call",
+  "requestId": "01a21289-c179-75ee-b4c1-fead01b91db9"
+}

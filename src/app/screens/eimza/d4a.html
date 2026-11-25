@@ -1,4 +1,8 @@
 <app-step-page [step]="4" ctx="sign" label="D-4a e-İmza öncesi" [width]="briefed() ? 1040 : 740">
+  @if (expired()) {
+    <!-- HTTP mode: the certificate expired before the formation was started; the API is back at signing. -->
+    <p class="wz-foot" role="status"><app-icon name="alert" size="13px" [stroke]="2" />E-imzanızın süresi doldu. Kuruluşu başlatabilmek için e-imza adımını yeniden yapmanız gerekir.</p>
+  }
   @if (!briefed()) {
     <!-- Pre-information: what the call needs, what to mind, and the consent. The camera check comes after "Devam et". -->
     <div class="wz-head">

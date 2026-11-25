@@ -32,6 +32,24 @@ import paymentOpen from './captured/payment-open.json';
 import stepUpRequired from './captured/step-up-required.json';
 import stepUpWrongCode from './captured/step-up-wrong-code.json';
 import threeDsWrongCode from './captured/threeds-wrong-code.json';
+import esignSigning from './captured/esign-signing.json';
+import esignConsent from './captured/esign-consent.json';
+import esignCallOpen from './captured/esign-call-open.json';
+import esignCallEnded from './captured/esign-call-ended.json';
+import esignIssuing from './captured/esign-issuing.json';
+import esignSigned from './captured/esign-signed.json';
+import setupStarted from './captured/setup-started.json';
+import setupSteps from './captured/setup-steps.json';
+import setupResults from './captured/setup-results.json';
+import setupDone from './captured/setup-done.json';
+import residentSigning from './captured/resident-signing.json';
+import residentIssuing from './captured/resident-issuing.json';
+import residentSigned from './captured/resident-signed.json';
+import residentSetupSteps from './captured/resident-setup-steps.json';
+import esignConsentMissing from './captured/esign-consent-missing.json';
+import esignNoOpenCall from './captured/esign-no-open-call.json';
+import statusSetup from './captured/status-setup.json';
+import statusDone from './captured/status-done.json';
 
 /**
  * Literal API answers for the specs, in the shape `GET /api/me` and `GET /api/application` send
@@ -191,6 +209,43 @@ export const CAPTURED = {
   paymentCancelled: paymentCancelled as ApplicationWire,
   /** Paid again (no new code within 15 minutes), 123456: stage `signing`, `captured`. */
   paymentCaptured: paymentCaptured as ApplicationWire,
+  // Steps 4 and 5 (captured 2026-11-25; founder F foreign, founder R resident; see tools/api-capture/capture.sh).
+  /** F after the payment: `signing`, no consent yet. */
+  esignSigning: esignSigning as ApplicationWire,
+  /** `POST esign/call/start` before the consent: 409. */
+  esignConsentMissing: esignConsentMissing as ProblemWire,
+  /** F after `POST esign/consent {consent:true}`: `callConsentAt` set. */
+  esignConsent: esignConsent as ApplicationWire,
+  /** F after `POST esign/call/start`: `calling`, the call open. */
+  esignCallOpen: esignCallOpen as ApplicationWire,
+  /** F after `POST esign/call/end`: `signing` again, "Görüşme tamamlanmadan sonlandırıldı". */
+  esignCallEnded: esignCallEnded as ApplicationWire,
+  /** `POST esign/call/end` with no call open: 409. */
+  esignNoOpenCall: esignNoOpenCall as ProblemWire,
+  /** F right after `POST esign/call/complete`: still `calling` (the certificate being issued). */
+  esignIssuing: esignIssuing as ApplicationWire,
+  /** F once the Worker issued the daily certificate: `signed`, `nes_daily`, valid 24 hours. */
+  esignSigned: esignSigned as ApplicationWire,
+  /** F right after `POST setup {confirmed:true}`: `setup`, the steps not created yet (`setup: null`). */
+  setupStarted: setupStarted as ApplicationWire,
+  /** `GET /api/application/status` at that moment. */
+  statusSetup: statusSetup as { stage: 'setup'; changedAt: string },
+  /** F once the Worker created the nine steps: 1–3 completed, 4–9 pending, the first task with the institution. */
+  setupSteps: setupSteps as ApplicationWire,
+  /** F while staff work (dev/staff.sh setup): the registration done, its numbers in `results`. */
+  setupResults: setupResults as ApplicationWire,
+  /** F at the end: `done`, every step completed, all the numbers. */
+  setupDone: setupDone as ApplicationWire,
+  /** `GET /api/application/status` after `done`. */
+  statusDone: statusDone as { stage: 'done'; changedAt: string },
+  /** R (resident, e-Devlet) after the payment: `signing`. */
+  residentSigning: residentSigning as ApplicationWire,
+  /** R right after `POST esign/resident {method:"existing"}`: the API reports `calling` while issuing (no call). */
+  residentIssuing: residentIssuing as ApplicationWire,
+  /** R once the Worker verified it: `signed`, `nes_existing`, valid a year. */
+  residentSigned: residentSigned as ApplicationWire,
+  /** R after `POST setup`, once the steps exist. */
+  residentSetupSteps: residentSetupSteps as ApplicationWire,
 };
 
 /** An error body as the API sends it (`application/problem+json`). */
@@ -226,3 +281,22 @@ export const IDENTITY_FAILED: ApplicationWire = {
  * application's status is still `identity`; the view's result stays null and the identity not done.
  */
 export const IDENTITY_FAILED_TWICE: ApplicationWire = { ...IDENTITY_FAILED, stage: 'manual' };
+
+/**
+ * The daily certificate after its 24 hours, before the formation was started. Not captured (it takes a
+ * day): the captured `esignSigned` with what ApplicationStage then reports: the stage back at `signing`
+ * (`awaiting_esign` without a valid certificate) and the expired certificate still in the view.
+ */
+export const SIGNATURE_EXPIRED: ApplicationWire = {
+  ...CAPTURED.esignSigned,
+  stage: 'signing',
+  signature: { ...CAPTURED.esignSigned.signature!, issuedAt: '2026-11-20T09:00:00+00:00', validUntil: '2026-11-21T09:00:00+00:00' },
+};
+
+/** `POST /api/application/setup` with an expired certificate (StartSetupHandler; not captured, see above). */
+export const NO_VALID_SIGNATURE: ProblemWire = {
+  title: 'Geçerli bir e-imzanız yok. Lütfen e-imza adımını yeniden yapınız.',
+  status: 409,
+  code: 'no_valid_signature',
+  requestId: 'hand-written',
+};

@@ -57,7 +57,8 @@ export function routeFor(stage: Stage | null, founderType: FounderType = 'foreig
     case 'signing':
       return founderType === 'resident' ? '/e-signature/turkish-citizen' : '/e-signature';
     case 'calling':
-      return '/e-signature/call';
+      // A resident at `calling` (HTTP mode) is waiting for the provider to verify their e-signature: no call.
+      return founderType === 'resident' ? '/e-signature/turkish-citizen' : '/e-signature/call';
     case 'signed':
       return '/e-signature/ready';
     case 'setup':
@@ -71,20 +72,24 @@ export function routeFor(stage: Stage | null, founderType: FounderType = 'foreig
 
 /**
  * Stages in which the server (or its staff) works and the founder waits; in HTTP mode the store
- * polls the status read while the application is in one of them (`waitsForServer`). `manual` is
- * decided by people and can take days; the poll settles at its slowest pace (`pollDelay`). Step 5's
- * waiting stages come with a later piece.
+ * polls the status read while the application is in one of them (`waitsForServer`). `manual` and
+ * `setup` are done by people (staff and institutions) and can take days; the poll settles at its
+ * slowest pace (`pollDelay`). `done` is not one: nothing is polled once the company is founded.
  */
-export const SERVER_WAITING_STAGES: Stage[] = ['scanning', 'titleChecking', 'screening', 'manual'];
+export const SERVER_WAITING_STAGES: Stage[] = ['scanning', 'titleChecking', 'screening', 'manual', 'setup'];
 
 /**
- * True while the portal should poll for the server in HTTP mode: a waiting stage, or the identity
- * step while a check is open on the server (camera not finished, or the Worker deciding) or while
- * the QR code is shown on this computer (so it notices the phone starting and finishing the check).
+ * True while the portal should poll for the server in HTTP mode: a waiting stage; the identity step
+ * while a check is open on the server (camera not finished, or the Worker deciding) or while the QR
+ * code is shown on this computer (so it notices the phone starting and finishing the check); and
+ * `calling` once the certificate is being issued: after the scripted call was reported ended, for a
+ * resident (no call: the provider verifies their e-signature), or when the portal cannot tell (no
+ * call start in the timeline). Not while the founder's own scripted call runs.
  */
 export function waitsForServer(app: Application | null): boolean {
   if (!app) return false;
   if (SERVER_WAITING_STAGES.includes(app.stage)) return true;
+  if (app.stage === 'calling') return app.founderType === 'resident' || !app.call || !!app.call.completed;
   return app.stage === 'eligibility' && (!!app.eligibility?.running || !!app.phoneLink);
 }
 
@@ -251,9 +256,13 @@ export class ApplicationStore {
     return { ...callView(p, a.founder.firstName), elapsedMs: this.now() - Date.parse(a.call.startedAt) };
   });
 
+  /**
+   * The mock's scripted set-up (D-5a), from its start time. Null in HTTP mode: there the screen shows
+   * only the server's steps and tasks (`Application.setup.steps`), with no progress made up by time.
+   */
   readonly setup = computed(() => {
     const a = this.app();
-    if (!a?.setup) return null;
+    if (!a?.setup || this.serverWork) return null;
     const p = a.stage === 'setup' ? progress(a.setup.startedAt, this.dur(DURATION.setup), this.now()) : 1;
     return setupView(p);
   });
@@ -325,6 +334,39 @@ export class ApplicationStore {
       sentFor = e.startedAt;
       untracked(() => void this.completeIdentity());
     });
+    // The video call: the same, once per call (keyed by its start). The call is the portal's scripted
+    // simulation (no video or e-signature vendor yet); when it ends the server is told, and the
+    // certificate is polled for. Hanging up before (`endCall`) cancels it instead.
+    let callSentFor: string | undefined;
+    effect(() => {
+      const a = this.app();
+      const call = a?.call;
+      if (a?.stage !== 'calling' || !call || call.completed || this.call()?.p !== 1 || callSentFor === call.startedAt) return;
+      callSentFor = call.startedAt;
+      untracked(() => void this.completeCall());
+    });
+    // The certificate expires (a daily one after 24 hours): the API then reports `signing` again and
+    // refuses the set-up. Read the application once when the time is up, so D-4c gives way by itself.
+    let expiryReadFor: string | undefined;
+    effect(() => {
+      const a = this.app();
+      const until = a?.signature?.validUntil;
+      if (a?.stage !== 'signed' || !until || Date.parse(until) > this.now() || expiryReadFor === until) return;
+      expiryReadFor = until;
+      untracked(() => void this.refresh());
+    });
+  }
+
+  /** HTTP mode: see `followServer`. A refusal re-reads the application. */
+  private async completeCall() {
+    this.writes++;
+    try {
+      this.app.set(await this.api.completeCall());
+    } catch (e) {
+      if (this.sessionLost(e) || this.applicationClosed(e)) return;
+      console.warn('call complete failed', e instanceof ApiError ? (e.code ?? e.status) : e);
+      void this.refresh();
+    }
   }
 
   /** HTTP mode: see `followServer`. A refusal (the check was finished elsewhere) only re-reads the application. */
@@ -575,8 +617,12 @@ export class ApplicationStore {
     this.fieldErrors.set({});
   }
 
-  /** Placeholder PDF for a generated document. */
+  /**
+   * Placeholder PDF for a generated document. Mock only: against the real API the portal never makes
+   * a document up (the API has no route to download one yet), so this refuses in HTTP mode.
+   */
   documentPdf(d: DocItem) {
+    if (this.serverWork) throw new Error('No placeholder documents against the real API.');
     return pdfBytes(d.name, [
       `Basvuru no: ${this.appId()}`,
       `Sirket: ${this.fullTitle() || '-'}`,
@@ -718,7 +764,8 @@ export class ApplicationStore {
       } catch (e) {
         // 409 wrong_stage: this screen was out of date (another tab, or the server moved on). Show
         // where the application really is; the refusal's sentence stays on screen. The same for the
-        // payment's 409s: a payment was opened, or closed, in another tab.
+        // payment's 409s: a payment was opened, or closed, in another tab; a call that is no longer open;
+        // a certificate that expired (the API is back at `signing`).
         if (e instanceof ApiError && OUT_OF_DATE.includes(e.code ?? '')) void this.refresh();
         throw e;
       }
@@ -856,7 +903,7 @@ export class ApplicationStore {
 }
 
 /** Refusals that mean the screen was out of date; the store reads the application again (`update`). */
-const OUT_OF_DATE = ['wrong_stage', 'payment_open', 'no_open_payment'];
+const OUT_OF_DATE = ['wrong_stage', 'payment_open', 'no_open_payment', 'no_open_call', 'no_valid_signature'];
 
 /**
  * What the founder reads for a refusal. A `validation_failed` answer from the API carries a

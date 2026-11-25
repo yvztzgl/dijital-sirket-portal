@@ -3,7 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import type { Api, ApplicationStatus, ReviewPatch, ServerWork, Session } from './api';
 import { ApiError } from './api-error';
-import { toAccount, toApplication, toReviewFields, toStage } from './api-mapper';
+import { callStartedAt, toAccount, toApplication, toReviewFields, toStage } from './api-mapper';
 import { ApplicationWire, EdevletStartWire, MeWire, PhoneLinkWire, PhoneStatusWire, StageWire } from './api-types';
 import { Account, Application, CrossKey, DeckConsents, PhoneLinkStatus, Profile, WizardReference } from './models';
 
@@ -14,16 +14,17 @@ import { Account, Application, CrossKey, DeckConsents, PhoneLinkStatus, Profile,
  * the session back after a reload, step 1 (profile, deck, review, cross-checks, title, the
  * reference data, and polling the status read while the server works) and step 2 (identity check
  * on the computer or on the phone, declaration, the result, manual review), the second factor
- * ("step-up") and step 3 (payment with 3-D Secure). The session is an
+ * ("step-up"), step 3 (payment with 3-D Secure), step 4 (the e-signature: the video call for foreign
+ * founders, the method choice for residents) and step 5 (the formation, followed by polling). The session is an
  * HttpOnly cookie the server sets; this class never sees it, and nothing about the founder is kept
  * in the browser's storage (only in this object's memory, until sign-out or reload).
  *
  * Every write answers with an empty body (204 or 202); each write here is followed by a fresh read
  * of the application (`fresh`).
  *
- * Everything else still rejects with "Bu işlem henüz sunucuya bağlanmadı." (code `not_connected`).
- * Parameters are left off until a method is connected; TypeScript accepts an implementation that
- * takes fewer of them, and `Api` (api.ts) shows the full signatures.
+ * What has no route on the API still rejects with "Bu işlem henüz sunucuya bağlanmadı." (code
+ * `not_connected`): `backToReview` and Terminal AI's `ask`. TypeScript accepts an implementation that
+ * takes fewer parameters, and `Api` (api.ts) shows the full signatures.
  *
  * `implements` rather than `extends` for the same reason as MockApi: api.ts imports the
  * environment, which imports this file.
@@ -70,6 +71,13 @@ export class HttpApi implements Api {
    * number itself, the expiry and the CVV are never kept anywhere (see `pay`).
    */
   private card: { applicationId: string; holder: string; last4: string } | null = null;
+  /**
+   * The video call this page reported ended (`call/complete`), by application and call start. The
+   * API reports `calling` while the call is open and also while the certificate is being issued; this
+   * is how the portal tells them apart (an API gap, docs/api-client.md). Memory only: after a reload
+   * the scripted call runs to its end again and `completeCall` learns from the 409 that it was over.
+   */
+  private callCompleted: { applicationId: string; startedAt: string } | null = null;
 
   // auth
 
@@ -181,6 +189,7 @@ export class HttpApi implements Api {
     this.phoneLink = null;
     this.resultSeen.clear();
     this.card = null;
+    this.callCompleted = null;
   }
 
   /** The light read: stage and change time, nothing decrypted on the server. */
@@ -209,7 +218,8 @@ export class HttpApi implements Api {
     // The QR code is no longer shown once a check is open or the identity step is over.
     if (view.stage !== 'eligibility' || view.eligibility?.running || view.eligibility?.identityDone) this.phoneLink = null;
     const card = this.card?.applicationId === view.id ? { holder: this.card.holder, last4: this.card.last4 } : undefined;
-    const app = toApplication(view, this.account!, { resultSeen: this.resultSeen.has(view.id), card });
+    const callCompleted = this.callCompleted?.applicationId === view.id ? this.callCompleted.startedAt : undefined;
+    const app = toApplication(view, this.account!, { resultSeen: this.resultSeen.has(view.id), card, callCompleted });
     return this.phoneLink ? { ...app, phoneLink: this.phoneLink } : app;
   }
 
@@ -422,14 +432,69 @@ export class HttpApi implements Api {
   }
 
   // step 4 · e-signature
-  acceptCallTerms(): Promise<Application> { return notConnected(); }
-  startCall(): Promise<Application> { return notConnected(); }
-  endCall(): Promise<Application> { return notConnected(); }
-  completeCall(): Promise<Application> { return notConnected(); }
-  signResident(): Promise<Application> { return notConnected(); }
+
+  /** D-4a's tick: 204, idempotent (the view then has `callConsentAt`). The consent is sent exactly as ticked. */
+  async acceptCallTerms(consent: boolean): Promise<Application> {
+    await this.request('POST', '/api/application/esign/consent', { consent: consent === true });
+    return this.fresh();
+  }
+
+  /**
+   * "Operatörü ara": 204, stage `calling`. Needs the second factor (403 `step_up_required`: the store
+   * asks for the code and repeats the call once). Foreign founders only (409 `wrong_flow`); 409
+   * `consent_missing` without D-4a's tick. Idempotent while a call is open.
+   */
+  async startCall(): Promise<Application> {
+    await this.request('POST', '/api/application/esign/call/start');
+    return this.fresh();
+  }
+
+  /** "Görüşmeyi bitir": 204, the call is cancelled and the stage is `signing` again. 409 `no_open_call`. */
+  async endCall(): Promise<Application> {
+    await this.request('POST', '/api/application/esign/call/end');
+    return this.fresh();
+  }
+
+  /**
+   * The scripted call reached its end. There is no video or e-signature vendor yet: the call is the
+   * portal's own simulation in both modes, and this tells the server it is over; the provider then
+   * issues the certificate (the Worker), stage `signed`, which the store polls for. 202.
+   * 409 `no_open_call`: the call was already completed (before a reload of this page) or ended
+   * elsewhere; the application is read again, and if it is still at `calling` the certificate is
+   * being issued.
+   */
+  async completeCall(): Promise<Application> {
+    const startedAt = this.view ? callStartedAt(this.view) : undefined;
+    try {
+      await this.request('POST', '/api/application/esign/call/complete');
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.code !== 'no_open_call') throw error;
+    }
+    if (this.view && startedAt) this.callCompleted = { applicationId: this.view.id, startedAt };
+    return this.fresh();
+  }
+
+  /**
+   * D-4d: a resident signs with an existing e-signature or a new one through e-Devlet. 202; the
+   * provider answers through the Worker, and meanwhile the API reports `calling` (an e-signature work
+   * item is open; there is no call). Needs the second factor; residents only (409 `wrong_flow`).
+   */
+  async signResident(method: 'existing' | 'edevlet'): Promise<Application> {
+    await this.request('POST', '/api/application/esign/resident', { method });
+    return this.fresh();
+  }
 
   // step 5 · formation
-  startSetup(): Promise<Application> { return notConnected(); }
+
+  /**
+   * D-4c "Kuruluşu başlat": 202, stage `setup`; the Worker then creates the steps (`setup` is null
+   * until it has). Needs the second factor and the tick as given (400 `errors.confirmed`); 409
+   * `no_valid_signature` when the certificate has expired (the store reads the application again).
+   */
+  async startSetup(confirmed: boolean): Promise<Application> {
+    await this.request('POST', '/api/application/setup', { confirmed: confirmed === true });
+    return this.fresh();
+  }
 
   // Terminal AI
   ask(): Promise<string> { return notConnected(); }

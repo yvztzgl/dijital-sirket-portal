@@ -1,6 +1,6 @@
 import type { ReviewPatch } from './api';
 import { ApplicationWire, DeckFieldWire, MeWire, ReviewFieldWire, ReviewKey, StageWire, TitleCheckWire } from './api-types';
-import { Account, Application, CAPITAL, CrossCheck, CrossKey, FieldMark, FundingSource, FUNDING_LABELS, LogEntry, Profile, ScanField, Sector, SECTORS, Stage } from './models';
+import { Account, Application, CAPITAL, CrossCheck, CrossKey, FieldMark, FundingSource, FUNDING_LABELS, LogEntry, Profile, ScanField, Sector, SECTORS, SetupStep, SetupTask, Stage } from './models';
 import { titleAlternatives, withoutSuffix } from './rules';
 
 /**
@@ -48,6 +48,12 @@ export interface MapOptions {
    * session; after a reload the screens show no card.
    */
   card?: { holder: string; last4: string };
+  /**
+   * The start time of the video call this page has reported ended (`call/complete`), or that the
+   * server said was no longer open. The API reports `calling` both while the call is open and while
+   * the certificate is being issued; HttpApi remembers which, in memory (see `toCall`).
+   */
+  callCompleted?: string;
 }
 
 /**
@@ -115,19 +121,112 @@ export function toApplication(view: ApplicationWire, account: Account, options: 
     payment: toPayment(view.payment, options.card),
     fees: view.payment.fees.map((f) => ({ code: f.code, label: f.label, amount: f.amountMinor / 100 })),
     callConsentAt: view.callConsentAt ?? undefined,
+    call: toCall(view, options.callCompleted),
     signature: view.signature
       ? {
-          method: view.signature.kind === 'existing' || view.signature.kind === 'edevlet' ? view.signature.kind : 'eshs',
+          method: SIGNATURE_METHODS[view.signature.kind] ?? 'eshs',
           serial: view.signature.serial,
-          holder: `${review('given_name') || account.firstName} ${review('family_name') || account.lastName}`,
+          // The API sends no holder: the certificate is the signed-in founder's, under the account's name.
+          holder: `${account.firstName} ${account.lastName}`.trim(),
           issuedAt: view.signature.issuedAt,
           validUntil: view.signature.validUntil,
         }
       : undefined,
-    docs: view.documents.map((d) => ({ ...(DOC_NAMES[d.type] ?? { group: '', name: d.type }), sizeKb: d.sizeKb, at: d.at })),
+    setup: toSetup(view),
+    results: toResults(view.results),
+    docs: view.documents.map((d) => ({ ...(DOC_NAMES[d.type] ?? { group: 'Diğer belgeler', name: d.type }), sizeKb: d.sizeKb, at: d.at })),
     logs: view.logs.map(toLog),
   };
 }
+
+/**
+ * The certificate kinds the API issues (formation.certificate.kind) → the portal's method words:
+ * the daily certificate of the video call (`eshs`), a resident's existing e-signature, and a new one
+ * through e-Devlet (the development provider issues `nes_standard` for that).
+ */
+const SIGNATURE_METHODS: Record<string, 'eshs' | 'existing' | 'edevlet'> = {
+  nes_daily: 'eshs',
+  nes_existing: 'existing',
+  nes_standard: 'edevlet',
+};
+
+/**
+ * The video call while the API is at `calling` (foreign founders only; a resident at `calling` is
+ * waiting for the provider, with no call). The call's start is the newest "ESHS görüntülü görüşmesi
+ * başladı" line of the timeline (the view has no field for it); the portal's scripted call runs from
+ * it, so a reload continues where the script was. `completed` when HttpApi knows this call was
+ * reported ended (`callCompleted`); then the certificate is being issued.
+ */
+function toCall(view: ApplicationWire, callCompleted: string | undefined): Application['call'] {
+  if (view.stage !== 'calling' || view.founderType === 'resident') return undefined;
+  const startedAt = callStartedAt(view);
+  if (!startedAt) return undefined;
+  return callCompleted === startedAt ? { startedAt, completed: true } : { startedAt };
+}
+
+/** When the newest video call started, from the timeline; undefined when no call was ever started. */
+export function callStartedAt(view: ApplicationWire): string | undefined {
+  return latestLog(view, [LOG_TEXTS.callStarted])?.at;
+}
+
+/**
+ * Step 5 from the API. `steps` is null until the Worker has created them (the stage is already
+ * `setup`); the times come from the timeline lines "Kuruluş başlatıldı", "Kuruluş belgelerinin e-imza
+ * ile imzalanması onaylandı" and "Şirketiniz kuruldu" (the view has no fields for them).
+ */
+function toSetup(view: ApplicationWire): Application['setup'] {
+  const started = latestLog(view, [LOG_TEXTS.setupStarted]);
+  if (view.stage !== 'setup' && view.stage !== 'done' && !view.setup) return undefined;
+  const consent = latestLog(view, [LOG_TEXTS.setupConsent]);
+  const finished = view.stage === 'done' ? latestLog(view, [LOG_TEXTS.formationDone]) : undefined;
+  return {
+    startedAt: started?.at ?? '',
+    ...(consent ? { signConsentAt: consent.at } : {}),
+    ...(finished ? { finishedAt: finished.at } : {}),
+    steps: view.setup ? view.setup.steps.map(toSetupStep) : null,
+  };
+}
+
+function toSetupStep(s: NonNullable<ApplicationWire['setup']>['steps'][number]): SetupStep {
+  const status = s.status === 'pending' || s.status === 'in_progress' || s.status === 'completed' ? s.status : 'other';
+  return { no: s.no, code: s.code, title: s.title, status, tasks: s.tasks.map(toSetupTask) };
+}
+
+/** The API's task statuses (formation.task_instance.status); `ready` is not started yet, `waiting_external` is with the institution. */
+const TASK_STATUSES: Record<string, SetupTask['status']> = {
+  pending: 'pending',
+  ready: 'pending',
+  in_progress: 'in_progress',
+  waiting_external: 'waiting',
+  done: 'done',
+  exempt: 'exempt',
+};
+
+function toSetupTask(t: { code: string; title: string; status: string }): SetupTask {
+  return { code: t.code, title: t.title, status: TASK_STATUSES[t.status] ?? 'other' };
+}
+
+/**
+ * The company's numbers (company.identifier kinds) under the portal's names. Only what has arrived;
+ * the API has more kinds (TTSG sayı, oda sicil no, …) that no screen shows yet. No advisor: the API
+ * does not send the advisor's name or firm.
+ */
+function toResults(results: Record<string, string> | null): Application['results'] {
+  if (!results) return undefined;
+  const out: NonNullable<Application['results']> = {};
+  for (const [kind, key] of Object.entries(RESULT_KEYS)) if (results[kind]) out[key] = results[kind];
+  return Object.keys(out).length ? out : undefined;
+}
+
+const RESULT_KEYS: Record<string, keyof NonNullable<Application['results']>> = {
+  vkn: 'vkn',
+  vergi_dairesi: 'taxOffice',
+  mersis_no: 'mersis',
+  tescil_no: 'registryNo',
+  iban: 'iban',
+  e_fatura_no: 'eInvoiceNo',
+  sgk_isyeri_no: 'sgkNo',
+};
 
 /**
  * The portal's result screen (D-2b, stage `eligible`) as a one-time acknowledgement. The API has no
@@ -175,6 +274,10 @@ export const LOG_TEXTS = {
   identityStartedByPhone: 'Kimlik doğrulama telefondan başlatıldı',
   screeningDone: 'Yaptırım ve PEP taraması tamamlandı',
   reviewApproved: 'Başvurunuz incelendi; ödeme adımına geçebilirsiniz',
+  callStarted: 'ESHS görüntülü görüşmesi başladı',
+  setupConsent: 'Kuruluş belgelerinin e-imza ile imzalanması onaylandı',
+  setupStarted: 'Kuruluş başlatıldı',
+  formationDone: 'Şirketiniz kuruldu',
 };
 
 /** The newest timeline line with one of these texts. */
@@ -210,9 +313,22 @@ function toEligibility(view: ApplicationWire): Application['eligibility'] {
 }
 
 /** The document types the API names in `documents`, as the portal's documents list groups and names them. */
+/**
+ * The document types the API names in `documents`, as the portal's documents list groups and names
+ * them. Today the API lists only the deck and the address document; the other types are those the
+ * database design names (doc.document.type) for documents an institution or the platform will issue,
+ * named here so they read in Turkish when they come. Any other type: "Diğer belgeler" and the type.
+ */
 const DOC_NAMES: Record<string, { group: string; name: string }> = {
   deck: { group: '1 · Başvuru & Uygunluk', name: 'Sunum' },
   address_proof: { group: '1 · Başvuru & Uygunluk', name: 'Adres belgesi' },
+  passport_page: { group: '1 · Başvuru & Uygunluk', name: 'Pasaport sayfası' },
+  makbuz: { group: '2 · Ödeme', name: 'Ödeme makbuzu' },
+  esas_sozlesme: { group: '4 · Tescil & Oda', name: 'Esas sözleşme' },
+  ttsg_ilani: { group: '4 · Tescil & Oda', name: 'Ticaret Sicili Gazetesi ilanı' },
+  sicil_tasdiknamesi: { group: '4 · Tescil & Oda', name: 'Sicil tasdiknamesi' },
+  vergi_levhasi: { group: '5 · Vergi', name: 'Vergi levhası' },
+  bloke_mektubu: { group: '7 · Banka', name: 'Sermaye blokaj mektubu' },
 };
 
 function toProfile(p: NonNullable<ApplicationWire['profile']>): Profile {
