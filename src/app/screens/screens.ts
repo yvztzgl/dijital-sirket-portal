@@ -23,6 +23,7 @@ export const SCREENS: ScreenInfo[] = [
   { id: 'd0b', code: 'D-0b', title: 'Kayıt', desc: 'İlk soru yolu belirler: yabancı kurucu e-posta ile, T.C. vatandaşı e-Devlet ile devam eder.', path: 'register', group: 'giris' },
   { id: 'd0c', code: 'D-0c', title: 'E-posta doğrulama', desc: '6 haneli kod. Doğrulanınca başvuru açılır ve Karşılama\'ya (D-00) geçilir.', path: 'verify-email', group: 'giris' },
   { id: 'd0d', code: 'D-0d', title: 'Şifre sıfırlama', desc: 'Bağlantı gönderildi durumu. Hesabın var olup olmadığını açıklamaz.', path: 'reset-password', group: 'giris' },
+  { id: 'd0e', code: 'D-0e', title: 'Yeni şifre', desc: 'E-postadaki sıfırlama bağlantısıyla açılır: yeni şifre iki kez yazılır. Bağlantının anahtarı adres çubuğundan hemen silinir.', path: 'sifre-sifirla', group: 'giris' },
   { id: 'd00', code: 'D-00', title: 'Karşılama', desc: 'Başlık ve dünya haritası; şehirlerden İstanbul’a yaylar uzanır. Kaydırınca harita İstanbul’a yaklaşır ve beş adım açılır: solda adım listesi, sağda her adımın görseli ve ekranından bir parça.', path: '', group: 'karsilama' },
   { id: 'd1e', code: 'D-1e', title: 'Ön bilgiler', desc: 'Adım 1’in ilk ekranı. Sunumdan önce kurucu şirket adını, faaliyet alanını, sermaye kaynağını, uyruğunu, ülkesini ve telefonunu yazar; sunum okunduktan sonra bunlarla karşılaştırılır. Sunum yüklenene kadar yeniden düzenlenebilir.', path: 'details', group: 'karsilama' },
   { id: 'd1a', code: 'D-1a', title: 'Proje sunumu yükleme', desc: 'Tek istek: sunum dosyası. Aydınlatma metni ve yapay zekâ ile işleme onayı, yükleme alanı (PDF veya PPTX, en fazla 25 MB), yüklemeden sonra olacaklar ve ön bilgileri düzenleme bağlantısı.', path: 'deck', group: 'karsilama' },
@@ -73,6 +74,13 @@ export const screenRoutes: Routes = [
     data: { screen: 'd0d' },
     canActivate: [flowGuard],
     loadComponent: () => import('./giris/d0d').then((m) => m.ScreenD0d),
+  },
+  {
+    // The address the API puts in the password-reset e-mail (`<portal>/sifre-sifirla?token=…`).
+    path: 'sifre-sifirla',
+    title: 'Yeni şifre · Terminal Şirket',
+    data: { screen: 'd0e' },
+    loadComponent: () => import('./giris/d0e').then((m) => m.ScreenD0e),
   },
   {
     path: '',

@@ -4,6 +4,7 @@
         <div style="width:520px;background:var(--bg-FFFFFF);border:1px solid var(--bd-E5E7EB);border-radius:16px;box-shadow:0 12px 32px -16px rgba(6,18,98,.22);padding:40px;display:flex;flex-direction:column;gap:22px">
           <span aria-hidden="true" style="width:52px;height:52px;border-radius:14px;background:var(--bg-EFF4FF);display:grid;place-items:center"><app-icon name="mail" size="26px" [stroke]="1.8" style="color:var(--fg-061262)" /></span>
           <div style="display:flex;flex-direction:column;gap:6px"><h3 style="margin:0;font:600 24px/32px 'IBM Plex Sans',sans-serif;color:var(--fg-061262)">E-postanızı doğrulayın</h3><span style="font:400 15px/22px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660);text-wrap:pretty"><b style="font-weight:600;color:var(--fg-061262)">{{ vals().verifyEmail }}</b> adresine 6 haneli bir kod gönderdik. Kod 10 dakika geçerlidir.</span></div>
+          @if (notice) {<p role="status" style="margin:0;padding:10px 12px;border-radius:9px;background:var(--bg-EFF4FF);border:1px solid var(--bd-C7D5F7);font:500 13px/19px 'IBM Plex Sans',sans-serif;color:var(--fg-061262);text-wrap:pretty">{{ notice }}</p>}
           <div role="group" aria-label="Doğrulama kodu" style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px">
             <app-otp-input [(value)]="otp" (complete)="verify($event)" />
           </div>

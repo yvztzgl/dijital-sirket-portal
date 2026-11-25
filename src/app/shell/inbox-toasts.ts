@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { Icon } from '../shared/icon';
-import { Inbox } from '../core/inbox';
+import { Inbox, InboxMessage } from '../core/inbox';
 
 /**
  * Simulated e-mail / SMS notifications (top-right), styled like the 3-D Secure SMS in the design.
@@ -25,9 +26,12 @@ import { Inbox } from '../core/inbox';
             @if (m.code) {
               <button type="button" class="code" (click)="copy(m.code)" title="Kopyala">{{ m.code }} <app-icon name="copy" size="13px" /></button>
             }
+            @if (m.link) {
+              <a class="link" [href]="m.link.url" (click)="$event.preventDefault(); open(m)">{{ m.link.label }} →</a>
+            }
           </div>
           <button type="button" class="x" aria-label="Kapat" (click)="close(m.id)"><app-icon name="x" size="15px" /></button>
-          <span class="timer" aria-hidden="true" [style.animation-duration.ms]="m.code ? CODE_MS : MS" (animationend)="close(m.id)"></span>
+          <span class="timer" aria-hidden="true" [style.animation-duration.ms]="m.code || m.link ? CODE_MS : MS" (animationend)="close(m.id)"></span>
         </div>
       }
     </div>
@@ -43,6 +47,7 @@ import { Inbox } from '../core/inbox';
     .when { font: 400 11.5px/18px 'IBM Plex Sans', sans-serif; color: var(--fg-8A93A6); white-space: nowrap; }
     p { margin: 0; font: 400 12.5px/18px 'IBM Plex Sans', sans-serif; color: var(--fg-3B4660); text-wrap: pretty; }
     .code { align-self: flex-start; border: 1px dashed var(--bd-C7D5F7); background: var(--bg-F7F9FE); border-radius: 6px; padding: 2px 8px; font: 600 15px/22px 'IBM Plex Mono', monospace; letter-spacing: .12em; color: var(--fg-061262); cursor: copy; }
+    .link { align-self: flex-start; font: 600 13px/18px 'IBM Plex Sans', sans-serif; color: var(--fg-061262); }
     .x { border: 0; background: none; color: var(--fg-8A93A6); font: 400 18px/1 'IBM Plex Sans', sans-serif; cursor: pointer; padding: 0 2px; }
     .timer { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--bg-061262); opacity: .35; transform-origin: left; animation: countdown linear forwards; }
     .toast:hover .timer, .toast:focus-within .timer { animation-play-state: paused; }
@@ -59,6 +64,7 @@ export class InboxToasts {
   protected readonly MS = 6_000;
   /** Messages with a verification code stay longer so the code can be read and copied. */
   protected readonly CODE_MS = 15_000;
+  private readonly router = inject(Router);
   protected readonly leaving = signal(new Set<number>());
 
   /** Plays the exit animation, then removes the message. */
@@ -73,6 +79,12 @@ export class InboxToasts {
         return next;
       });
     }, 200);
+  }
+
+  /** Follows the link inside the portal, without reloading the page. */
+  protected open(m: InboxMessage) {
+    this.close(m.id);
+    void this.router.navigateByUrl(m.link!.url);
   }
 
   protected copy(code: string) {

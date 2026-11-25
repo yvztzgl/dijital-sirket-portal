@@ -38,6 +38,7 @@
             <a routerLink="/reset-password" style="align-self:flex-end;font:500 13px/18px 'IBM Plex Sans',sans-serif">Şifremi unuttum</a>
           </div>
           <label style="display:flex;align-items:center;gap:10px;font:400 13.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660);cursor:pointer"><input type="checkbox" [checked]="remember" (change)="toggleRemember()" style="width:16px;height:16px;margin:0;accent-color:var(--bg-061262)">Bu cihazda 30 gün oturumu açık tut</label>
+          @if (notice) {<p role="status" style="margin:0;padding:10px 12px;border-radius:9px;background:var(--bg-EFF4FF);border:1px solid var(--bd-C7D5F7);font:500 13px/19px 'IBM Plex Sans',sans-serif;color:var(--fg-061262);text-wrap:pretty">{{ notice }}</p>}
           <app-form-error [message]="formError()" />
           <button type="button" (click)="login()" [disabled]="store.busy()" style="border:0;background:var(--bg-061262);color:var(--fg-FFFFFF);border-radius:10px;padding:14px 22px;font:600 15px/20px 'IBM Plex Sans',sans-serif;cursor:pointer;box-shadow:0 1px 2px rgba(6,18,98,.2)"><app-itext [text]="store.busy() ? 'Giriş yapılıyor…' : 'Giriş yap →'" /></button>
           <div style="display:flex;align-items:center;gap:12px;font:500 12px/16px 'IBM Plex Sans',sans-serif;color:var(--fg-8A93A6)"><span style="flex:1;height:1px;background:var(--bg-EEF1F6)"></span>T.C. vatandaşı mısınız?<span style="flex:1;height:1px;background:var(--bg-EEF1F6)"></span></div>

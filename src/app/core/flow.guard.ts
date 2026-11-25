@@ -30,14 +30,20 @@ export const SCREEN_STAGES: Record<string, { stages: Stage[]; founder?: FounderT
 /**
  * Keeps the wizard honest: a screen opens only when the application is at a stage that screen
  * belongs to; otherwise the founder is sent to where their application actually is.
+ * Until the session the browser already had is known (`ApplicationStore.restored`, one request
+ * after a reload in HTTP mode), it waits instead of sending a signed-in founder to the login page.
  */
 export const flowGuard: CanActivateFn = (route: ActivatedRouteSnapshot) => {
   const store = inject(ApplicationStore);
   const router = inject(Router);
   const rule = SCREEN_STAGES[route.data['screen'] as string];
   if (!rule) return true;
-  if (!store.signedIn()) return router.parseUrl('/login');
-  const stage = store.stage();
-  const ok = !!stage && rule.stages.includes(stage) && (!rule.founder || rule.founder === store.founderType());
-  return ok || router.parseUrl(store.resumeRoute());
+  const decide = () => {
+    // No stage: nobody is signed in and no address is waiting for its code.
+    const stage = store.stage();
+    if (!stage) return router.parseUrl('/login');
+    const ok = rule.stages.includes(stage) && (!rule.founder || rule.founder === store.founderType());
+    return ok || router.parseUrl(store.resumeRoute());
+  };
+  return store.restored.then(decide);
 };

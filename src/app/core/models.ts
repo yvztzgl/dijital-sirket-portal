@@ -120,15 +120,17 @@ export interface DeckConsents {
 /** Badge state per reviewable field: read by AI, needs a check, or edited by the founder. */
 export type FieldMark = 'ai' | 'check' | 'edited';
 
+/**
+ * The signed-in founder as the portal sees them; the same fields as the API's `GET /api/me`.
+ * No password and no T.C. kimlik no: the mock keeps those in its own type (`MockAccount` in
+ * mock-api.ts), and the real API never sends them.
+ */
 export interface Account {
   email: string;
-  password: string; // mock backend only — never do this with a real API
   firstName: string;
   lastName: string;
   founderType: FounderType;
-  tckn?: string;
   verified: boolean;
-  createdAt: string;
 }
 
 export interface ScanField {
@@ -207,6 +209,11 @@ export interface Application {
    */
   phoneLink?: { token: string; createdAt: string; expiresAt: string; usedAt?: string };
   payment?: { holder: string; last4: string; amount: number; otp?: string; otpSentAt?: string; paidAt?: string };
+  /**
+   * The fee lines the server charges, in TL (set from the API's `payment.fees`; the mock leaves it
+   * out and the payment screen uses `FEES`).
+   */
+  fees?: { code: string; label: string; amount: number }[];
   /** D-4a pre-information: when the founder accepted that the call is recorded and an e-signature is issued in their name. */
   callConsentAt?: string;
   call?: { startedAt: string };

@@ -7,6 +7,8 @@ export interface InboxMessage {
   title: string;
   body: string;
   code?: string;
+  /** A link inside the e-mail (the mock's password-reset link); opened inside the portal. */
+  link?: { url: string; label: string };
   at: number;
 }
 

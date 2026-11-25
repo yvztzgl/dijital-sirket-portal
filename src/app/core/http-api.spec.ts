@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { ApiError } from './api-error';
 import { HttpApi, markApiWrites } from './http-api';
+import { ME, NEW_APPLICATION } from './testing/api-fixtures';
 
 describe('HttpApi', () => {
   let api: HttpApi;
@@ -33,7 +34,7 @@ describe('HttpApi', () => {
 
   it('has no demo tools and rejects every call until it is connected', async () => {
     expect(api.demo).toBeNull();
-    const error = await api.login().catch((e: unknown) => e);
+    const error = await api.submitProfile().catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).message).toBe('Bu işlem henüz sunucuya bağlanmadı.');
     expect((error as ApiError).code).toBe('not_connected');
@@ -89,6 +90,179 @@ describe('HttpApi', () => {
     const error = await failure((req) => req.error(new ProgressEvent('error')));
     expect(error.message).toBe('Beklenmeyen bir hata oluştu.');
     expect(error.status).toBeUndefined();
+  });
+});
+
+describe('HttpApi sign-in', () => {
+  let api: HttpApi;
+  let backend: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(withInterceptors([markApiWrites])), provideHttpClientTesting()],
+    });
+    api = TestBed.inject(HttpApi);
+    backend = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => backend.verify());
+
+  /** Lets the awaited request before this one finish, then takes the next one, which must be `method url`. */
+  async function next(method: string, url: string) {
+    await new Promise((resolve) => setTimeout(resolve));
+    const req = backend.expectOne(url);
+    expect(req.request.method).toBe(method);
+    return req;
+  }
+
+  const problem = (status: number, code: string, title: string, errors?: Record<string, string[]>) =>
+    [{ title, status, code, requestId: 'r1', ...(errors ? { errors } : {}) }, { status, statusText: 'x' }] as const;
+
+  /** The reads every sign-in ends with, when the application already exists. */
+  async function answerSession() {
+    (await next('GET', '/api/me')).flush(ME);
+    (await next('GET', '/api/application')).flush(NEW_APPLICATION);
+  }
+
+  it('registers with the typed data and the anti-forgery header, and expects nothing back', async () => {
+    const input = { firstName: 'Ayşe', lastName: 'Kaya', email: 'ayse@example.test', password: 'Nova-Lab-2026!' };
+    const pending = api.register(input);
+    const req = await next('POST', '/api/auth/register');
+    expect(req.request.body).toEqual(input);
+    expect(req.request.headers.get('X-DSP-Request')).toBe('1');
+    req.flush(null, { status: 202, statusText: 'Accepted' });
+    await expect(pending).resolves.toBeUndefined();
+  });
+
+  it('asks for a new code', async () => {
+    const pending = api.resendEmailCode('ayse@example.test');
+    const req = await next('POST', '/api/auth/resend-code');
+    expect(req.request.body).toEqual({ email: 'ayse@example.test' });
+    req.flush(null, { status: 202, statusText: 'Accepted' });
+    await pending;
+  });
+
+  it('verifies the code, then reads the founder and creates the application the API does not have yet', async () => {
+    const pending = api.verifyEmail('ayse@example.test', '424346');
+    const verify = await next('POST', '/api/auth/verify-email');
+    expect(verify.request.body).toEqual({ email: 'ayse@example.test', code: '424346' });
+    verify.flush(null, { status: 204, statusText: 'No Content' });
+    (await next('GET', '/api/me')).flush(ME);
+    (await next('GET', '/api/application')).flush(...problem(404, 'no_application', 'Başvuru bulunamadı.'));
+    const create = await next('POST', '/api/application');
+    expect(create.request.body).toBeNull();
+    expect(create.request.headers.get('X-DSP-Request')).toBe('1');
+    create.flush(null, { status: 204, statusText: 'No Content' });
+    (await next('GET', '/api/application')).flush(NEW_APPLICATION);
+    const session = await pending;
+    expect(session.account).toEqual({ email: 'ayse@example.test', firstName: 'Ayşe', lastName: 'Kaya', founderType: 'foreign', verified: true });
+    expect(session.app!.id).toBe('DS-26-03403699');
+    expect(session.app!.stage).toBe('profile');
+  });
+
+  it('shows the code field\'s own sentence for a wrong code', async () => {
+    const pending = api.verifyEmail('ayse@example.test', '000000').catch((e: unknown) => e);
+    (await next('POST', '/api/auth/verify-email')).flush(
+      ...problem(400, 'validation_failed', 'Gönderdiğiniz bilgiler eksik veya hatalıdır.', { code: ['Kod hatalı veya süresi dolmuş. Yeni kod isteyiniz.'] }),
+    );
+    const error = (await pending) as ApiError;
+    expect(error.code).toBe('validation_failed');
+    expect(error.fields).toEqual({ code: ['Kod hatalı veya süresi dolmuş. Yeni kod isteyiniz.'] });
+  });
+
+  it('signs in with e-mail and password and reads the existing application', async () => {
+    const pending = api.login('ayse@example.test', 'Nova-Lab-2026!');
+    const req = await next('POST', '/api/auth/login');
+    expect(req.request.body).toEqual({ email: 'ayse@example.test', password: 'Nova-Lab-2026!' });
+    req.flush(null, { status: 204, statusText: 'No Content' });
+    await answerSession();
+    expect((await pending).app!.id).toBe('DS-26-03403699');
+  });
+
+  it('passes on email_not_verified with the server\'s sentence and reads nothing else', async () => {
+    const pending = api.login('ayse@example.test', 'Nova-Lab-2026!').catch((e: unknown) => e);
+    (await next('POST', '/api/auth/login')).flush(
+      ...problem(403, 'email_not_verified', 'E-posta adresiniz henüz doğrulanmadı. Size yeni bir kod gönderdik.'),
+    );
+    const error = (await pending) as ApiError;
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.code).toBe('email_not_verified');
+    expect(error.message).toBe('E-posta adresiniz henüz doğrulanmadı. Size yeni bir kod gönderdik.');
+    await new Promise((resolve) => setTimeout(resolve));
+    backend.expectNone('/api/me');
+  });
+
+  it('replaces the rate limiter\'s title with a sentence that says what to do', async () => {
+    const pending = api.login('ayse@example.test', 'x').catch((e: unknown) => e);
+    (await next('POST', '/api/auth/login')).flush(...problem(429, 'http_429', 'İstek karşılanamadı.'));
+    const error = (await pending) as ApiError;
+    expect(error.message).toBe('Çok fazla deneme yapıldı. Lütfen bir dakika sonra yeniden deneyiniz.');
+    expect(error.code).toBe('http_429');
+    expect(error.status).toBe(429);
+  });
+
+  it('signs out', async () => {
+    const pending = api.logout();
+    const req = await next('POST', '/api/auth/logout');
+    expect(req.request.headers.get('X-DSP-Request')).toBe('1');
+    req.flush(null, { status: 204, statusText: 'No Content' });
+    await pending;
+  });
+
+  it('asks for a reset link and sets the new password with the link\'s token', async () => {
+    const asked = api.requestPasswordReset('ayse@example.test');
+    const ask = await next('POST', '/api/auth/password-reset');
+    expect(ask.request.body).toEqual({ email: 'ayse@example.test' });
+    ask.flush(null, { status: 202, statusText: 'Accepted' });
+    await asked;
+
+    const set = api.confirmPasswordReset('0193abcd.token', 'Yeni-Sifre-2026!');
+    const confirm = await next('POST', '/api/auth/password-reset/confirm');
+    expect(confirm.request.body).toEqual({ token: '0193abcd.token', password: 'Yeni-Sifre-2026!' });
+    confirm.flush(null, { status: 204, statusText: 'No Content' });
+    await set;
+    // Setting the password does not sign in: nothing is read afterwards.
+    await new Promise((resolve) => setTimeout(resolve));
+    backend.expectNone('/api/me');
+  });
+
+  it('refuses an old reset link with the server\'s sentence', async () => {
+    const set = api.confirmPasswordReset('old', 'Yeni-Sifre-2026!').catch((e: unknown) => e);
+    (await next('POST', '/api/auth/password-reset/confirm')).flush(
+      ...problem(422, 'link_invalid', 'Bağlantı geçersiz veya süresi dolmuş. Yeniden şifre sıfırlama isteyiniz.'),
+    );
+    expect(((await set) as ApiError).message).toBe('Bağlantı geçersiz veya süresi dolmuş. Yeniden şifre sıfırlama isteyiniz.');
+  });
+
+  it('plays the e-Devlet return trip with the state from the start answer', async () => {
+    const pending = api.edevlet('10000000146');
+    (await next('GET', '/api/auth/edevlet/start')).flush({ redirectUrl: '/edevlet-test?state=s7a7e%2Bx' });
+    const signIn = await next('POST', '/api/auth/edevlet');
+    expect(signIn.request.body).toEqual({ code: '10000000146', state: 's7a7e+x' });
+    signIn.flush(null, { status: 204, statusText: 'No Content' });
+    (await next('GET', '/api/me')).flush({ ...ME, founderType: 'resident' });
+    (await next('GET', '/api/application')).flush({ ...NEW_APPLICATION, founderType: 'resident' });
+    const session = await pending;
+    expect(session.account.founderType).toBe('resident');
+    expect(session.app!.founderType).toBe('resident');
+  });
+
+  it('restores the session the cookie still holds', async () => {
+    const pending = api.restore();
+    await answerSession();
+    expect((await pending)!.account.email).toBe('ayse@example.test');
+  });
+
+  it('restores nothing when the server answers 401', async () => {
+    const pending = api.restore();
+    (await next('GET', '/api/me')).flush(...problem(401, 'unauthenticated', 'Oturumunuz bulunamadı.'));
+    expect(await pending).toBeNull();
+  });
+
+  it('does not hide other failures of the restore', async () => {
+    const pending = api.restore().catch((e: unknown) => e);
+    (await next('GET', '/api/me')).flush('<html>Bad Gateway</html>', { status: 502, statusText: 'Bad Gateway' });
+    expect(((await pending) as ApiError).status).toBe(502);
   });
 });
 

@@ -42,6 +42,11 @@ anything a later reader needs in a temporary directory or only in chat.
   wiring; see `tools/design-import/README.md`.
 - The mock stores passwords in plain text in the browser. That is for the prototype only and
   must not be carried into a real API.
+- Who is signed in is the API's business (an HttpOnly session cookie; in the mock, `MockApi.current`).
+  `Api` methods take no e-mail as identity, and in HTTP mode nothing about the founder is written to
+  the browser's storage; `dsp.session.v1` and `dsp.lastEmail` are mock-only. A 401
+  `unauthenticated` from any call signs the founder out and opens `/login` (`ApplicationStore`).
+  The shared `Account` has no password; the mock keeps it in its own `MockAccount`.
 - All the wizard screens (D-1a to D-5b) were rebuilt by hand on 2026-11-17 in the "Odak"
   layout: they use `<app-step-page>` (`src/app/shared/step-page.ts`) and the `wz-*` classes in
   `src/wizard.scss`, not inline styles. The owner's rules for this look: **no `box-shadow`

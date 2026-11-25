@@ -42,12 +42,33 @@ export { ApiError } from './api-error';
 export type { ReviewPatch } from './api';
 export { ADDRESS_DOC_MAX, FUNDING_OPTIONS, luhn, passwordStrength, validateCard, validTckn } from './rules';
 
+/**
+ * An account as the mock stores it. The password is kept in plain text in the browser: prototype
+ * only (see AGENTS.md). It never leaves this file: every method hands out `Account`, without it.
+ */
+interface MockAccount extends Account {
+  password: string;
+  tckn?: string;
+  createdAt: string;
+}
+
 interface Db {
-  users: Account[];
+  users: MockAccount[];
   apps: Record<string, Application>;
+  /** Open password-reset links: token → address and expiry. Single use. */
+  resets?: Record<string, { email: string; expiresAt: string }>;
 }
 
 const DB_KEY = 'dsp.db.v1';
+/** Who is signed in to the mock: the founder's e-mail. Mock mode only; HTTP mode has a server session. */
+const SESSION_KEY = 'dsp.session.v1';
+/** The last e-mail typed on a sign-in screen (demo convenience, see `DemoTools.rememberEmail`). */
+const LAST_EMAIL_KEY = 'dsp.lastEmail';
+/** How long a password-reset link works, as on the API. */
+const RESET_TTL = 30 * 60_000;
+
+/** Same code and status as the API's answer without a session, so the store treats both alike. */
+const notSignedIn = () => new ApiError('Oturumunuz bulunamadı. Lütfen giriş yapınız.', { code: 'unauthenticated', status: 401 });
 
 /** Titles already registered in the simulated MERSİS. */
 export const MERSIS_REGISTRY = [
@@ -82,25 +103,45 @@ export class MockApi implements Api {
     seed: (stage, founderType) => this.seed(stage, founderType),
     reset: () => this.reset(),
     speed: () => this.settings.speed(),
-    readSession: (email) => {
-      const db = JSON.parse(localStorage.getItem(DB_KEY) ?? '{}');
-      const account: Account | null = (db.users ?? []).find((u: Account) => u.email === email) ?? null;
-      return { account, app: account ? (db.apps?.[email] ?? null) : null };
-    },
     onExternalChange: (callback) =>
       addEventListener('storage', (e) => {
-        if (e.key === DB_KEY) callback();
+        if (e.key === DB_KEY || e.key === SESSION_KEY) callback();
       }),
+    rememberedEmail: () => localStorage.getItem(LAST_EMAIL_KEY) ?? '',
+    rememberEmail: (email) => localStorage.setItem(LAST_EMAIL_KEY, email.trim()),
   };
+
+  /**
+   * The signed-in founder's e-mail: the mock's stand-in for the API's session cookie. Set by
+   * verifyEmail, login, edevlet, seed and restore; cleared by logout and reset. Also written to
+   * `dsp.session.v1` so a reload or another tab finds it (see `restore`).
+   */
+  private current: string | null = null;
+
+  private signIn(email: string | null) {
+    this.current = email;
+    if (email) localStorage.setItem(SESSION_KEY, email);
+    else localStorage.removeItem(SESSION_KEY);
+  }
+
+  /** The signed-in founder's e-mail, or the API's 401. */
+  private who(): string {
+    if (!this.current) throw notSignedIn();
+    return this.current;
+  }
 
   // ------------------------------------------------------------------------------------- auth
 
-  async register(input: { firstName: string; lastName: string; email: string; password: string }): Promise<Account> {
+  /**
+   * Unlike the API, the mock still says when the address is taken (the API answers 202 either way
+   * and tells the owner by e-mail). Kept as it was; see docs/api-client.md.
+   */
+  async register(input: { firstName: string; lastName: string; email: string; password: string }): Promise<void> {
     await this.wait(700);
     const email = normEmail(input.email);
     const db = this.db();
     if (db.users.some((u) => u.email === email)) throw new ApiError('Bu e-posta adresiyle bir hesap zaten var. Giriş yapın.');
-    const acc: Account = {
+    const acc: MockAccount = {
       email,
       password: input.password,
       firstName: input.firstName.trim(),
@@ -112,7 +153,6 @@ export class MockApi implements Api {
     db.users.push(acc);
     this.save(db);
     this.sendEmailCode(email);
-    return clone(acc);
   }
 
   /**
@@ -134,15 +174,38 @@ export class MockApi implements Api {
     }
     db.apps[acc.email] ??= newApplication(acc);
     this.save(db);
-    return { account: clone(acc), app: clone(db.apps[acc.email]), created };
+    this.signIn(acc.email);
+    return { account: publicAccount(acc), app: clone(db.apps[acc.email]), created };
   }
 
+  /** Same refusals as the API: one message for every wrong pair, and a new code for an unconfirmed address. */
   async login(emailIn: string, password: string) {
     await this.wait(600);
     const db = this.db();
     const acc = db.users.find((u) => u.email === normEmail(emailIn));
-    if (!acc || acc.password !== password || !password) throw new ApiError('E-posta veya şifre hatalı.');
-    return { account: clone(acc), app: clone(db.apps[acc.email] ?? null) };
+    if (!acc || acc.password !== password || !password) throw new ApiError('E-posta veya şifre hatalı.', { code: 'invalid_credentials', status: 401 });
+    if (!acc.verified) {
+      this.sendEmailCode(acc.email);
+      throw new ApiError('E-posta adresiniz henüz doğrulanmadı. Size yeni bir kod gönderdik.', { code: 'email_not_verified', status: 403 });
+    }
+    this.signIn(acc.email);
+    return { account: publicAccount(acc), app: clone(db.apps[acc.email] ?? null) };
+  }
+
+  async logout() {
+    this.signIn(null);
+  }
+
+  /** The founder this browser was signed in as (`dsp.session.v1`), if the account still exists and is confirmed. */
+  async restore() {
+    const email = localStorage.getItem(SESSION_KEY);
+    const acc = email ? this.db().users.find((u) => u.email === email && u.verified) : undefined;
+    if (!acc) {
+      this.signIn(null);
+      return null;
+    }
+    this.current = acc.email;
+    return { account: publicAccount(acc), app: clone(this.db().apps[acc.email] ?? null) };
   }
 
   async resendEmailCode(email: string) {
@@ -161,21 +224,46 @@ export class MockApi implements Api {
     db.apps[email] ??= newApplication(acc);
     this.save(db);
     this.codes.delete(email);
-    return { account: clone(acc), app: clone(db.apps[email]) };
+    this.signIn(email);
+    return { account: publicAccount(acc), app: clone(db.apps[email]) };
   }
 
-  /** Always succeeds so the response never reveals whether an account exists. */
+  /**
+   * Always succeeds so the response never reveals whether an account exists. For a known address
+   * the Inbox shows the e-mail with a working link to the set-new-password screen, as the API's
+   * e-mail does (`/sifre-sifirla?token=…`, 30 minutes, single use).
+   */
   async requestPasswordReset(emailIn: string) {
     await this.wait(700);
     const email = normEmail(emailIn);
-    if (this.db().users.some((u) => u.email === email)) {
-      this.inbox.send({
-        kind: 'mail',
-        from: 'no-reply@dijitalsirket.gov.tr',
-        title: 'Şifre sıfırlama bağlantısı',
-        body: `${email} için şifre sıfırlama bağlantısı. 30 dakika geçerlidir.`,
-      });
-    }
+    const db = this.db();
+    if (!db.users.some((u) => u.email === email)) return;
+    const token = randomToken();
+    db.resets = { ...db.resets, [token]: { email, expiresAt: new Date(Date.now() + RESET_TTL).toISOString() } };
+    this.save(db);
+    this.inbox.send({
+      kind: 'mail',
+      from: 'no-reply@dijitalsirket.gov.tr',
+      title: 'Şifre sıfırlama bağlantısı',
+      body: `${email} için şifre sıfırlama bağlantısı. 30 dakika geçerlidir.`,
+      link: { url: `/sifre-sifirla?token=${token}`, label: 'Yeni şifre belirle' },
+    });
+  }
+
+  /** Same rules as the API: a live single-use link, a password of 10 to 128 characters; signs the founder out. */
+  async confirmPasswordReset(token: string, password: string) {
+    await this.wait(700);
+    const db = this.db();
+    const reset = db.resets?.[token];
+    const acc = reset && Date.now() <= Date.parse(reset.expiresAt) ? db.users.find((u) => u.email === reset.email) : undefined;
+    if (!acc) throw new ApiError('Bağlantı geçersiz veya süresi dolmuş. Yeniden şifre sıfırlama isteyiniz.', { code: 'link_invalid', status: 422 });
+    if (password.length < 10) throw new ApiError('Şifre en az 10 karakter olmalıdır.', { code: 'validation_failed', status: 400, fields: { password: ['Şifre en az 10 karakter olmalıdır.'] } });
+    if (password.length > 128) throw new ApiError('Şifre en fazla 128 karakter olabilir.', { code: 'validation_failed', status: 400, fields: { password: ['Şifre en fazla 128 karakter olabilir.'] } });
+    acc.password = password;
+    delete db.resets![token];
+    this.save(db);
+    // The API ends every session of the account; the mock has one.
+    if (this.current === acc.email) this.signIn(null);
   }
 
   // ------------------------------------------------------------------------- step 1 · sunum
@@ -186,7 +274,7 @@ export class MockApi implements Api {
    * uploaded; each save replaces the last (the API keeps every version with its time).
    * Same rules and messages as the API's SubmitProfileHandler.
    */
-  async submitProfile(email: string, input: Omit<Profile, 'at'>) {
+  async submitProfile(input: Omit<Profile, 'at'>) {
     await this.wait(400);
     const brand = input.brand.trim().replace(/\s+/g, ' ');
     if (brand.length < 2 || brand.length > 120) throw new ApiError('Şirketinizin veya markanızın adını yazınız.');
@@ -196,7 +284,7 @@ export class MockApi implements Api {
     if (!input.country.trim() || input.country.length > 60) throw new ApiError('Yaşadığınız ülkeyi seçiniz.');
     const digits = input.phone.replace(/\D/g, '').length;
     if (digits < 8 || digits > 15) throw new ApiError('Telefon numaranızı eksiksiz yazınız.');
-    return this.mutate(email, ['profile', 'verified'], (app) => {
+    return this.mutate(['profile', 'verified'], (app) => {
       const again = !!app.profile;
       app.profile = { brand, sector: input.sector, funding: input.funding, nationality: input.nationality.trim(), phone: input.phone.trim(), country: input.country.trim(), at: nowIso() };
       app.stage = 'verified';
@@ -209,8 +297,8 @@ export class MockApi implements Api {
    * profile's value into the application; `read` keeps the deck's. Either way it is their decision
    * and is logged as theirs.
    */
-  async resolveCrossCheck(email: string, key: CrossKey, choice: 'stated' | 'read') {
-    return this.mutate(email, ['review', 'titleConflict'], (app) => {
+  async resolveCrossCheck(key: CrossKey, choice: 'stated' | 'read') {
+    return this.mutate(['review', 'titleConflict'], (app) => {
       const item = app.crossCheck.find((c) => c.key === key);
       if (!item || item.match || !app.profile) throw new ApiError('Bu bilgi için seçim gerekmemektedir.');
       if (choice === 'stated') applyStated(app, app.profile, key);
@@ -225,12 +313,12 @@ export class MockApi implements Api {
    * Refused without both, as the API does, which records them as consent rows. The mock keeps only
    * the file's name and size; the HTTP client sends the file itself.
    */
-  async uploadDeck(email: string, file: File, consents: DeckConsents) {
+  async uploadDeck(file: File, consents: DeckConsents) {
     await this.wait(500);
     if (!consents.noticeAcknowledged || !consents.aiConsent) throw new ApiError(DECK_CONSENT_ERROR);
     const fileError = deckFileError(file);
     if (fileError) throw new ApiError(fileError);
-    return this.mutate(email, ['profile', 'verified', 'review', 'titleConflict', 'scanning'], (app, acc) => {
+    return this.mutate(['profile', 'verified', 'review', 'titleConflict', 'scanning'], (app, acc) => {
       if (!app.profile) throw new ApiError('Önce ön bilgileri doldurunuz.');
       const brand = brandFromFile(file.name);
       const root = brand.split(' ')[0];
@@ -265,8 +353,8 @@ export class MockApi implements Api {
     });
   }
 
-  async completeScan(email: string) {
-    return this.mutate(email, ['scanning'], (app) => {
+  async completeScan() {
+    return this.mutate(['scanning'], (app) => {
       app.stage = 'review';
       log(app, `AI Reviewer ${(app.deck?.fields.length ?? 10) + 3} alan çıkardı`, 'a');
       if (app.profile) {
@@ -277,8 +365,8 @@ export class MockApi implements Api {
     });
   }
 
-  async updateReview(email: string, patch: ReviewPatch, edited: string[]) {
-    return this.mutate(email, ['review', 'titleConflict'], (app) => {
+  async updateReview(patch: ReviewPatch, edited: string[]) {
+    return this.mutate(['review', 'titleConflict'], (app) => {
       const defined = <T extends object>(o?: T) => Object.fromEntries(Object.entries(o ?? {}).filter(([, v]) => v !== undefined)) as Partial<T>;
       Object.assign(app, {
         company: { ...app.company, ...defined(patch.company) },
@@ -298,17 +386,17 @@ export class MockApi implements Api {
   }
 
   /** Submit the reviewed data: reserve the title in MERSİS, then open the identity step (see startEligibility). */
-  async submitReview(email: string) {
+  async submitReview() {
     await this.wait(1_200);
-    return this.mutate(email, ['review', 'titleConflict'], (app) => {
+    return this.mutate(['review', 'titleConflict'], (app) => {
       if (app.crossCheck.some((c) => !c.match && !c.choice)) throw new ApiError('Ön bilgilerinizle uyuşmayan bilgilerde doğru değeri seçiniz.');
       this.reserveAndStart(app);
     });
   }
 
-  async chooseTitle(email: string, title: string) {
+  async chooseTitle(title: string) {
     await this.wait(1_000);
-    return this.mutate(email, ['titleConflict', 'review'], (app) => {
+    return this.mutate(['titleConflict', 'review'], (app) => {
       const [root, ...rest] = title.replace(/\s+(A\.Ş\.|Anonim Şirketi)$/i, '').trim().split(/\s+/);
       app.company.root = root;
       app.company.activity = rest.join(' ');
@@ -350,9 +438,9 @@ export class MockApi implements Api {
    * on the application. Calling it again while the check runs changes nothing. Starting on the
    * computer cancels a phone link that was not used.
    */
-  async startEligibility(email: string, consent: boolean) {
+  async startEligibility(consent: boolean) {
     await this.wait(500);
-    return this.mutate(email, ['eligibility'], (app) => {
+    return this.mutate(['eligibility'], (app) => {
       if (app.eligibility) return;
       this.begin(app, consent);
       app.phoneLink = undefined;
@@ -375,8 +463,13 @@ export class MockApi implements Api {
   }
 
   /** The camera check ended: the founder goes on to the declaration screen. */
-  async completeIdentity(email: string) {
-    return this.mutate(email, ['eligibility'], (app) => {
+  async completeIdentity() {
+    return this.finishIdentity(this.who());
+  }
+
+  /** Shared by the computer (signed in) and the phone page (which has only its link). */
+  private finishIdentity(email: string) {
+    return this.mutateFor(email, ['eligibility'], (app) => {
       if (!app.eligibility) throw new ApiError('Kimlik doğrulaması henüz başlatılmamıştır.');
       const logs = identityEvents(app, this.dur(DURATION.identity));
       app.logs.push(...logs);
@@ -391,9 +484,9 @@ export class MockApi implements Api {
    * The mock keeps only the file's name and size. A real API must store the file encrypted, scan
    * it, and record who confirmed which declaration text.
    */
-  async submitDeclaration(email: string, input: { file: { name: string; size: number } | null; declared: boolean }) {
+  async submitDeclaration(input: { file: { name: string; size: number } | null; declared: boolean }) {
     await this.wait(700);
-    return this.mutate(email, ['declaration'], (app) => {
+    return this.mutate(['declaration'], (app) => {
       const f = input.file;
       if (!f) throw new ApiError('Adres belgenizi yükleyiniz.');
       if (!/\.(pdf|jpe?g|png)$/i.test(f.name)) throw new ApiError('Adres belgesi PDF, JPG veya PNG biçiminde olmalıdır.');
@@ -408,8 +501,8 @@ export class MockApi implements Api {
   }
 
   /** The list search ended: the result, its log lines and the three documents. */
-  async completeScreening(email: string) {
-    return this.mutate(email, ['screening'], (app) => {
+  async completeScreening() {
+    return this.mutate(['screening'], (app) => {
       const ev = screeningEvents(app, this.dur(DURATION.screening));
       app.logs.push(...ev.logs);
       app.docs.push(...ev.docs);
@@ -428,9 +521,9 @@ export class MockApi implements Api {
    * grant this one step of this one application and no session; creation and every use must be
    * audited with the device they came from; attempts must be rate-limited.
    */
-  async createPhoneLink(email: string) {
+  async createPhoneLink() {
     await this.wait(400);
-    return this.mutate(email, ['eligibility'], (app) => {
+    return this.mutate(['eligibility'], (app) => {
       if (app.eligibility) throw new ApiError('Kimlik doğrulaması zaten başlatılmıştır.');
       const now = Date.now();
       app.phoneLink = { token: randomToken(), createdAt: new Date(now).toISOString(), expiresAt: new Date(now + PHONE_LINK_TTL).toISOString() };
@@ -453,7 +546,7 @@ export class MockApi implements Api {
     await this.wait(500);
     const email = this.appByToken(token)?.[0];
     if (!email) throw new ApiError('Bağlantı geçersizdir. Bilgisayarınızdaki sayfadan yeni bir QR kod oluşturunuz.');
-    await this.mutate(email, ['eligibility'], (app) => {
+    await this.mutateFor(email, ['eligibility'], (app) => {
       if (app.eligibility) return;
       if (Date.now() > Date.parse(app.phoneLink!.expiresAt)) throw new ApiError('Bağlantının süresi dolmuştur. Bilgisayarınızdaki sayfadan yeni bir QR kod oluşturunuz.');
       this.begin(app, consent, 'phone');
@@ -465,7 +558,7 @@ export class MockApi implements Api {
   /** The phone page saw the camera check through (in the mock the client's clock finishes time-based steps). */
   async completeIdentityByPhone(token: string) {
     const email = this.appByToken(token)?.[0];
-    if (email) await this.completeIdentity(email);
+    if (email) await this.finishIdentity(email);
     return this.phoneLinkStatus(token);
   }
 
@@ -475,9 +568,9 @@ export class MockApi implements Api {
   }
 
   /** From manual review: go back and correct the deck data (eligibility will run again). */
-  async backToReview(email: string) {
+  async backToReview() {
     await this.wait(300);
-    return this.mutate(email, ['manual', 'eligible', 'titleConflict'], (app) => {
+    return this.mutate(['manual', 'eligible', 'titleConflict'], (app) => {
       app.docs = app.docs.filter((d) => !d.group.startsWith('1 ·'));
       app.eligibility = undefined;
       app.phoneLink = undefined;
@@ -487,9 +580,9 @@ export class MockApi implements Api {
     });
   }
 
-  async proceedToPayment(email: string) {
+  async proceedToPayment() {
     await this.wait(300);
-    return this.mutate(email, ['eligible', 'manual'], (app) => {
+    return this.mutate(['eligible', 'manual'], (app) => {
       if (app.stage === 'manual') {
         app.eligibility!.manualAccepted = true;
         log(app, 'Manuel inceleme kaydıyla devam edildi', 'u');
@@ -500,32 +593,32 @@ export class MockApi implements Api {
 
   // ------------------------------------------------------------------------ step 3 · ödeme
 
-  async pay(email: string, card: { holder: string; number: string; expiry: string; cvv: string }) {
+  async pay(card: { holder: string; number: string; expiry: string; cvv: string }) {
     await this.wait(1_100);
     const err = validateCard(card);
     if (err) throw new ApiError(err);
-    return this.mutate(email, ['payment', 'threeDs'], (app) => {
+    return this.mutate(['payment', 'threeDs'], (app) => {
       app.payment = { holder: card.holder.trim().toLocaleUpperCase('tr-TR'), last4: card.number.replace(/\D/g, '').slice(-4), amount: FEE_TOTAL };
       this.sendOtp(app);
       app.stage = 'threeDs';
     });
   }
 
-  async resendOtp(email: string) {
+  async resendOtp() {
     await this.wait(400);
-    return this.mutate(email, ['threeDs'], (app) => this.sendOtp(app));
+    return this.mutate(['threeDs'], (app) => this.sendOtp(app));
   }
 
-  async cancel3ds(email: string) {
-    return this.mutate(email, ['threeDs'], (app) => {
+  async cancel3ds() {
+    return this.mutate(['threeDs'], (app) => {
       app.payment = undefined;
       app.stage = 'payment';
     });
   }
 
-  async confirm3ds(email: string, code: string) {
+  async confirm3ds(code: string) {
     await this.wait(1_000);
-    return this.mutate(email, ['threeDs'], (app) => {
+    return this.mutate(['threeDs'], (app) => {
       const p = app.payment!;
       if (Date.now() - Date.parse(p.otpSentAt!) > 180_000) throw new ApiError('Kodun süresi doldu. Yeni kod isteyin.');
       if (code !== p.otp) throw new ApiError('Doğrulama kodu hatalı.');
@@ -557,9 +650,9 @@ export class MockApi implements Api {
    * call is recorded; an e-signature is issued in their name). Kept on the application, so a
    * reload or a call that was ended does not ask again. Refused without the tick.
    */
-  async acceptCallTerms(email: string, consent: boolean) {
+  async acceptCallTerms(consent: boolean) {
     await this.wait(300);
-    return this.mutate(email, ['signing'], (app) => {
+    return this.mutate(['signing'], (app) => {
       if (app.callConsentAt) return;
       if (!consent) throw new ApiError('Devam etmek için onay metnini işaretleyiniz.');
       app.callConsentAt = nowIso();
@@ -567,9 +660,9 @@ export class MockApi implements Api {
     });
   }
 
-  async startCall(email: string) {
+  async startCall() {
     await this.wait(800);
-    return this.mutate(email, ['signing'], (app) => {
+    return this.mutate(['signing'], (app) => {
       if (!app.callConsentAt) throw new ApiError('Görüşme başlamadan önce ön bilgilendirmeyi onaylayınız.');
       app.call = { startedAt: nowIso() };
       app.stage = 'calling';
@@ -577,22 +670,22 @@ export class MockApi implements Api {
     });
   }
 
-  async endCall(email: string) {
-    return this.mutate(email, ['calling'], (app) => {
+  async endCall() {
+    return this.mutate(['calling'], (app) => {
       app.call = undefined;
       app.stage = 'signing';
       log(app, 'Görüşme tamamlanmadan sonlandırıldı', 'u');
     });
   }
 
-  async completeCall(email: string) {
-    return this.mutate(email, ['calling'], (app) => this.issue(app, 'eshs'));
+  async completeCall() {
+    return this.mutate(['calling'], (app) => this.issue(app, 'eshs'));
   }
 
   /** T.C. citizens: sign with an existing e-signature or a new one via e-Devlet. */
-  async signResident(email: string, method: 'existing' | 'edevlet') {
+  async signResident(method: 'existing' | 'edevlet') {
     await this.wait(1_200);
-    return this.mutate(email, ['signing'], (app) => this.issue(app, method));
+    return this.mutate(['signing'], (app) => this.issue(app, method));
   }
 
   private issue(app: Application, method: 'eshs' | 'existing' | 'edevlet') {
@@ -619,9 +712,9 @@ export class MockApi implements Api {
    * sent to the agencies. Refused unless the founder has confirmed exactly that on the screen;
    * the confirmation is logged as the founder's action and its time kept.
    */
-  async startSetup(email: string, confirmed: boolean) {
+  async startSetup(confirmed: boolean) {
     await this.wait(600);
-    return this.mutate(email, ['signed'], (app) => {
+    return this.mutate(['signed'], (app) => {
       if (!confirmed) throw new ApiError('Devam etmek için belgelerinizin imzalanmasını onaylayınız.');
       const at = nowIso();
       app.setup = { startedAt: at, signConsentAt: at };
@@ -631,8 +724,8 @@ export class MockApi implements Api {
     });
   }
 
-  async completeSetup(email: string) {
-    return this.mutate(email, ['setup'], (app) => {
+  async completeSetup() {
+    return this.mutate(['setup'], (app) => {
       const ev = setupEvents(app, 1, this.dur(DURATION.setup));
       app.logs.push(...ev.logs);
       app.docs.push(...ev.docs);
@@ -664,7 +757,7 @@ export class MockApi implements Api {
   async seed(stage: Stage, founderType: FounderType = 'foreign') {
     const db = this.db();
     const resident = founderType === 'resident';
-    const acc: Account = {
+    const acc: MockAccount = {
       email: resident ? 'mehmet.yilmaz@ornek.com.tr' : DEMO_ACCOUNT.email,
       password: resident ? '' : DEMO_ACCOUNT.password,
       firstName: resident ? 'Mehmet' : DEMO_ACCOUNT.firstName,
@@ -680,6 +773,8 @@ export class MockApi implements Api {
     if (stage !== 'registered') db.apps[acc.email] = newApplication(acc);
     this.save(db);
     if (stage === 'registered') this.sendEmailCode(acc.email);
+    // Seeding signs in as the demo founder, except before the e-mail is confirmed (no session yet).
+    this.signIn(stage === 'registered' ? null : acc.email);
     const settings = this.settings.state();
     this.settings.set({ forceConflict: false, forceManual: false, speed: 1000 });
     try {
@@ -687,11 +782,12 @@ export class MockApi implements Api {
     } finally {
       this.settings.set(settings);
     }
-    return { account: clone(acc), app: clone(this.db().apps[acc.email] ?? null) };
+    return { account: publicAccount(acc), app: clone(this.db().apps[acc.email] ?? null) };
   }
 
   reset() {
     localStorage.removeItem(DB_KEY);
+    this.signIn(null);
   }
 
   // ---------------------------------------------------------------------------- internals
@@ -732,7 +828,12 @@ export class MockApi implements Api {
     localStorage.setItem(DB_KEY, JSON.stringify(db));
   }
 
-  private async mutate(emailIn: string, allowed: Stage[], fn: (app: Application, acc: Account) => void): Promise<Application> {
+  /** Changes the signed-in founder's application; refused without a session or at the wrong stage. */
+  private async mutate(allowed: Stage[], fn: (app: Application, acc: MockAccount) => void): Promise<Application> {
+    return this.mutateFor(this.who(), allowed, fn);
+  }
+
+  private async mutateFor(emailIn: string, allowed: Stage[], fn: (app: Application, acc: MockAccount) => void): Promise<Application> {
     const email = normEmail(emailIn);
     const db = this.db();
     const app = db.apps[email];
@@ -747,7 +848,7 @@ export class MockApi implements Api {
 
 // ------------------------------------------------------------------------------- helpers
 
-function newApplication(acc: Account): Application {
+function newApplication(acc: MockAccount): Application {
   const app: Application = {
     id: `DS-${String(new Date().getFullYear()).slice(2)}-${String(Math.floor(1000 + Math.random() * 9000))}`,
     createdAt: nowIso(),
@@ -784,6 +885,11 @@ function log(app: Application, text: string, who: LogEntry['who']) {
 }
 
 const normEmail = (e: string) => e.trim().toLocaleLowerCase('en-US');
+
+/** What the mock hands out: the account without its password, T.C. kimlik no and creation time. */
+function publicAccount(acc: MockAccount): Account {
+  return { email: acc.email, firstName: acc.firstName, lastName: acc.lastName, founderType: acc.founderType, verified: acc.verified };
+}
 
 const FIRST = ['Mehmet', 'Zeynep', 'Ahmet', 'Elif', 'Mustafa', 'Ayşe', 'Emre', 'Selin', 'Burak', 'Deniz'];
 const LAST = ['Yılmaz', 'Kaya', 'Demir', 'Şahin', 'Çelik', 'Yıldız', 'Aydın', 'Öztürk', 'Arslan', 'Doğan'];
@@ -985,7 +1091,7 @@ async function fastForward(api: MockApi, email: string, want: Stage) {
   if (want === 'registered' || want === 'profile') return;
   const resident = JSON.parse(localStorage.getItem(DB_KEY)!).apps[email].founderType === 'resident';
   // The demo profile agrees with the demo deck except for the phone number, so D-1c shows one difference.
-  await api.submitProfile(email, {
+  await api.submitProfile({
     brand: 'Acme Cloud',
     sector: 'software',
     funding: 'own-abroad',
@@ -995,48 +1101,48 @@ async function fastForward(api: MockApi, email: string, want: Stage) {
   });
   if (want === 'verified') return;
   // Seeding stands in for the founder's ticks on D-1a, so that later stages have a deck to show.
-  await api.uploadDeck(email, demoFile('acme-cloud-pitch.pdf', 4_812_000), { noticeAcknowledged: true, aiConsent: true });
+  await api.uploadDeck(demoFile('acme-cloud-pitch.pdf', 4_812_000), { noticeAcknowledged: true, aiConsent: true });
   if (want === 'scanning') return;
-  const scanned = await api.completeScan(email);
+  const scanned = await api.completeScan();
   if (want === 'review') return;
-  for (const c of scanned.crossCheck) if (!c.match) await api.resolveCrossCheck(email, c.key, 'read');
+  for (const c of scanned.crossCheck) if (!c.match) await api.resolveCrossCheck(c.key, 'read');
   // The demo deck's first title clashes in MERSİS; pick a free alternative unless we want the conflict.
   if (want === 'titleConflict') {
-    await api.submitReview(email);
+    await api.submitReview();
     return;
   }
-  await api.updateReview(email, { company: { activity: 'Bulut Yazılım' }, funding: want === 'manual' ? 'third-party' : 'own-abroad' }, ['title']);
-  await api.submitReview(email);
+  await api.updateReview({ company: { activity: 'Bulut Yazılım' }, funding: want === 'manual' ? 'third-party' : 'own-abroad' }, ['title']);
+  await api.submitReview();
   if (want === 'eligibility') return; // D-2a opens on its pre-information view
-  await api.startEligibility(email, true);
+  await api.startEligibility(true);
   await backdate(email, 'identity');
-  await api.completeIdentity(email);
+  await api.completeIdentity();
   if (want === 'declaration') return;
-  await api.submitDeclaration(email, { file: { name: 'adres-belgesi.pdf', size: 412_000 }, declared: true });
+  await api.submitDeclaration({ file: { name: 'adres-belgesi.pdf', size: 412_000 }, declared: true });
   if (want === 'screening') return;
   await backdate(email, 'screening');
-  await api.completeScreening(email);
+  await api.completeScreening();
   if (want === 'eligible' || want === 'manual') return;
-  await api.proceedToPayment(email);
+  await api.proceedToPayment();
   if (want === 'payment') return;
-  await api.pay(email, { holder: 'John Doe', number: '4242 4242 4242 4242', expiry: '12/30', cvv: '123' });
+  await api.pay({ holder: 'John Doe', number: '4242 4242 4242 4242', expiry: '12/30', cvv: '123' });
   if (want === 'threeDs') return;
   const otp = JSON.parse(localStorage.getItem(DB_KEY)!).apps[email].payment.otp as string;
-  await api.confirm3ds(email, otp);
+  await api.confirm3ds(otp);
   if (want === 'signing') return;
   if (resident) {
-    await api.signResident(email, 'existing');
+    await api.signResident('existing');
   } else {
-    await api.acceptCallTerms(email, true);
-    await api.startCall(email);
+    await api.acceptCallTerms(true);
+    await api.startCall();
     if (want === 'calling') return;
-    await api.completeCall(email);
+    await api.completeCall();
   }
   if (want === 'signed') return;
-  await api.startSetup(email, true);
+  await api.startSetup(true);
   if (want === 'setup') return;
   await backdate(email, 'setup');
-  await api.completeSetup(email);
+  await api.completeSetup();
 }
 
 /** Moves a running process's start into the past so seeded data has realistic, ordered timestamps. */

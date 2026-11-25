@@ -1,5 +1,6 @@
 import { computed, effect, inject, Injectable, signal, untracked } from '@angular/core';
-import { Api, ReviewPatch } from './api';
+import { Router } from '@angular/router';
+import { Api, ReviewPatch, Session } from './api';
 import { ApiError } from './api-error';
 import { Clock } from './clock';
 import { pdfBytes, zipBytes } from './files';
@@ -17,8 +18,6 @@ import {
   setupEvents,
   setupView,
 } from './timeline';
-
-const SESSION_KEY = 'dsp.session.v1';
 
 /** Screen each stage lives on. */
 export function routeFor(stage: Stage | null, founderType: FounderType = 'foreign'): string {
@@ -72,10 +71,24 @@ export function routeFor(stage: Stage | null, founderType: FounderType = 'foreig
 @Injectable({ providedIn: 'root' })
 export class ApplicationStore {
   private readonly api = inject(Api);
+  private readonly router = inject(Router);
   readonly now = inject(Clock).now;
 
   readonly account = signal<Account | null>(null);
   readonly app = signal<Application | null>(null);
+  /**
+   * The address that registered (or tried to sign in) but has not confirmed its code yet. Kept in
+   * memory only: the verify screen (D-0c) needs it, and nothing about the founder is written to
+   * the browser's storage. A reload forgets it; signing in again sends a new code.
+   */
+  readonly pendingEmail = signal<string | null>(null);
+  /**
+   * Resolves once the session the browser already had has been looked up (`Api.restore`). The
+   * flow guard waits for it, so a reload does not bounce a signed-in founder to the login page.
+   */
+  readonly restored: Promise<void>;
+  /** A short message for the next sign-in screen ("your password was changed"); read once with `takeNotice`. */
+  private notice: string | null = null;
   /** True while an action is in flight (buttons show a spinner / disable). */
   readonly busy = signal(false);
   /** Last action error, shown next to the action that failed. */
@@ -84,7 +97,7 @@ export class ApplicationStore {
   // ------------------------------------------------------------------------------ derived
 
   readonly signedIn = computed(() => !!this.account());
-  readonly stage = computed<Stage | null>(() => this.app()?.stage ?? (this.account() ? (this.account()!.verified ? 'profile' : 'registered') : null));
+  readonly stage = computed<Stage | null>(() => this.app()?.stage ?? (this.account() ? 'profile' : this.pendingEmail() ? 'registered' : null));
   readonly step = computed(() => {
     const s = this.stage();
     return s ? stepOf(s) : 1;
@@ -160,7 +173,7 @@ export class ApplicationStore {
   });
 
   constructor() {
-    this.restore();
+    this.restored = this.restore();
     // Finish time-based steps when their simulated duration has elapsed.
     effect(() => {
       const a = this.app();
@@ -181,75 +194,105 @@ export class ApplicationStore {
       untracked(() => void this.finishByPhone().finally(() => (finishing = false)));
     });
     // Another tab or device moved the application on (the phone page starts the identity check): pick it up.
-    this.api.demo?.onExternalChange(() => this.restore());
+    this.api.demo?.onExternalChange(() => void this.restore());
   }
 
   // ---------------------------------------------------------------------------- actions
 
+  /** Sends the code; the verify screen (D-0c) then asks for it. Does not sign in. */
   async register(input: { firstName: string; lastName: string; email: string; password: string }) {
     return this.run(async () => {
-      const acc = await this.api.register(input);
-      this.setSession(acc, null);
+      await this.api.register(input);
+      this.setSession(null);
+      this.pendingEmail.set(input.email.trim());
     });
   }
 
+  /**
+   * When the address is not confirmed yet the server sends a new code and refuses with
+   * `email_not_verified`: the founder is then taken to the verify screen, which shows the
+   * server's sentence (`takeNotice`). Resolves true only when signed in.
+   */
   async login(email: string, password: string) {
+    this.pendingEmail.set(null);
     return this.run(async () => {
-      const r = await this.api.login(email, password);
-      this.setSession(r.account, r.app);
+      try {
+        this.setSession(await this.api.login(email, password));
+      } catch (e) {
+        if (e instanceof ApiError && e.code === 'email_not_verified') {
+          this.pendingEmail.set(email.trim());
+          this.notice = e.message;
+        }
+        throw e;
+      }
     });
   }
 
   /** e-Devlet sign-in for T.C. citizens; creates the account on first use. */
   async edevlet(tckn: string) {
-    return this.run(async () => {
-      const r = await this.api.edevlet(tckn);
-      this.setSession(r.account, r.app);
-    });
+    return this.run(async () => this.setSession(await this.api.edevlet(tckn)));
   }
 
-  logout() {
-    this.setSession(null, null);
+  /** Ends the session on the server, then forgets the founder here. A failed call still signs out locally. */
+  async logout() {
+    if (this.signedIn()) await this.api.logout().catch((e: unknown) => console.warn('logout failed', e instanceof ApiError ? e.code : e));
+    this.setSession(null);
+    this.pendingEmail.set(null);
   }
 
-  verifyEmail = (code: string) =>
-    this.run(async () => {
-      const r = await this.api.verifyEmail(this.email(), code);
-      this.setSession(r.account, r.app);
-    });
-
-  resendEmailCode = () => this.run(() => this.api.resendEmailCode(this.email()));
+  verifyEmail = (code: string) => this.run(async () => this.setSession(await this.api.verifyEmail(this.unconfirmedEmail(), code)));
+  resendEmailCode = () => this.run(() => this.api.resendEmailCode(this.unconfirmedEmail()));
   requestPasswordReset = (email: string) => this.run(() => this.api.requestPasswordReset(email));
 
+  /** The set-new-password screen. On success the login screen says so (`takeNotice`). */
+  confirmPasswordReset = (token: string, password: string) =>
+    this.run(async () => {
+      await this.api.confirmPasswordReset(token, password);
+      // The server has ended every session of this account; this tab may have had one.
+      this.setSession(null);
+      this.notice = 'Şifreniz değiştirildi. Yeni şifrenizle giriş yapabilirsiniz.';
+    });
+
+  /** The message left for the next sign-in screen, once. */
+  takeNotice() {
+    const notice = this.notice;
+    this.notice = null;
+    return notice;
+  }
+
+  /** Demo convenience: the last e-mail typed on a sign-in screen. Nothing is kept outside mock mode. */
+  rememberedEmail = () => this.api.demo?.rememberedEmail() ?? '';
+  rememberEmail = (email: string) => this.api.demo?.rememberEmail(email);
+
   /** D-1e: the founder's statement before the deck; may be saved again until a deck is uploaded. */
-  submitProfile = (input: Omit<Profile, 'at'>) => this.update(() => this.api.submitProfile(this.email(), input));
+  submitProfile = (input: Omit<Profile, 'at'>) => this.update(() => this.api.submitProfile(input));
   /** D-1a: the deck with the founder's two ticks for this upload. */
-  uploadDeck = (file: File, consents: DeckConsents) => this.update(() => this.api.uploadDeck(this.email(), file, consents));
-  updateReview = (patch: ReviewPatch, edited: string[]) => this.update(() => this.api.updateReview(this.email(), patch, edited));
-  submitReview = () => this.update(() => this.api.submitReview(this.email()));
-  chooseTitle = (title: string) => this.update(() => this.api.chooseTitle(this.email(), title));
+  uploadDeck = (file: File, consents: DeckConsents) => this.update(() => this.api.uploadDeck(file, consents));
+  updateReview = (patch: ReviewPatch, edited: string[]) => this.update(() => this.api.updateReview(patch, edited));
+  submitReview = () => this.update(() => this.api.submitReview());
+  chooseTitle = (title: string) => this.update(() => this.api.chooseTitle(title));
   /** D-1c: which value to keep where the profile and the deck differ. */
-  resolveCrossCheck = (key: CrossKey, choice: 'stated' | 'read') => this.update(() => this.api.resolveCrossCheck(this.email(), key, choice));
+  resolveCrossCheck = (key: CrossKey, choice: 'stated' | 'read') => this.update(() => this.api.resolveCrossCheck(key, choice));
   /** D-2a: the founder read the pre-information, ticked the consent and starts the identity check. */
-  startEligibility = (consent: boolean) => this.update(() => this.api.startEligibility(this.email(), consent));
+  startEligibility = (consent: boolean) => this.update(() => this.api.startEligibility(consent));
   /** D-2d: the address document and the confirmed declaration; the list search starts. */
   submitDeclaration = (input: { file: { name: string; size: number } | null; declared: boolean }) =>
-    this.update(() => this.api.submitDeclaration(this.email(), input));
+    this.update(() => this.api.submitDeclaration(input));
   /** D-2a "Telefonla devam et": make (or renew) the link the QR code carries. */
-  createPhoneLink = () => this.update(() => this.api.createPhoneLink(this.email()));
-  backToReview = () => this.update(() => this.api.backToReview(this.email()));
-  proceedToPayment = () => this.update(() => this.api.proceedToPayment(this.email()));
-  pay = (card: { holder: string; number: string; expiry: string; cvv: string }) => this.update(() => this.api.pay(this.email(), card));
-  resendOtp = () => this.update(() => this.api.resendOtp(this.email()));
-  cancel3ds = () => this.update(() => this.api.cancel3ds(this.email()));
-  confirm3ds = (code: string) => this.update(() => this.api.confirm3ds(this.email(), code));
+  createPhoneLink = () => this.update(() => this.api.createPhoneLink());
+  backToReview = () => this.update(() => this.api.backToReview());
+  proceedToPayment = () => this.update(() => this.api.proceedToPayment());
+  pay = (card: { holder: string; number: string; expiry: string; cvv: string }) => this.update(() => this.api.pay(card));
+  resendOtp = () => this.update(() => this.api.resendOtp());
+  cancel3ds = () => this.update(() => this.api.cancel3ds());
+  confirm3ds = (code: string) => this.update(() => this.api.confirm3ds(code));
   /** D-4a pre-information: the consent tick and "Devam et". */
-  acceptCallTerms = (consent: boolean) => this.update(() => this.api.acceptCallTerms(this.email(), consent));
-  startCall = () => this.update(() => this.api.startCall(this.email()));
-  endCall = () => this.update(() => this.api.endCall(this.email()));
-  signResident = (method: 'existing' | 'edevlet') => this.update(() => this.api.signResident(this.email(), method));
+  acceptCallTerms = (consent: boolean) => this.update(() => this.api.acceptCallTerms(consent));
+  startCall = () => this.update(() => this.api.startCall());
+  endCall = () => this.update(() => this.api.endCall());
+  signResident = (method: 'existing' | 'edevlet') => this.update(() => this.api.signResident(method));
   /** D-4c: the founder confirmed that the documents are signed with their e-signature, and starts the formation. */
-  startSetup = (confirmed: boolean) => this.update(() => this.api.startSetup(this.email(), confirmed));
+  startSetup = (confirmed: boolean) => this.update(() => this.api.startSetup(confirmed));
   ask = (q: string) => this.api.ask(q);
 
   // ------------------------------------------------- identity check on the phone (D-2a-m)
@@ -287,14 +330,16 @@ export class ApplicationStore {
   async seed(stage: Stage, founderType: FounderType = 'foreign') {
     return this.run(async () => {
       const r = await this.demoTools().seed(stage, founderType);
-      this.setSession(r.account, r.app);
+      // Seeded before the e-mail is confirmed: no session, only the address waiting for its code.
+      this.setSession(r.account.verified ? r : null);
+      if (!r.account.verified) this.pendingEmail.set(r.account.email);
     });
   }
 
   /** Demo panel: delete all mock data. Mock mode only. */
   resetAll() {
     this.demoTools().reset();
-    this.setSession(null, null);
+    this.setSession(null);
   }
 
   /** Simulation speed of the time-based steps: the demo panel's setting, real time without demo tools. */
@@ -331,19 +376,19 @@ export class ApplicationStore {
   private async complete(stage: Stage) {
     if (this.completing === stage) return;
     this.completing = stage;
-    const email = this.email();
     try {
       const fn = {
-        scanning: () => this.api.completeScan(email),
-        eligibility: () => this.api.completeIdentity(email),
-        screening: () => this.api.completeScreening(email),
-        calling: () => this.api.completeCall(email),
-        setup: () => this.api.completeSetup(email),
+        scanning: () => this.api.completeScan(),
+        eligibility: () => this.api.completeIdentity(),
+        screening: () => this.api.completeScreening(),
+        calling: () => this.api.completeCall(),
+        setup: () => this.api.completeSetup(),
       }[stage as 'scanning'];
       if (fn) this.app.set(await fn());
     } catch (e) {
+      if (this.sessionLost(e)) return;
       // Another tab may have advanced the application already: resync.
-      this.restore();
+      void this.restore();
       if (!(e instanceof ApiError)) throw e;
     } finally {
       this.completing = null;
@@ -373,36 +418,54 @@ export class ApplicationStore {
     return this.api.demo;
   }
 
-  private email() {
-    const e = this.account()?.email;
-    if (!e) throw new ApiError('Oturum bulunamadı. Lütfen giriş yapın.');
-    return e;
+  /** The address waiting for its code (see `pendingEmail`). */
+  private unconfirmedEmail() {
+    const email = this.pendingEmail();
+    if (!email) throw new ApiError('E-posta adresiniz bulunamadı. Lütfen yeniden giriş yapınız.');
+    return email;
   }
 
-  private setSession(account: Account | null, app: Application | null) {
-    this.account.set(account);
-    this.app.set(app);
-    if (account) localStorage.setItem(SESSION_KEY, account.email);
-    else localStorage.removeItem(SESSION_KEY);
+  /** Counts sign-ins and sign-outs, so a slow `restore` cannot overwrite a newer session. */
+  private sessionVersion = 0;
+
+  /** Signs in (a session from the API) or out (null). Nothing is written to the browser's storage here. */
+  private setSession(session: Session | null) {
+    this.sessionVersion++;
+    this.account.set(session?.account ?? null);
+    this.app.set(session?.app ?? null);
+    if (session) {
+      this.pendingEmail.set(null);
+      this.notice = null;
+    }
   }
 
   /**
-   * Signs the founder back in after a reload from the mock's own storage. Without demo tools
-   * (HTTP mode) there is nothing to restore yet: a later piece asks the server for the session.
+   * Asks the API who is signed in: after a reload, and in mock mode when another tab changed the
+   * data. Leaves the founder signed out when there is no session or the answer fails.
    */
-  private restore() {
-    const demo = this.api.demo;
-    if (!demo) return;
-    const email = localStorage.getItem(SESSION_KEY);
-    if (!email) return;
+  private async restore() {
+    const version = this.sessionVersion;
+    let session: Session | null = null;
     try {
-      const { account: acc, app } = demo.readSession(email);
-      this.account.set(acc);
-      this.app.set(app);
-      if (!acc) localStorage.removeItem(SESSION_KEY);
-    } catch {
-      localStorage.removeItem(SESSION_KEY);
+      session = await this.api.restore();
+    } catch (e) {
+      console.warn('session restore failed', e instanceof ApiError ? (e.code ?? e.status) : e);
     }
+    // A sign-in or sign-out happened while we waited: that one wins.
+    if (version !== this.sessionVersion) return;
+    this.account.set(session?.account ?? null);
+    this.app.set(session?.app ?? null);
+  }
+
+  /**
+   * The server no longer knows the session (expired, ended in another tab, password reset):
+   * forget the founder and go to the login page. True when that was the case.
+   */
+  private sessionLost(e: unknown): boolean {
+    if (!(e instanceof ApiError) || e.code !== 'unauthenticated') return false;
+    this.setSession(null);
+    void this.router.navigateByUrl('/login').catch(() => undefined);
+    return true;
   }
 
   private async update(fn: () => Promise<Application>) {
@@ -417,11 +480,22 @@ export class ApplicationStore {
       await fn();
       return true;
     } catch (e) {
-      this.error.set(e instanceof Error ? e.message : 'Beklenmeyen bir hata oluştu.');
+      this.sessionLost(e);
+      this.error.set(e instanceof ApiError ? shownMessage(e) : e instanceof Error ? e.message : 'Beklenmeyen bir hata oluştu.');
       if (!(e instanceof ApiError)) console.error(e);
       return false;
     } finally {
       this.busy.set(false);
     }
   }
+}
+
+/**
+ * What the founder reads for a refusal. A `validation_failed` answer from the API carries a
+ * general title ("Gönderdiğiniz bilgiler eksik veya hatalıdır.") and the useful sentence under its
+ * field (a wrong code: `errors.code`), so the field's sentence is shown when there is one.
+ */
+function shownMessage(e: ApiError): string {
+  const first = Object.values(e.fields ?? {}).flat()[0];
+  return first ?? e.message;
 }

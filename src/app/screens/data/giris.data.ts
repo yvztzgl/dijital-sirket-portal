@@ -6,9 +6,8 @@ import { clock } from '../../core/format';
 import { passwordStrength } from '../../core/rules';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const LAST_EMAIL = 'dsp.lastEmail';
 
-/** Login, register, e-mail verification and password reset (Ekranlar 0). */
+/** Login, register, e-mail verification, password reset and the new password (Ekranlar 0). */
 export class GirisData {
   protected readonly store = inject(ApplicationStore);
   private readonly router = inject(Router);
@@ -17,8 +16,11 @@ export class GirisData {
   protected readonly form = signal({
     firstName: '',
     lastName: '',
-    email: localStorage.getItem(LAST_EMAIL) ?? '',
+    // Prefilled only in mock mode; HTTP mode keeps no e-mail in the browser.
+    email: this.store.rememberedEmail(),
     password: '',
+    /** The new password typed a second time (set-new-password screen). */
+    repeat: '',
   });
   protected readonly ui = signal({ showPw: false, remember: true, path: 'foreign' as 'foreign' | 'resident', kvkk: false, terms: false });
   /** Validation messages show only after the first submit attempt. */
@@ -27,12 +29,17 @@ export class GirisData {
   protected readonly otp = signal('');
   protected readonly resetSent = signal(false);
   private readonly resendAt = signal(Date.now() + 60_000);
+  /**
+   * A message the previous screen left for this one: "password changed" on the login screen, the
+   * server's "not confirmed yet, a new code was sent" on the verify screen.
+   */
+  protected readonly notice = this.store.takeNotice();
 
   constructor() {
     this.store.clearError();
   }
 
-  protected setField(key: 'firstName' | 'lastName' | 'email' | 'password', e: Event) {
+  protected setField(key: 'firstName' | 'lastName' | 'email' | 'password' | 'repeat', e: Event) {
     const value = (e.target as HTMLInputElement).value;
     this.form.update((f) => ({ ...f, [key]: value }));
   }
@@ -48,6 +55,11 @@ export class GirisData {
       if (!this.strength().ok) return 'Şifre en az 10 karakter olmalı ve harf, rakam, sembol içermeli.';
       return null;
     }
+    if (this.router.url.startsWith('/sifre-sifirla')) {
+      if (!this.strength().ok) return 'Şifre en az 10 karakter olmalı ve harf, rakam, sembol içermeli.';
+      if (f.password !== f.repeat) return 'Yazdığınız iki şifre aynı değildir.';
+      return null;
+    }
     if (!EMAIL_RE.test(f.email)) return 'Geçerli bir e-posta adresi girin.';
     if (this.router.url.startsWith('/login') && !f.password) return 'Şifrenizi yazın.';
     return null;
@@ -59,10 +71,10 @@ export class GirisData {
     this.tried.set(true);
     if (this.formError()) return;
     const f = this.form();
-    if (await this.store.login(f.email, f.password)) {
-      localStorage.setItem(LAST_EMAIL, f.email.trim());
-      void this.router.navigateByUrl(this.store.resumeRoute());
-    }
+    const ok = await this.store.login(f.email, f.password);
+    this.store.rememberEmail(f.email);
+    // Signed in, or the address still needs its code (stage `registered`): either way resume there.
+    if (ok || this.store.stage() === 'registered') void this.router.navigateByUrl(this.store.resumeRoute());
   }
 
   protected async register() {
@@ -73,8 +85,9 @@ export class GirisData {
     this.tried.set(true);
     if (this.formError() || this.vals().cantSubmit) return;
     const f = this.form();
-    if (await this.store.register(f)) {
-      localStorage.setItem(LAST_EMAIL, f.email.trim());
+    // The KVKK and terms ticks are checked here only: the API's register call has no field for them.
+    if (await this.store.register({ firstName: f.firstName, lastName: f.lastName, email: f.email, password: f.password })) {
+      this.store.rememberEmail(f.email);
       void this.router.navigateByUrl('/verify-email');
     }
   }
@@ -85,6 +98,9 @@ export class GirisData {
   }
 
   protected async verify(code = this.otp()) {
+    // One code at a time: the code boxes can report "complete" again while a check is in flight,
+    // and parallel checks of one code collide on the server (409).
+    if (this.store.busy()) return;
     if (!/^\d{6}$/.test(code)) {
       this.store.error.set('6 haneli kodu girin.');
       return;
@@ -110,9 +126,16 @@ export class GirisData {
     }
   }
 
-  /** Signed-in user who returns to the register page: offer to change e-mail = sign out. */
-  protected changeEmail() {
-    this.store.logout();
+  /** Set-new-password screen: the token was read from the link when the screen opened. */
+  protected async setNewPassword(token: string | null) {
+    this.tried.set(true);
+    if (!token || this.formError()) return;
+    if (await this.store.confirmPasswordReset(token, this.form().password)) void this.router.navigateByUrl('/login');
+  }
+
+  /** "E-postayı değiştir" on the verify screen: forget the address waiting for its code and register again. */
+  protected async changeEmail() {
+    await this.store.logout();
     void this.router.navigateByUrl('/register');
   }
 
@@ -171,7 +194,7 @@ export class GirisData {
       strengthBars: [0, 1, 2, 3].map((i) => (f.password && i < Math.max(1, st.score) ? strengthColor : 'var(--bg-E5E7EB)')),
       strengthText: f.password ? `${st.ok ? '✓ ' : ''}${st.label} · en az 10 karakter, harf, rakam ve sembol` : 'En az 10 karakter, harf, rakam ve sembol',
       strengthColor: f.password ? strengthColor : 'var(--fg-5B6478)',
-      verifyEmail: this.store.account()?.email ?? '',
+      verifyEmail: this.store.pendingEmail() ?? '',
     };
   });
 }

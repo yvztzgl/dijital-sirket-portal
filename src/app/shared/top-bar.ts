@@ -92,9 +92,8 @@ export class TopBar {
 
   protected logout() {
     this.menu.set(false);
-    this.store.logout();
     this.assistant.clear();
-    void this.router.navigateByUrl('/login');
+    void this.store.logout().then(() => this.router.navigateByUrl('/login'));
   }
 
   protected readonly vals = computed(() => {
