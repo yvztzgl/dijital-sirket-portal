@@ -1,5 +1,7 @@
 import { computed, inject, signal } from '@angular/core';
 import { ApplicationStore } from '../../core/application.store';
+import { Assistant } from '../../core/assistant';
+import { Confirm } from '../../core/confirm';
 import { DemoSettings } from '../../core/demo-settings';
 import { followFlow } from '../../core/follow';
 import { clock, date, dateTime, tl0 } from '../../core/format';
@@ -12,13 +14,37 @@ export class EimzaData {
   protected readonly store = inject(ApplicationStore);
   private readonly demo = inject(DemoSettings);
   private readonly inbox = inject(Inbox);
+  private readonly assistant = inject(Assistant);
+  private readonly confirmDialog = inject(Confirm);
 
   constructor() {
     this.store.clearError();
-    followFlow();
+    // D-5a stays for a moment after the last step so the finished building is seen, then moves to
+    // "Şirketiniz kuruldu" with the "founded" animation (the company's logo travels from the roof sign).
+    const founded = (screen: string, stage: string | null) => screen === 'd5a' && stage === 'done';
+    followFlow({
+      linger: (screen, stage) => (founded(screen, stage) ? EimzaData.FINISHED_HOLD : 0),
+      transition: (screen, stage) => (founded(screen, stage) ? 'vt-founded' : null),
+    });
   }
 
   // ------------------------------------------------------------------------ D-4a pre-call
+
+  /** D-4a opens on a pre-information view until the founder has accepted the call's terms. */
+  protected readonly briefed = computed(() => !!this.store.app()?.callConsentAt);
+  protected readonly callConsent = signal(false);
+  /**
+   * What to do and not to do during the call. Placeholders until the e-signature provider's own
+   * rules are known (PROJECT_LOG, 2026-11-17 twenty-sixth entry).
+   */
+  protected readonly callRules = {
+    do: ['Pasaportunuzu yanınızda bulundurunuz.', 'Yüzünüzü açık ve tam görünür tutunuz.', 'Görüşme bitene kadar kameranın karşısında kalınız.'],
+    dont: ['Görüşme sırasında başka bir kişiden yardım almayınız.', 'Güneş gözlüğü, şapka veya maske takmayınız.', 'Görüşme tamamlanmadan bağlantıyı kesmeyiniz.'],
+  };
+
+  protected acceptCallTerms() {
+    void this.store.acceptCallTerms(this.callConsent());
+  }
 
   protected readonly mic = signal(true);
   protected readonly cam = signal(true);
@@ -29,10 +55,15 @@ export class EimzaData {
     'Bağlantı kalitesi iyi',
   ]);
   protected readonly devicesReady = computed(() => this.mic() && this.cam());
+  /** The founder's initials, shown where the camera picture would be. */
+  protected readonly initials = computed(() => {
+    const f = this.store.app()?.founder;
+    return `${f?.firstName?.[0] ?? ''}${f?.lastName?.[0] ?? ''}`.toLocaleUpperCase('tr-TR');
+  });
 
   protected startCall() {
     if (!this.devicesReady()) {
-      this.store.error.set('Görüşme için kamera ve mikrofon açık olmalı.');
+      this.store.error.set('Görüşme için kamera ve mikrofon açık olmalıdır.');
       return;
     }
     void this.store.startCall();
@@ -55,6 +86,8 @@ export class EimzaData {
     return { prev: c.step > 0 ? all[c.step - 1] : '', cur: all[c.step] };
   });
   protected readonly passportSeen = computed(() => (this.store.call()?.step ?? 0) >= 1);
+  /** What the call has just established about the founder, shown on their own picture (the latest one only). */
+  protected readonly selfStatus = computed(() => ['', 'Pasaport algılandı', 'Yüz eşleşti', 'Onayınız alındı', 'Tutanak imzalandı', 'E-imza düzenlendi'][Math.min(this.store.call()?.step ?? 0, 5)]);
   protected readonly callSteps = computed(() => {
     const step = this.store.call()?.step ?? 0;
     return CALL_STEPS.map((t, i) => {
@@ -64,8 +97,16 @@ export class EimzaData {
     });
   });
 
-  protected endCall() {
-    if (confirm('Görüşmeyi bitirirseniz e-imza düzenlenmez ve görüşmeyi yeniden başlatmanız gerekir. Bitirilsin mi?')) void this.store.endCall();
+  protected async endCall() {
+    const ok = await this.confirmDialog.ask({
+      tone: 'danger',
+      icon: 'phone-off',
+      title: 'Görüşme sonlandırılsın mı?',
+      message: 'Görüşmeyi sonlandırırsanız e-imzanız düzenlenmez. Devam etmek için görüşmeyi yeniden başlatmanız gerekir.',
+      confirm: 'Görüşmeyi sonlandır',
+      cancel: 'Görüşmeye dön',
+    });
+    if (ok) void this.store.endCall();
   }
 
   // ------------------------------------------------------------------------ D-4c ready
@@ -80,6 +121,8 @@ export class EimzaData {
   protected readonly validity = computed(() => (this.sig() ? `${dateTime(this.sig()!.validUntil)} tarihine kadar geçerli` : ''));
   protected readonly leftMs = computed(() => (this.sig() ? Math.max(0, Date.parse(this.sig()!.validUntil) - this.store.now()) : 0));
   protected readonly leftLabel = computed(() => clock(this.leftMs(), true));
+  /** Share of the signature's 24 hours still left, for the bar on D-4c. */
+  protected readonly leftPct = computed(() => Math.round((this.leftMs() / (24 * 3600_000)) * 100));
   /** Countdown ring: 352 ≈ circumference of r=56. */
   protected readonly ringDash = computed(() => `${Math.round((this.leftMs() / (24 * 3600_000)) * 352)} 352`);
   protected readonly callSummary = computed(() => {
@@ -89,8 +132,11 @@ export class EimzaData {
     return `· 5/5 adım · ${clock(DURATION.call / this.demo.speed())} dk · tutanak belgelerinize eklendi`;
   });
 
+  /** D-4c: "Kuruluş belgelerimin bu e-imza ile imzalanmasını onaylıyorum." The API checks it too. */
+  protected readonly signConfirm = signal(false);
+
   protected startSetup() {
-    void this.store.startSetup();
+    void this.store.startSetup(this.signConfirm());
   }
 
   // ---------------------------------------------------------------- D-4d T.C. citizen
@@ -101,11 +147,81 @@ export class EimzaData {
     return a ? `${a.founder.firstName} ${a.founder.lastName}` : '';
   });
 
-  protected async signAndStart() {
-    if (await this.store.signResident(this.method())) await this.store.startSetup();
+  /**
+   * D-4d: the chosen e-signature is verified; the founder then confirms the signing on D-4c like
+   * everyone else. (Until 2026-11-17 this also started the formation at once.)
+   */
+  protected signResident() {
+    void this.store.signResident(this.method());
   }
 
   // ---------------------------------------------------------------------- D-5a setup
+
+  /**
+   * The picture, and the seven heights in it, in % of its height from the top: the ground line,
+   * then the top of the slab above each of the six floors (the last is the top of the picture,
+   * so the roof and its sign come with the sixth floor). Measured from the file; measure again
+   * when the picture is replaced (art/README.md, "Building scene").
+   */
+  private static readonly BUILDING = { src: '/assets/illustrations/building.webp', levels: [97.9, 79.9, 66.4, 52.6, 38.2, 23.2, 0] };
+  protected readonly building = EimzaData.BUILDING;
+
+  /**
+   * D-5a's illustration: a six-storey building, cut open, that rises as the company is founded.
+   * The six agency steps that run on this screen (AGENCIES 4 to 9; the first three were finished
+   * in earlier steps) are its six floors, from the ground up, and each floor shows a small scene
+   * for its step: registry, tax office, financial seal, bank, social security and e-ledger,
+   * accountant. The picture (generated by the owner, 2026-11-17) is shown twice: faint and
+   * dotted as the plan, and in full up to the height built so far. While a step runs its floor
+   * fills in from its own floor line to the slab above it. No step names appear on it.
+   * (Before this the owner rejected a drawn "seal sheet", a take-off scene and a plain facade.)
+   */
+  protected readonly rise = computed(() => {
+    const v = this.store.setup();
+    const lens = AGENCIES.slice(3).map((a) => a.subs.length);
+    // The height follows time, not finished sub-steps: where the run stands among all its sub-steps,
+    // as a fraction, so the building rises without jumps at any demo speed.
+    let pos = (v?.p ?? 0) * lens.reduce((s, n) => s + n, 0);
+    let floor = 0;
+    while (floor < 6 && pos >= lens[floor]) pos -= lens[floor++];
+    const lv = EimzaData.BUILDING.levels;
+    return {
+      /** Floors finished: the count on the picture. Equals the agency steps finished. */
+      done: floor,
+      top: floor >= 6 ? lv[6] : lv[floor] + (pos / lens[floor]) * (lv[floor + 1] - lv[floor]),
+      finished: floor >= 6,
+    };
+  });
+  /** How long D-5a stays after the sixth floor is finished, in ms: long enough for the finishing moment below. */
+  private static readonly FINISHED_HOLD = 3600;
+
+  /**
+   * The finishing moment's parts, drawn over the picture once the sixth floor is done (the order
+   * and timing are in wizard.scss, "finishing moment"): a band of light for each floor, running
+   * up the building, and a burst of paper from the roof in the picture's own colours.
+   */
+  protected readonly floorBands = EimzaData.BUILDING.levels.slice(0, 6).map((bottom, i) => ({ i, top: EimzaData.BUILDING.levels[i + 1], height: bottom - EimzaData.BUILDING.levels[i + 1] }));
+  protected readonly confetti = Array.from({ length: 40 }, (_, i) => {
+    // The same burst every time: a fixed pseudo-random spread, not Math.random.
+    const r = (n: number) => {
+      const x = Math.sin(i * 12.9898 + n * 78.233) * 43758.5453;
+      return x - Math.floor(x);
+    };
+    return {
+      dx: Math.round((r(1) - 0.5) * 560),
+      up: Math.round(40 + r(2) * 110),
+      fall: Math.round(170 + r(3) * 220),
+      rot: Math.round((r(4) - 0.5) * 1080),
+      delay: (0.95 + r(5) * 0.22).toFixed(2) + 's',
+      dur: (1.5 + r(6) * 0.9).toFixed(2) + 's',
+      w: Math.round(5 + r(7) * 4),
+      h: i % 4 === 0 ? Math.round(5 + r(7) * 4) : Math.round(9 + r(8) * 6),
+      round: i % 4 === 0,
+      color: ['#061262', '#9DB6FF', '#C7D5F7', '#E5484D', '#4F7CF0'][i % 5],
+    };
+  });
+  /** "Detayı gör": the full list of steps and sub-steps under the illustration. */
+  protected readonly listOpen = signal(false);
 
   protected readonly agency = computed(() => {
     const v = this.store.setup();
@@ -142,6 +258,14 @@ export class EimzaData {
     const sub = a.subs[Math.min(v.sub, a.subs.length - 1)];
     return { idx: Math.min(v.agency + 1, AGENCIES.length), total: AGENCIES.length, t: a.t, ag: a.ag, sub: `${sub.t}…`, percent: v.percent };
   });
+
+  /** Agency steps finished so far. */
+  protected readonly doneCount = computed(() => Math.min(this.store.setup()?.agency ?? 0, AGENCIES.length));
+
+  /** "Belgeleri görüntüle" / "İşlem kaydını görüntüle": open that view in the side panel. */
+  protected showPanel(tab: 'docs' | 'log') {
+    this.assistant.show(tab);
+  }
 
   protected readonly detailsOpen = signal(false);
   protected readonly totalSubs = AGENCIES.reduce((s, a) => s + a.subs.length, 0);
@@ -195,15 +319,17 @@ export class EimzaData {
     const blocked = tl0((this.store.app()?.company.capital ?? 250_000) * 0.25);
     const advisor = this.store.app()?.results?.advisor.replace('SMMM ', '') ?? 'Müşaviriniz';
     return [
-      { n: '01', t: "Sermayenin %25'ini yatırın", d: `${blocked}'yi Halkbank hesabınıza transfer edin; blokaj tescille kalkar.`, w: '30 gün içinde' },
-      { n: '02', t: 'İlk e-faturanızı kesin', d: 'e-Fatura kaydınız hazır; GİB portalına erişim e-postanıza gönderildi.', w: 'Hazır' },
-      { n: '03', t: 'Müşavirinizle tanışın', d: `${advisor} ile 20 dakikalık görüntülü tanışma planlayın.`, w: 'Önerilir' },
+      // `img`: that step's scene, cut from the building picture of D-5a (art/README.md, "Building scene"). `tone`: the tag's colour.
+      { n: '01', t: 'Sermayenin %25’ini yatırınız', d: `${blocked} tutarını Halkbank hesabınıza transfer ediniz; blokaj tescille kalkar.`, w: '30 gün içinde', tone: 'warn', img: '/assets/illustrations/next-bank.webp' },
+      { n: '02', t: 'İlk e-faturanızı kesiniz', d: 'e-Fatura kaydınız hazırdır; GİB portalına erişim bilgileri e-posta adresinize gönderildi.', w: 'Hazır', tone: 'ok', img: '/assets/illustrations/next-invoice.webp' },
+      { n: '03', t: 'Mali müşavirinizle tanışınız', d: `${advisor} ile 20 dakikalık görüntülü bir görüşme planlayabilirsiniz.`, w: 'Önerilir', tone: 'info', img: '/assets/illustrations/next-advisor.webp' },
     ];
   });
 
   protected resultAction(r: { k: string; v: string; a: string }) {
     if (r.a === 'Kopyala') {
-      void navigator.clipboard?.writeText(r.v.replace(/\s/g, r.k.startsWith('IBAN') ? ' ' : ''));
+      // Copying can be refused (an unfocused window, an insecure origin); the button still acknowledges the press.
+      navigator.clipboard?.writeText(r.v.replace(/\s/g, r.k.startsWith('IBAN') ? ' ' : '')).catch(() => undefined);
       this.copied.set(r.k);
       setTimeout(() => this.copied.set(null), 1500);
     } else {

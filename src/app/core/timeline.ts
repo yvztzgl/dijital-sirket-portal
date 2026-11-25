@@ -7,7 +7,7 @@ import { Application, DocItem, LogEntry } from './models';
  */
 
 /** Base durations at 1× speed (ms). */
-export const DURATION = { scan: 5_000, eligibility: 10_000, call: 20_000, setup: 45_000 };
+export const DURATION = { scan: 5_000, identity: 6_000, screening: 5_000, call: 20_000, setup: 45_000 };
 
 export const progress = (startedAt: string | undefined, duration: number, now: number) =>
   startedAt ? Math.min(1, Math.max(0, (now - Date.parse(startedAt)) / duration)) : 0;
@@ -32,7 +32,7 @@ export function scanView(app: Application, p: number) {
   };
 }
 
-// ------------------------------------------------------------------------- eligibility (D-2a)
+// ------------------------------------------------- step 2: identity (D-2a) and screening (D-2e)
 
 export const SCREENING_LISTS = [
   'BM Güvenlik Konseyi yaptırım listesi',
@@ -43,25 +43,32 @@ export const SCREENING_LISTS = [
 ];
 export const LIVENESS = ['Başınızı çevirin', 'Göz kırpın', 'Gülümseyin'];
 
-export function eligibilityView(p: number) {
-  const passportRead = p >= 0.12;
-  const liveness = p < 0.12 ? -1 : p >= 0.45 ? 3 : Math.floor((p - 0.12) / 0.11); // index of current prompt
-  const identityDone = p >= 0.45;
-  const declarationDone = p >= 0.6;
-  const listsDone = p < 0.6 ? 0 : Math.min(5, Math.floor((p - 0.6) / 0.08));
-  const stage = !identityDone ? 0 : !declarationDone ? 1 : listsDone < 5 ? 2 : 3;
-  return { p, passportRead, liveness, identityDone, declarationDone, listsDone, stage };
+/** The camera check (stage `eligibility`): the passport is read, then three liveness prompts. */
+export function identityView(p: number) {
+  const passportRead = p >= 0.25;
+  const liveness = p < 0.25 ? -1 : p >= 1 ? 3 : Math.floor((p - 0.25) / 0.25); // index of the current prompt
+  return { p, passportRead, liveness, identityDone: p >= 1 };
 }
 
-export function eligibilityEvents(app: Application, d = DURATION.eligibility): { logs: LogEntry[]; docs: DocItem[]; listTimes: string[] } {
+export function identityEvents(app: Application, d = DURATION.identity): LogEntry[] {
   const s = app.eligibility!.startedAt;
-  const listTimes = SCREENING_LISTS.map((_, i) => at(s, d, 0.6 + (i + 1) * 0.08));
+  return [
+    { at: at(s, d, 0.25), text: 'Pasaport MRZ doğrulandı', who: 's' },
+    { at: at(s, d, 1), text: `Canlılık kontrolü · eşleşme ${String(app.eligibility!.score).replace('.', ',')}`, who: 's' },
+  ];
+}
+
+/** The list search (stage `screening`): the five lists one after the other. */
+export function screeningView(p: number) {
+  return { p, listsDone: Math.min(5, Math.floor(p * 5 + 1e-9)) };
+}
+
+export function screeningEvents(app: Application, d = DURATION.screening): { logs: LogEntry[]; docs: DocItem[]; listTimes: string[] } {
+  // Applications finished before the step was split (2026-11-17) have no separate screening start.
+  const s = app.eligibility!.screeningStartedAt ?? app.eligibility!.startedAt;
+  const listTimes = SCREENING_LISTS.map((_, i) => at(s, d, (i + 1) / 5));
   const manual = app.eligibility!.result === 'manual';
   const logs: LogEntry[] = [
-    { at: at(s, d, 0.12), text: 'Pasaport MRZ doğrulandı', who: 's' },
-    { at: at(s, d, 0.45), text: `Canlılık kontrolü · eşleşme ${String(app.eligibility!.score).replace('.', ',')}`, who: 's' },
-    { at: at(s, d, 0.5), text: 'Adres belgesi alındı', who: 'u' },
-    { at: at(s, d, 0.6), text: 'Beyan onaylandı', who: 'u' },
     { at: listTimes[4], text: 'Yaptırım ve PEP taraması: eşleşme yok', who: 's' },
     {
       at: listTimes[4],
@@ -123,7 +130,7 @@ export interface Agency {
 }
 
 export const AGENCIES: Agency[] = [
-  { t: 'Başvuru & Uygunluk Kontrolü', ag: 'Dijital Şirket Platformu', subs: [{ t: 'Başvuru formu oluşturuldu' }, { t: 'Kimlik doğrulandı' }, { t: 'Beyan onaylandı' }, { t: 'Yaptırım taraması tamamlandı' }], docs: [] },
+  { t: 'Başvuru & Uygunluk Kontrolü', ag: 'Terminal Şirket', subs: [{ t: 'Başvuru formu oluşturuldu' }, { t: 'Kimlik doğrulandı' }, { t: 'Beyan onaylandı' }, { t: 'Yaptırım taraması tamamlandı' }], docs: [] },
   { t: 'Unvan Rezervasyonu & Adres Ataması', ag: 'MERSİS · Terminal İstanbul', subs: [{ t: 'Unvan sorgulandı' }, { t: 'Unvan rezerve edildi' }, { t: 'Sanal ofis adresi atandı' }], docs: [] },
   { t: 'e-İmza', ag: 'ESHS', subs: [{ t: 'Görüntülü görüşme yapıldı' }, { t: 'Sözlü onay alındı' }, { t: 'Günlük e-imza düzenlendi' }], docs: [] },
   {

@@ -1,0 +1,204 @@
+{
+  "version": "1.0",
+  "name": "Terminal Şirket sunum formatı",
+  "sample": {
+    "company": "Lumora Analytics",
+    "pptx": "/assets/samples/lumora-analytics-pitch.pptx",
+    "pdf": "/assets/samples/lumora-analytics-pitch.pdf",
+    "thumbs": "/assets/samples/format"
+  },
+  "rules": [
+    { "title": "Dosya", "text": "Tek dosya yüklenir: PDF, PowerPoint (.pptx) veya Keynote (.key), en fazla 50 MB." },
+    { "title": "Sayfa sayısı", "text": "16 zorunlu sayfa aşağıdaki sırayla yer alır. Ardından ek sayfalar eklenebilir; toplam en fazla 40 sayfadır." },
+    { "title": "Sayfa başlıkları", "text": "Her zorunlu sayfanın başlığı bu formattaki başlıkla aynı olmalıdır. Terminal AI sayfaları başlıklarından tanır." },
+    { "title": "Metin olarak yazım", "text": "Okunacak bilgiler görsel içine gömülmeden, seçilebilir metin olarak yazılmalıdır. Taranmış sayfalardaki bilgiler kontrol edilmek üzere işaretlenir." },
+    { "title": "Kaynak ve yıl", "text": "Her sayısal veri ve grafik, altında kaynağı ve yılı ile birlikte verilmelidir. Kaynağı belirtilmeyen veri değerlendirmede dikkate alınmaz." },
+    { "title": "Seçim listeleri", "text": "İş modeli, gelir modeli, ürün tipi ve girişim aşaması yalnızca bu formatta verilen değerlerle yazılmalıdır." }
+  ],
+  "notFromDeck": [
+    { "title": "Bilgilerin doğruluğu beyanı", "text": "Başvuru gönderilmeden önce ekranda onay kutusuyla verilir." },
+    { "title": "Kişisel verilerin işlenmesi", "text": "Aydınlatma metni ekranda okunur ve onay ekranda verilir." },
+    { "title": "Yapay zekâ ön incelemesi onayı", "text": "Ekranda verilir. Ön inceleme sonucu nihai karar değildir; komite tarafından doğrulanır." },
+    { "title": "Başvuru onay ifadesi", "text": "“Başvurumu Onaylıyorum” ifadesi son adımda ekrana yazılır." },
+    { "title": "Kimlik doğrulama", "text": "Kimlik, kamera kontrolü veya e-Devlet ile doğrulanır; sunumdaki kimlik bilgisi yeterli sayılmaz." }
+  ],
+  "groups": [
+    {
+      "title": "Başvuran ve girişim",
+      "slides": [
+        {
+          "no": 1,
+          "title": "Kapak",
+          "purpose": "Girişimin adını ve çevrimiçi adresini verir. Web sitesi veya uygulama bağlantısı, sunum dışı doğrulama için kullanılır.",
+          "fields": [
+            { "label": "Girişim adı", "rule": "Zorunlu · en fazla 150 karakter", "sample": "Lumora Analytics", "use": "Başvurunun adı ve şirket unvanının kökü" },
+            { "label": "Tek cümlelik tanım", "rule": "Zorunlu · en fazla 120 karakter", "sample": "KOBİ’ler için yapay zekâ destekli satış tahmini", "use": "Başvuru özeti" },
+            { "label": "Web sitesi veya uygulama bağlantısı", "rule": "İsteğe bağlı · https:// ile başlayan adres", "sample": "https://lumora-analytics.com", "use": "Sunum dışı doğrulama" },
+            { "label": "Sunum tarihi", "rule": "Zorunlu · ay ve yıl", "sample": "Kasım 2026", "use": "Bilgilerin güncelliği" }
+          ]
+        },
+        {
+          "no": 2,
+          "title": "Başvuran",
+          "purpose": "Resmî yazışmaları alacak ve başvurudan birinci derecede sorumlu olacak kişiyi tanımlar. Kurucu ortak veya yetkili temsilci olmalıdır.",
+          "fields": [
+            { "label": "Ad soyad", "rule": "Zorunlu · en fazla 100 karakter", "sample": "Daniel Weber", "use": "Başvuran; oturum açan hesapla karşılaştırılır" },
+            { "label": "Görev / unvan", "rule": "Zorunlu · en fazla 100 karakter", "sample": "Kurucu ve Genel Müdür", "use": "Komite değerlendirmesi" },
+            { "label": "E-posta", "rule": "Zorunlu · en fazla 254 karakter · kurumsal adres tercih edilir", "sample": "daniel.weber@lumora-analytics.com", "use": "Resmî yazışma" },
+            { "label": "Telefon", "rule": "Zorunlu · ülke koduyla, +49 151 … biçiminde", "sample": "+49 151 2345 6789", "use": "SMS doğrulama ve komite iletişimi" }
+          ]
+        },
+        {
+          "no": 3,
+          "title": "Kısa özet",
+          "purpose": "Girişimin ne yaptığını, kime hizmet verdiğini ve temel değer önerisini tek paragrafta anlatır.",
+          "fields": [
+            { "label": "Kısa özet", "rule": "Zorunlu · en fazla 500 karakter · tek paragraf", "sample": "Lumora, yıllık cirosu 10–250 milyon TL olan perakende KOBİ’lerinin satışlarını ürün bazında 12 hafta önceden tahmin eder…", "use": "Başvuru özeti ve pazar uyum analizi" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Ürün ve iş modeli",
+      "slides": [
+        {
+          "no": 4,
+          "title": "Problem",
+          "purpose": "Çözülen sorunu sayısal verilerle tanımlar. Veriyle desteklenen problem tanımı ön incelemede daha güvenilir kabul edilir.",
+          "fields": [
+            { "label": "Problem tanımı", "rule": "Zorunlu · en fazla 300 karakter", "sample": "KOBİ perakendecileri satışlarını tahmin edemediği için stok fazlası veya eksiği yaşıyor.", "use": "Problem–çözüm uyumu" },
+            { "label": "Sayısal göstergeler", "rule": "Zorunlu · en az bir gösterge", "sample": "%62 · 11 saat · %34", "use": "Problem tanımının dayanağı" },
+            { "label": "Kaynak ve yıl", "rule": "Zorunlu", "sample": "Lumora müşteri görüşmeleri, 2025 (n = 120)", "use": "Verinin doğrulanması" }
+          ]
+        },
+        {
+          "no": 5,
+          "title": "Çözüm ve ürün",
+          "purpose": "Ürünün nasıl çalıştığını ve sorunu nasıl çözdüğünü adım adım gösterir.",
+          "fields": [
+            { "label": "Ürünün işleyişi", "rule": "Zorunlu · en fazla 3 adım", "sample": "Bağla · Tahmin et · Harekete geç", "use": "Teknoloji ve içerik değerlendirmesi" },
+            { "label": "Ürün görseli", "rule": "İsteğe bağlı", "sample": "Panel ekran görüntüsü", "use": "Tasarım değerlendirmesi" }
+          ]
+        },
+        {
+          "no": 6,
+          "title": "Girişim kimliği",
+          "purpose": "Girişimin ülke, sektör ve aşama bilgilerini verir. Bu bilgiler pazar uyum analizinde, rakip eşleştirmede ve hibe uygunluk filtrelerinde kullanılır.",
+          "fields": [
+            { "label": "Girişimin ülkesi", "rule": "Zorunlu · ülke adı", "sample": "Türkiye", "use": "Hibe uygunluk filtresi" },
+            { "label": "Sektör", "rule": "Zorunlu · olabildiğince belirli", "sample": "Yazılım ve bilişim", "use": "Pazar uyum analizi; ön bilgilerinizle karşılaştırılır" },
+            { "label": "Endüstri", "rule": "Zorunlu · sektörün alt dalı", "sample": "Perakende ve e-ticaret analitiği", "use": "Rakip eşleştirme" },
+            { "label": "Girişim aşaması", "rule": "Zorunlu · Fikir, Pre-seed, Seed, Seri A veya Seri B ve sonrası", "sample": "Seed", "use": "Yatırım tezi hesaplaması" }
+          ]
+        },
+        {
+          "no": 7,
+          "title": "İş modeli ve gelir",
+          "purpose": "Kime sattığınızı, nasıl gelir elde ettiğinizi ve ürününüzün türünü belirtir. Gelir modelleri önem sırasıyla yazılır; ilk sıradaki baskın gelir modeli kabul edilir.",
+          "fields": [
+            { "label": "İş modeli", "rule": "Zorunlu · bir veya birkaçı: B2B, B2C, B2G, C2C", "sample": "B2B", "use": "Pazar araştırması ve rakip eşleştirme" },
+            { "label": "Gelir modelleri", "rule": "Zorunlu · önem sırasıyla numaralı: Reklam, Komisyon, Lisanslama, Kâr amacı gütmeyen, Ürün satışı, Hizmet, Abonelik, Kullanım bazlı", "sample": "1. Abonelik · 2. Kullanım bazlı · 3. Hizmet", "use": "Skorlama; ilk sıradaki baskın kabul edilir" },
+            { "label": "Ürün tipi", "rule": "Zorunlu · bir veya birkaçı: Fiziksel, Dijital, Hizmet, Diğer", "sample": "Dijital", "use": "İş modeli değerlendirmesi" }
+          ]
+        },
+        {
+          "no": 8,
+          "title": "Müşteri segmenti",
+          "purpose": "Hedef müşterileri ölçülebilir ölçütlerle tanımlar. Segment tanımı TAM/SAM/SOM hesaplamasının temelidir.",
+          "fields": [
+            { "label": "Segment tanımı", "rule": "Zorunlu · en az bir segment · nicel ölçütle", "sample": "Yıllık cirosu 10–250 milyon TL, en az 500 ürün yöneten perakende KOBİ’leri", "use": "TAM/SAM/SOM hesaplaması" },
+            { "label": "Segmentteki işletme sayısı", "rule": "Zorunlu · kaynak ve yıl ile", "sample": "18.400 işletme (Türkiye, 2025)", "use": "Pazar büyüklüğü doğrulaması" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Pazar ve ekip",
+      "slides": [
+        {
+          "no": 9,
+          "title": "Pazar büyüklüğü",
+          "purpose": "Toplam, hizmet verilebilir ve elde edilebilir pazarı para birimiyle verir.",
+          "fields": [
+            { "label": "TAM, SAM, SOM", "rule": "Zorunlu · tutar ve para birimiyle", "sample": "TAM 9,2 milyar TL · SAM 1,6 milyar TL · SOM 48 milyon TL", "use": "Pazar araştırması modülü" },
+            { "label": "Hesaplama yöntemi", "rule": "Zorunlu · tek cümle", "sample": "İşletme sayısı × yıllık lisans bedeli", "use": "Hesaplamanın doğrulanması" },
+            { "label": "Kaynak ve yıl", "rule": "Zorunlu", "sample": "Lumora pazar çalışması, 2025", "use": "Verinin doğrulanması" }
+          ]
+        },
+        {
+          "no": 10,
+          "title": "Rakipler",
+          "purpose": "Müşterinin bugün kullandığı alternatifleri ve girişimin bunlardan farkını karşılaştırır.",
+          "fields": [
+            { "label": "Alternatifler", "rule": "Zorunlu · en az iki", "sample": "Elle tutulan tablolar · ERP tahmin modülleri · Kurumsal tahmin yazılımları", "use": "Rakip eşleştirme" },
+            { "label": "Karşılaştırma ölçütleri", "rule": "Zorunlu · en az üç", "sample": "Kurulum süresi · Aylık maliyet · Ürün bazında tahmin", "use": "Konumlandırma değerlendirmesi" }
+          ]
+        },
+        {
+          "no": 11,
+          "title": "Çekiş ve metrikler",
+          "purpose": "Bugüne kadarki müşteri, gelir ve kullanım sonuçlarını tarihle birlikte gösterir.",
+          "fields": [
+            { "label": "Temel metrikler", "rule": "Zorunlu · en az iki · tarihle", "sample": "14 pilot müşteri · 6 ücretli müşteri · Aylık 180.000 TL yinelenen gelir", "use": "Aşama ve çekiş değerlendirmesi" },
+            { "label": "Ölçüm tarihi", "rule": "Zorunlu · ay ve yıl", "sample": "Ekim 2026", "use": "Bilgilerin güncelliği" }
+          ]
+        },
+        {
+          "no": 12,
+          "title": "Ekip",
+          "purpose": "Kurucuları ve kilit ekip üyelerini, girişimdeki rolleriyle birlikte tanıtır.",
+          "fields": [
+            { "label": "Ekip üyeleri", "rule": "Zorunlu · ad soyad, rol ve tek satır deneyim", "sample": "Daniel Weber · Elif Kaya · Jonas Brandt", "use": "Ekip değerlendirmesi" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Şirket kuruluşu",
+      "slides": [
+        {
+          "no": 13,
+          "title": "Şirket ve faaliyet",
+          "purpose": "Kurulacak şirketin unvanını, türünü ve faaliyet alanlarını verir. NACE kodları ticaret sicili başvurusunda kullanılır.",
+          "fields": [
+            { "label": "Şirket adı", "rule": "Zorunlu", "sample": "Lumora Analytics", "use": "Şirket unvanı; ön bilgilerinizle karşılaştırılır" },
+            { "label": "Kurulacak tür", "rule": "Zorunlu", "sample": "Tek pay sahipli anonim şirket", "use": "Esas sözleşme" },
+            { "label": "Merkez", "rule": "Zorunlu · il", "sample": "İstanbul (sanal ofis)", "use": "Ticaret sicili müdürlüğü" },
+            { "label": "Faaliyet alanları", "rule": "Zorunlu · NACE kodu ve açıklaması", "sample": "62.01 · 63.11 · 62.02", "use": "Şirketin faaliyet konusu" }
+          ]
+        },
+        {
+          "no": 14,
+          "title": "Kurucu ve pay yapısı",
+          "purpose": "Pay sahiplerini, uyruklarını ve pay oranlarını verir.",
+          "fields": [
+            { "label": "Ad soyad", "rule": "Zorunlu · her pay sahibi için", "sample": "Daniel Weber", "use": "Pay sahipleri listesi" },
+            { "label": "Uyruk", "rule": "Zorunlu", "sample": "Almanya", "use": "Yabancı kurucu işlemleri; ön bilgilerinizle karşılaştırılır" },
+            { "label": "Pay oranı", "rule": "Zorunlu · toplam %100", "sample": "%100", "use": "Esas sözleşme" },
+            { "label": "Yönetim kurulu", "rule": "Zorunlu", "sample": "Tek üye: Daniel Weber", "use": "Esas sözleşme" }
+          ]
+        },
+        {
+          "no": 15,
+          "title": "İletişim ve adres",
+          "purpose": "Kurucunun iletişim bilgilerini ve yerleşim adresini verir.",
+          "fields": [
+            { "label": "E-posta", "rule": "Zorunlu", "sample": "daniel.weber@lumora-analytics.com", "use": "Kurucu iletişim bilgisi" },
+            { "label": "Telefon", "rule": "Zorunlu · ülke koduyla", "sample": "+49 151 2345 6789", "use": "Ön bilgilerinizle karşılaştırılır" },
+            { "label": "Adres", "rule": "Zorunlu · posta kodu ve ülkeyle", "sample": "Torstraße 45, 10119 Berlin, Almanya", "use": "Yerleşim yeri; ön bilgilerinizle karşılaştırılır" }
+          ]
+        },
+        {
+          "no": 16,
+          "title": "Sermaye ve fon kaynağı",
+          "purpose": "Esas sermayeyi ve sermayenin hangi kaynaktan, hangi yolla getirileceğini verir.",
+          "fields": [
+            { "label": "Esas sermaye", "rule": "Zorunlu · TL", "sample": "250.000 TL", "use": "Esas sözleşme ve bloke tutar" },
+            { "label": "Fon kaynağı", "rule": "Zorunlu", "sample": "Kurucunun kişisel birikimi", "use": "Kara para aklamayla mücadele kontrolü; ön bilgilerinizle karşılaştırılır" },
+            { "label": "Transfer yolu", "rule": "Zorunlu", "sample": "Yurt dışı banka transferi", "use": "Bloke hesap işlemleri" }
+          ]
+        }
+      ]
+    }
+  ]
+}

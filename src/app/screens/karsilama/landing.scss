@@ -1,0 +1,371 @@
+/* D-00 landing, built from an empty page. Three parts: the hero text, the pinned scroll sequence
+   (map → dive into İstanbul → five steps), and a short close. */
+$sans: 'IBM Plex Sans', system-ui, sans-serif;
+$serif: 'IBM Plex Serif', Georgia, serif;
+$mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+.lp { min-height: 100vh; background: var(--bg-FFFFFF); color: var(--fg-1F2A44); font-family: $sans; overflow: clip; }
+
+/* ---------------------------------------------------------------------------------- nav */
+.lp-nav { display: flex; align-items: center; gap: 16px; padding: 24px clamp(20px, 5.5vw, 80px) 0; position: relative; }
+.lp-brand { display: flex; align-items: center; gap: 12px; text-decoration: none !important; }
+.lp-brand img { height: 32px; width: auto; flex: none; }
+.lp-brand-rule { width: 1px; height: 26px; background: var(--bd-D6DEEE); }
+.lp-brand-name { font: 600 16px/20px $sans; color: var(--fg-061262); white-space: nowrap; }
+.lp-grow { flex: 1; }
+.lp-login {
+  font: 600 14px/20px $sans; color: var(--fg-061262); background: var(--bg-FFFFFF); padding: 8px 14px;
+  border: 1px solid var(--bd-D6DEEE); border-radius: 8px; white-space: nowrap;
+}
+.lp-narrow { display: none; }
+
+/* --------------------------------------------------------------------------------- hero */
+.lp-hero { display: flex; flex-direction: column; align-items: center; gap: 22px; text-align: center; padding: clamp(40px, 7vh, 84px) 20px clamp(26px, 4vh, 40px); }
+.lp-title { margin: 0; max-width: 16em; font: 600 clamp(34px, calc(3vw + 20px), 62px)/1.1 $sans; letter-spacing: -.025em; color: var(--fg-061262); text-wrap: balance; }
+.lp-lead { margin: 0; max-width: 34em; font: 400 clamp(16.5px, calc(.4vw + 14px), 19px)/1.58 $sans; color: var(--fg-5B6478); text-wrap: pretty; }
+.lp-cta {
+  display: inline-flex; align-items: center; gap: 10px; margin-top: 6px; padding: 15px 26px; border-radius: 10px;
+  background: var(--bg-061262); color: var(--fg-FFFFFF); font: 600 16px/20px $sans;
+}
+
+/* The figures: one small line under the button, split by hairlines; each is an icon, a number and a few words. */
+.lp-figs { display: flex; flex-wrap: wrap; justify-content: center; row-gap: 8px; margin: clamp(0px, .6vh, 6px) 0 0; padding: 0; list-style: none; }
+.lp-figs li { display: inline-flex; align-items: center; gap: 6px; padding: 0 clamp(12px, 1.5vw, 20px); font: 400 13px/16px $sans; color: var(--fg-5B6478); white-space: nowrap; }
+.lp-figs li + li { border-left: 1px solid var(--bd-D6DEEE); }
+.lp-figs app-icon { color: var(--fg-0C217E); opacity: .8; }
+.lp-figs b { font-weight: 600; color: var(--fg-061262); font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------------------- the pinned sequence */
+.track { position: relative; height: calc(var(--track) * 1vh); }
+.pin { position: sticky; top: 0; height: 100vh; height: 100dvh; overflow: hidden; --e: 0; --settle: 0; --step: 0; }
+
+/* The stage: a card under the hero that grows to the whole window as scrolling starts. */
+.card {
+  --side: max(20px, calc((100vw - 1160px) / 2));
+  --h0: clamp(340px, 58vh, 540px);
+  position: absolute; top: 0; left: calc((1 - var(--e)) * var(--side)); right: calc((1 - var(--e)) * var(--side));
+  height: calc(var(--h0) + var(--e) * (100% - var(--h0)));
+  overflow: hidden;
+  border-radius: calc((1 - var(--e)) * 28px); border: 1px solid var(--bd-E3E9F5);
+  background: radial-gradient(120% 90% at 58% 42%, var(--bg-FFFFFF) 0%, var(--bg-F1F4FA) 70%, var(--bg-EFF4FF) 100%);
+}
+/* The map canvas is window-sized and placed by the script; the card clips it. */
+.map { position: absolute; top: 0; left: 0; display: block; }
+/* Founder cards: placed over their cities by the script, one at a time. */
+.founders { position: absolute; inset: 0; pointer-events: none; }
+.founder {
+  position: absolute; left: 0; top: 0; opacity: 0; will-change: transform, opacity; display: flex; align-items: center; gap: 10px;
+  padding: 7px 14px 7px 7px; border-radius: 999px; white-space: nowrap;
+  background: var(--bg-FFFFFF); border: 1px solid var(--bd-E3E9F5);
+}
+.avatar {
+  flex: none; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; display: grid; place-items: center;
+  background: var(--bg-061262); color: var(--fg-FFFFFF); font: 600 14px/1 $sans;
+}
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.who { display: flex; flex-direction: column; gap: 1px; }
+.who b { display: inline-flex; align-items: center; gap: 6px; font: 600 13px/17px $sans; color: var(--fg-061262); }
+.who b img { flex: none; display: block; border-radius: 2px; }
+.who small { font: 400 11.5px/15px $sans; color: var(--fg-5B6478); }
+/* The İstanbul point's name: placed above the point by the script during the dive. */
+.place {
+  position: absolute; left: 0; top: 0; opacity: 0; pointer-events: none; will-change: transform, opacity; transform-origin: 50% 100%;
+  display: inline-flex; align-items: center; gap: 9px; padding: 9px 17px 9px 13px; border-radius: 999px; white-space: nowrap;
+  background: var(--bg-FFFFFF); border: 1px solid var(--bd-E3E9F5);
+  font: 600 15px/20px $sans; color: var(--fg-061262);
+}
+.place i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #ED1C2C; }
+.place::after {
+  content: ''; position: absolute; left: 50%; bottom: -5px; width: 9px; height: 9px; background: inherit;
+  border: solid var(--bd-E3E9F5); border-width: 0 1px 1px 0; transform: translateX(-50%) rotate(45deg);
+}
+.hint {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px;
+  font: 500 12px/16px $mono; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-8A93A6); opacity: calc(1 - var(--e) * 3);
+}
+.hint svg { animation: nudge 1.6s ease-in-out infinite; }
+@keyframes nudge { 50% { transform: translateY(3px); } }
+
+/* The İstanbul point opens and becomes the page the story plays on (the app's surface colour once settled). */
+.white {
+  position: absolute; inset: 0; visibility: hidden; will-change: clip-path;
+  background: color-mix(in srgb, var(--bg-F7F9FE) calc(var(--settle) * 100%), #fff);
+}
+
+/* ------------------------------------------------------------------------------ the story
+   Redesigned 2026-11-19 (the owner found the miniature app window and the dotted pictures under
+   it "really bad"). Left: the five steps as a list; the one on screen is open with its text.
+   Right: the step's panel, one picture across its top and one piece of the real screen under it,
+   at real size so it can be read. The panels lie on top of each other in one grid cell and the
+   script fades each in over the one before. */
+.story {
+  position: absolute; inset: 0; opacity: var(--settle);
+  display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 720px); justify-content: center; align-content: center;
+  column-gap: clamp(40px, 6vw, 96px); padding: 40px clamp(24px, 4.4vw, 72px);
+}
+
+/* The list of steps. Numbered because it is a sequence. */
+.steps { grid-area: 1 / 1; align-self: start; padding-top: 6px; display: flex; flex-direction: column; gap: 22px; }
+.steps-h { margin: 0; font: 400 clamp(28px, calc(1.2vw + 16px), 36px)/1.15 $serif; letter-spacing: -.01em; color: var(--fg-061262); text-wrap: balance; }
+.steps ol { list-style: none; margin: 0; padding: 0; }
+.steps li { position: relative; --line: var(--bd-D6DEEE); }
+/* The line that joins each number to the next; it turns navy once the step is behind the visitor. */
+.steps li:not(:last-child)::before { content: ''; position: absolute; left: 15px; top: 42px; bottom: -8px; width: 2px; border-radius: 1px; background: var(--line); }
+.steps li.done { --line: var(--bg-061262); }
+.steps button {
+  all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 14px; padding: 8px 0; cursor: pointer;
+  font: 600 17px/1.3 $sans; color: var(--fg-5B6478);
+}
+.steps button:hover .name { color: var(--fg-061262); }
+.steps button:focus-visible { outline: 2px solid var(--bg-061262); outline-offset: 3px; border-radius: 8px; }
+.num {
+  position: relative; flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--bg-FFFFFF); border: 1.5px solid var(--bd-D6DEEE); color: var(--fg-5B6478); font: 600 13.5px/1 $sans;
+  transition: background-color .25s, border-color .25s, color .25s;
+}
+.num app-icon { position: absolute; opacity: 0; }
+.on .num { background: var(--bg-061262); border-color: var(--bg-061262); color: var(--fg-FFFFFF); }
+.done .num { background: var(--bg-EFF4FF); border-color: var(--bd-C7D5F7); color: var(--fg-061262); }
+.done .num b { opacity: 0; }
+.done .num app-icon { opacity: 1; }
+.name { transition: color .25s; }
+.on .name { color: var(--fg-061262); }
+/* The open step's text, under its name. */
+.more { display: grid; grid-template-rows: 0fr; margin-left: 46px; transition: grid-template-rows .35s ease; }
+.more p { min-height: 0; overflow: hidden; margin: 0; font: 400 15.5px/1.6 $sans; color: var(--fg-5B6478); text-wrap: pretty; }
+.on .more { grid-template-rows: 1fr; }
+.on .more p { padding: 2px 0 14px; }
+.sample { margin: 0; font: 400 13px/18px $sans; color: var(--fg-8A93A6); }
+
+/* One step: its text (narrow screens and the still page only) and its panel. */
+.step { grid-area: 1 / 2; min-width: 0; display: grid; isolation: isolate; --t: 0; }
+.step-text { display: none; flex-direction: column; gap: 8px; }
+.count { font: 500 13px/16px $sans; color: var(--fg-0C217E); }
+.step-text h3 { margin: 0; font: 400 clamp(25px, calc(1.4vw + 14px), 34px)/1.16 $serif; letter-spacing: -.01em; color: var(--fg-061262); text-wrap: balance; }
+.step-text p { margin: 0; font: 400 16px/1.6 $sans; color: var(--fg-5B6478); text-wrap: pretty; }
+
+/* The panel takes on the picture's own background colour, so the picture has no edge. */
+.stage {
+  container-type: inline-size; min-width: 0; display: flex; flex-direction: column; border-radius: 24px; overflow: hidden;
+  background: var(--pic, #E8EFFD);
+}
+.pic { display: block; width: 100%; height: min(31.25cqw, max(110px, 100vh - 580px)); object-fit: contain; }
+.ui {
+  flex: 1; min-height: 300px; display: flex; flex-direction: column; gap: 14px; margin: 0 24px 24px; padding: 20px 22px;
+  background: var(--bg-FFFFFF); border: 1px solid var(--bd-D6DEEE); border-radius: 16px; overflow: hidden;
+  font: 400 14px/1.4 $sans; color: var(--fg-1F2A44);
+}
+
+/* Pieces that change as the step is scrolled through. --at is when (0–1 of the step);
+   --on goes 0 → 1 there and is inherited, so children can use it too. */
+$check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5.5 10.4l3 3 6-6.6' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+@property --lp-pct { syntax: '<integer>'; inherits: true; initial-value: 0; }
+@property --lp-n { syntax: '<integer>'; inherits: true; initial-value: 0; }
+.st, .pop { --on: clamp(0, calc((var(--t) - var(--at, 0)) * 9), 1); }
+.pop { opacity: var(--on); transform: translateY(calc((1 - var(--on)) * 6px)); }
+/* Visible only between --a and --b. */
+.u-range { --on: clamp(0, min(calc((var(--t) - var(--a)) * 14), calc((var(--b) - var(--t)) * 14)), 1); opacity: var(--on); }
+.u-ok { display: inline-block; flex: none; width: 18px; height: 18px; border-radius: 50%; background: var(--bg-15803D) $check center / 100% no-repeat; }
+/* A numbered badge that turns into a tick. */
+.u-num { position: relative; flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--bg-EEF1F6); font: 600 12px/1 $sans; color: var(--fg-5B6478); }
+.u-num b { font-weight: 600; opacity: calc(1 - var(--on)); }
+.u-num .u-ok { position: absolute; inset: 0; width: auto; height: auto; opacity: var(--on); transform: scale(calc(.6 + .4 * var(--on))); }
+.u-title { flex: none; display: flex; flex-direction: column; gap: 3px; font: 600 16px/1.25 $sans; color: var(--fg-061262); }
+.u-title small { font: 400 13px/1.3 $sans; color: var(--fg-5B6478); }
+
+/* 1 · Sunum: the deck being read */
+.u-head { flex: none; display: flex; align-items: center; gap: 12px; }
+.u-file { flex: none; width: 34px; height: 42px; padding-bottom: 6px; border-radius: 6px; display: grid; place-items: end center; border: 1px solid var(--bd-D6DEEE); font: 700 9.5px/1 $sans; color: #D92D20; }
+.u-head-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.u-head-t strong { font: 600 15px/1.2 $sans; color: var(--fg-061262); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.u-swap { position: relative; font: 400 13px/1.2 $sans; color: var(--fg-5B6478); }
+.u-swap i { font-style: normal; opacity: calc(1 - var(--on)); }
+.u-swap b { position: absolute; left: 0; top: 0; font-weight: 400; color: var(--fg-15803D); opacity: var(--on); white-space: nowrap; }
+.u-pct { flex: none; font: 600 22px/1 $sans; font-variant-numeric: tabular-nums; color: var(--fg-061262); --lp-pct: calc(min(1, var(--t) / .55) * 100); }
+.u-pct::after { counter-reset: lp-pct var(--lp-pct); content: '%' counter(lp-pct); }
+.u-bar { flex: none; height: 6px; border-radius: 3px; background: var(--bg-EEF1F6); overflow: hidden; }
+.u-bar i { display: block; height: 100%; width: calc(min(1, var(--t) / .55) * 100%); border-radius: inherit; background: var(--bg-061262); }
+.u-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.u-rows li { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--bd-EEF1F6); }
+.u-rows li:last-child { border-bottom: 0; }
+.u-rows span { color: var(--fg-5B6478); }
+.u-rows strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.u-rows em { padding: 3px 7px; border-radius: 6px; background: var(--bg-F1F4FA); font: 500 12px/1 $sans; font-style: normal; font-variant-numeric: tabular-nums; color: var(--fg-5B6478); }
+.u-rows em.u-flag { background: var(--bg-FFFBEB); color: var(--fg-B45309); }
+
+/* 2 · Uygunluk: identity, declaration, list search */
+.u-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.u-checks li {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-F0FDF4) calc(var(--on) * 100%), var(--bg-FFFFFF));
+  border: 1px solid color-mix(in srgb, var(--bd-BBE5C8) calc(var(--on) * 100%), var(--bd-E5E7EB));
+}
+.u-check-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.u-check-t strong { font: 600 14.5px/1.3 $sans; }
+.u-check-t small { font: 400 13px/1.3 $sans; color: var(--fg-5B6478); }
+.u-status { position: relative; flex: none; font: 600 13px/1 $sans; text-align: right; }
+.u-status i { font-style: normal; color: var(--fg-8A93A6); opacity: calc(1 - var(--on)); }
+.u-status b { position: absolute; right: 0; top: 0; white-space: nowrap; font-weight: 600; color: var(--fg-15803D); opacity: var(--on); }
+.u-verdict { margin-top: auto; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--bg-F0FDF4); border: 1px solid var(--bd-BBE5C8); }
+.u-verdict .u-ok { width: 26px; height: 26px; }
+.u-verdict span { display: flex; flex-direction: column; gap: 2px; }
+.u-verdict strong { font: 600 15px/1.3 $sans; color: var(--fg-15803D); }
+.u-verdict small { font: 400 13px/1.3 $sans; color: var(--fg-5B6478); }
+
+/* 3 · Ödeme: the summary and the button */
+.u-fees { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.u-fees li { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid var(--bd-EEF1F6); }
+.u-fees span { min-width: 0; color: var(--fg-3B4660); }
+.u-fees b, .u-total b { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.u-total { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.u-total span { font-weight: 600; color: var(--fg-061262); }
+.u-total b { font-size: 22px; color: var(--fg-061262); }
+.u-button { position: relative; margin-top: auto; border-radius: 10px; overflow: hidden; font: 600 15px/1 $sans; text-align: center; }
+.u-button b { display: block; padding: 14px 18px; background: var(--bg-061262); color: var(--fg-FFFFFF); font-weight: 600; }
+.u-button > i { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--bg-15803D); font-style: normal; color: #fff; opacity: var(--on); }
+.u-button .u-ok { background-color: rgba(255, 255, 255, .22); }
+
+/* 4 · e-İmza: the call's caption and its steps */
+.u-call { flex: none; display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 12px; background: #070B33; color: #fff; }
+.u-call-bar { display: flex; align-items: center; gap: 10px; font: 500 13px/1 $sans; color: #C9D4F0; }
+.u-call-bar span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.u-rec { display: inline-flex; align-items: center; gap: 6px; font: 600 12px/1 $sans; color: #fff; }
+.u-rec::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #FF5A5F; animation: lp-blink 1.2s steps(1) infinite; }
+.u-timer { font: 600 13px/1 $sans; font-variant-numeric: tabular-nums; color: #fff; --lp-n: calc(var(--t) * 47); }
+.u-timer::after { counter-reset: lp-s var(--lp-n); content: '00:' counter(lp-s, decimal-leading-zero); }
+.u-caption { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, .08); }
+.u-caption b { flex: none; font: 600 13px/1.45 $sans; color: #9DB6FF; }
+.u-lines { position: relative; flex: 1; min-height: 40px; }
+.u-lines i { position: absolute; inset: 0; font: 400 14px/1.45 $sans; font-style: normal; color: #fff; }
+.u-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.u-list li { display: flex; align-items: center; gap: 10px; color: color-mix(in srgb, var(--fg-1F2A44) calc(var(--on) * 100%), var(--fg-8A93A6)); }
+
+/* 5 · Kuruluş: the agencies, then the company */
+.u-setup { position: relative; flex: 1; min-height: 0; --done: clamp(0, calc((var(--t) - .82) * 9), 1); }
+.u-run { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 12px; opacity: calc(1 - var(--done)); }
+.u-run-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.u-n { font: 400 13px/1 $sans; color: var(--fg-5B6478); }
+.u-n b { font-weight: 600; color: var(--fg-061262); }
+.u-count { --lp-n: calc(min(6, max(0, (var(--t) - .1) / .11 - .5))); }
+.u-count::after { counter-reset: lp-c var(--lp-n); content: counter(lp-c); }
+.u-segs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.u-segs i { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--bg-15803D) calc(var(--on) * 100%), var(--bg-EEF1F6)); }
+/* The agency step running now: one line at a time. */
+.u-now { position: relative; height: 22px; }
+.u-now .u-range { --on: clamp(0, min(calc((var(--t) - var(--a)) * 40), calc((var(--b) - var(--t)) * 40)), 1); }
+.u-now i { position: absolute; inset: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-style: normal; }
+.u-now strong { font: 600 15px/1.3 $sans; }
+.u-now small { font: 400 13px/1.3 $sans; color: var(--fg-5B6478); text-align: right; }
+.u-done { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 10px; opacity: var(--done); transform: translateY(calc((1 - var(--done)) * 8px)); }
+.u-founded { display: flex; align-items: center; gap: 12px; }
+.u-founded .u-ok { width: 30px; height: 30px; }
+.u-founded span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.u-founded strong { font: 600 17px/1.2 $sans; color: var(--fg-15803D); }
+.u-founded small { font: 400 13.5px/1.3 $sans; color: var(--fg-3B4660); }
+.u-results { margin: 0; display: grid; grid-template-columns: 1fr 1.3fr 2.2fr; gap: 8px; }
+.u-results div { min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--bd-E5E7EB); }
+.u-results dt { font: 400 12px/1.2 $sans; color: var(--fg-5B6478); }
+.u-results dd { margin: 0; font: 600 13px/1.2 $sans; font-variant-numeric: tabular-nums; color: var(--fg-061262); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Step 5's panel: D-5a's building fills most of it and rises with the scroll; a short card under it.
+   The building is drawn twice: `.plan` the whole picture as faint dots, `.built` the picture in full
+   with the building's own column (--l to --r) cut off above the height reached (--built, set by the
+   script). Sky, skyline and ground beside the building are always in full. */
+.stage--rise .ui { flex: none; min-height: 0; height: 132px; padding: 16px 20px; }
+.rise-area { flex: 1 1 0; min-height: 0; contain: size; display: grid; place-items: center; padding: 12px 24px; }
+.rise { position: relative; height: 100%; max-width: 100%; aspect-ratio: 3 / 2; --l: 33.2%; --r: 90.8%; --done: clamp(0, calc((var(--t) - .82) * 9), 1); }
+.rise img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
+.rise .plan {
+  opacity: calc(.55 * (1 - var(--done)));
+  -webkit-mask-image: radial-gradient(circle, #000 1px, transparent 1.4px); mask-image: radial-gradient(circle, #000 1px, transparent 1.4px);
+  -webkit-mask-size: 5px 5px; mask-size: 5px 5px;
+}
+.rise .built { clip-path: polygon(0 0, var(--l) 0, var(--l) var(--built), var(--r) var(--built), var(--r) 0, 100% 0, 100% 100%, 0 100%); }
+/* The height reached so far. */
+.rise .level { position: absolute; left: var(--l); right: calc(100% - var(--r)); top: var(--built); border-top: 1.5px dashed #9DB6FF; opacity: calc(1 - var(--done)); }
+
+@keyframes lp-blink { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .u-rec::before { animation: none; } .more, .num, .name { transition: none; } }
+
+/* Narrow screens only: five ticks at the bottom show where in the story the visitor is. */
+.rail { display: none; position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); gap: 8px; }
+.rail i { width: 32px; height: 4px; border-radius: 2px; background: var(--bg-DDE3EE); position: relative; overflow: hidden; }
+.rail i::after { content: ''; position: absolute; inset: 0; border-radius: 2px; background: var(--bg-061262); transform-origin: left; transform: scaleX(clamp(0, calc(var(--step) - var(--i)), 1)); }
+
+/* -------------------------------------------------------------------------------- close */
+.lp-close { display: flex; flex-direction: column; align-items: center; gap: 28px; text-align: center; padding: clamp(72px, 12vh, 128px) 20px; background: var(--bg-FFFFFF); }
+.lp-close h2 { margin: 0; max-width: 22em; font: 400 clamp(26px, calc(2vw + 16px), 42px)/1.22 $serif; letter-spacing: -.01em; color: var(--fg-061262); text-wrap: balance; }
+.lp-close em { color: var(--fg-5B6478); }
+.lp-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 24px; padding: 22px clamp(20px, 5.5vw, 80px); border-top: 1px solid var(--bd-EEF1F6); font: 400 13px/18px $sans; color: var(--fg-5B6478); }
+.lp-foot a { color: var(--fg-3B4660); }
+
+/* ------------------------------------------------------------------------------ narrow */
+@media (max-width: 1100px) { .lp-brand-rule, .lp-brand-name { display: none; } }
+@media (max-width: 860px) {
+  .story { display: block; padding: 0; }
+  .steps { display: none; }
+  /* Each step covers the whole screen, so the one before it never shows through. */
+  .step {
+    position: absolute; inset: 0; align-content: center; justify-content: center; grid-template-columns: minmax(0, 560px); gap: 18px;
+    padding: 24px 20px 56px; background: var(--bg-F7F9FE);
+  }
+  .step-text { display: flex; }
+  .step-text p { font-size: 15px; }
+  .pic { height: min(31.25cqw, 150px); }
+  .ui { min-height: 270px; margin: 0 14px 14px; padding: 16px; gap: 12px; }
+  .u-rows li { grid-template-columns: minmax(0, 1fr) auto; gap: 1px 12px; padding: 6px 0; }
+  .u-rows li span { grid-column: 1; font-size: 12.5px; line-height: 1.2; }
+  .u-rows li strong { grid-column: 1; }
+  .u-rows li em { grid-column: 2; grid-row: 1 / span 2; }
+  .u-check-t small, .u-now small { display: none; }
+  .u-lines { min-height: 62px; }
+  .rise-area { flex: none; contain: none; padding: 8px 14px; }
+  .rise { width: 100%; height: auto; }
+  /* The three numbers as label-and-value lines, so the long ones are not cut. */
+  .u-results { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .u-results div { flex-direction: row; align-items: baseline; justify-content: space-between; gap: 10px; padding: 6px 0; border: 0; border-radius: 0; border-top: 1px solid var(--bd-EEF1F6); }
+  .u-results dt { flex: none; }
+  .u-results dd { font-size: 12.5px; }
+  .u-bank { display: none; }
+  .stage--rise .ui { height: 190px; }
+  .rail { display: flex; }
+}
+@media (max-width: 720px) {
+  .card { --h0: min(400px, 56vh); --side: 12px; }
+}
+@media (max-width: 640px) {
+  .lp-nav { gap: 6px; padding: 16px 20px 0; }
+  .lp-brand img { height: 28px; }
+  .lp-login { padding: 8px 12px; font-size: 13px; }
+  .lp-wide { display: none; }
+  .lp-narrow { display: inline; }
+  .lp-cta { align-self: stretch; justify-content: center; margin-inline: 0; }
+  .lp-hero { padding-inline: 20px; }
+  /* Two by two, with the hairline between the columns only. */
+  .lp-figs { display: grid; grid-template-columns: auto auto; justify-content: center; row-gap: 9px; }
+  .lp-figs li { font-size: 12px; gap: 5px; padding: 0 11px; }
+  .lp-figs li:nth-child(odd) { padding-left: 0; }
+  .lp-figs li + li:nth-child(odd) { border-left: 0; }
+  .lp-figs li:nth-child(even) { padding-right: 0; }
+  .lp-foot > span:first-child { flex: 1 1 100%; }
+  .lp-foot .lp-grow { display: none; }
+}
+/* Short windows: the story has to fit one screen. */
+@media (max-height: 700px) {
+  .ui { min-height: 270px; gap: 10px; padding: 16px 18px; }
+  .more p { font-size: 14.5px; }
+}
+
+/* ---------------------------------------------------------- reduced motion: an ordinary page */
+.track.is-static { height: auto; }
+.is-static .pin { position: static; height: auto; overflow: visible; }
+.is-static .card { position: relative; left: auto; right: auto; margin: 0 var(--side); height: var(--h0); border-radius: 28px; }
+.is-static .hint, .is-static .rail, .is-static .steps { display: none; }
+.is-static .white { position: static; visibility: visible; background: var(--bg-F7F9FE); margin-top: 48px; }
+.is-static .story { position: static; opacity: 1; display: flex; flex-direction: column; gap: 56px; padding-block: 64px; }
+.is-static .step { position: relative; inset: auto; background: none; padding: 0; }
+.is-static .step { --t: 1; grid-template-columns: minmax(0, 360px) minmax(0, 720px); justify-content: center; align-items: center; column-gap: clamp(32px, 5vw, 80px); row-gap: 18px; }
+.is-static .step-text { display: flex; }
+.is-static .rise-area { flex: none; contain: none; }
+.is-static .rise { width: 100%; height: auto; }
+@media (max-width: 860px) { .is-static .step { grid-template-columns: minmax(0, 560px); } }

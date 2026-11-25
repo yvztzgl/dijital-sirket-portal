@@ -41,6 +41,8 @@ export class DotEngraving {
   readonly src = input.required<string>();
   /** Vertical anchoring when the map is cropped to cover the box. */
   readonly align = input<'center' | 'bottom'>('center');
+  /** Horizontal anchoring when the map is wider than the box: 0 keeps its left edge, 1 its right. */
+  readonly alignX = input(0.5);
   /** Dot colour. */
   readonly ink = input('#E9EFFF');
   /** How strongly dots breathe (0 = static, 1 = shrink to nothing at the low point). */
@@ -67,6 +69,8 @@ export class DotEngraving {
     if (!ctx) return;
 
     await this.loadMap(this.src());
+    // The screen may have been left while the image was loading; nothing to draw or clean up then.
+    if (this.destroyRef.destroyed) return;
     const still = matchMedia('(prefers-reduced-motion: reduce)');
 
     const resize = () => {
@@ -135,9 +139,9 @@ export class DotEngraving {
     ctx.clearRect(0, 0, W, H);
     if (!this.cols) return;
 
-    // "cover" fit: dot pitch so the map fills the box; crop centred horizontally.
+    // "cover" fit: dot pitch so the map fills the box; cropped at the sides as alignX says.
     const pitch = Math.max(W / this.cols, H / this.rows);
-    const x0 = (W - this.cols * pitch) / 2;
+    const x0 = (W - this.cols * pitch) * this.alignX();
     const y0 = this.align() === 'bottom' ? H - this.rows * pitch : (H - this.rows * pitch) / 2;
     const maxR = pitch * 0.55;
     const depth = still ? 0 : this.breath();

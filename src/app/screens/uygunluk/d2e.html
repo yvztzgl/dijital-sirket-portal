@@ -1,0 +1,27 @@
+<app-step-page [step]="2" [part]="3" [parts]="3" sub="Uygunluk taraması" ctx="screen" label="D-2e Tarama">
+  @let s = scr();
+  <div class="wz-head">
+    <h1 class="wz-h1">Uygunluk taraması yapılıyor</h1>
+    <p class="wz-lead">Sizden bir işlem beklenmemektedir. Tarama tamamlandığında sonuç gösterilir.</p>
+  </div>
+
+  <section class="wz-card wz-scr">
+    <header>
+      <h2 class="wz-card-h">Taranan listeler</h2>
+      <span aria-live="polite">{{ s.done }} / 5</span>
+    </header>
+    <div class="bar" aria-hidden="true"><i [style.width.%]="s.done * 20"></i></div>
+    <ol>
+      @for (l of s.lists; track l.n) {
+        <li [class.ok]="l.st === 'ok'" [class.now]="l.st === 'now'">
+          <span class="st" aria-hidden="true">@if (l.st === 'ok') {<app-icon name="check" size="12px" [stroke]="3" />}</span>
+          <span class="n">{{ l.n }}</span>
+          <time>{{ l.t }}</time>
+          <em>{{ l.st === 'ok' ? 'Eşleşme bulunmadı' : l.st === 'now' ? 'Taranıyor…' : 'Sırada' }}</em>
+        </li>
+      }
+    </ol>
+  </section>
+
+  <p class="wz-foot"><app-icon name="info" size="13px" [stroke]="2" />Kimlik bilgileriniz yaptırım ve siyasi nüfuz sahibi kişi listelerinde aranır.</p>
+</app-step-page>

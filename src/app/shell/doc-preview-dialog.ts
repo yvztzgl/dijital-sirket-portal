@@ -45,8 +45,8 @@ import { Icon } from '../shared/icon';
           <article class="paper keep-light" [attr.aria-label]="v.doc.name + ' önizlemesi'">
             <span class="watermark" aria-hidden="true">ÖRNEK</span>
             <div class="doc-head">
-              <span class="mono">DŞ</span>
-              <span class="org"><b>Dijital Şirket Platformu</b><small>Terminal İstanbul · dijitalsirket.gov.tr</small></span>
+              <img class="logo" src="/assets/brand/terminal-istanbul.svg" alt="Terminal İstanbul" width="87" height="28" />
+              <span class="org"><b>Terminal Şirket</b><small>Terminal İstanbul · dijitalsirket.gov.tr</small></span>
               <span class="ref"><small>Başvuru no</small><b>{{ v.appId }}</b></span>
             </div>
             <span class="kicker">{{ v.doc.group }}</span>
@@ -57,7 +57,7 @@ import { Icon } from '../shared/icon';
               }
             </dl>
             <p class="body">
-              Bu belge, {{ v.company }} kuruluş başvurusu kapsamında Dijital Şirket Platformu tarafından oluşturulmuş ve
+              Bu belge, {{ v.company }} kuruluş başvurusu kapsamında Terminal Şirket tarafından oluşturulmuş ve
               kurucunun günlük e-imzasıyla imzalanmıştır. İlgili kurumlara elektronik ortamda iletilir; ıslak imza gerekmez.
             </p>
             <p class="body muted">Bu dosya prototipte üretilmiş örnek bir belgedir ve hukuki geçerliliği yoktur.</p>
@@ -114,7 +114,7 @@ import { Icon } from '../shared/icon';
       font: 700 120px/1 'IBM Plex Sans', sans-serif; letter-spacing: .08em; color: rgba(6, 18, 98, .045);
     }
     .doc-head { display: flex; align-items: center; gap: 12px; padding-bottom: 16px; border-bottom: 2px solid var(--bd-061262); }
-    .mono { width: 34px; height: 34px; flex: none; border-radius: 8px; background: var(--bg-061262); color: var(--fg-FFFFFF); display: grid; place-items: center; font: 700 13px/1 'IBM Plex Sans', sans-serif; }
+    .logo { display: block; flex: none; height: 28px; width: auto; }
     .org { flex: 1; display: flex; flex-direction: column; }
     .org b { font: 600 14px/18px 'IBM Plex Sans', sans-serif; color: var(--fg-061262); }
     .org small, .ref small { font: 400 11px/15px 'IBM Plex Sans', sans-serif; color: var(--fg-5B6478); }

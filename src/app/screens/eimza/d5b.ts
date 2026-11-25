@@ -1,14 +1,12 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { IText, Icon } from '../../shared/icon';
-import { SidePanel } from '../../shared/side-panel';
-import { Stepper } from '../../shared/stepper';
-import { TopBar } from '../../shared/top-bar';
+import { Icon } from '../../shared/icon';
+import { StepPage } from '../../shared/step-page';
 import { EimzaData } from '../data/eimza.data';
 
-/** D-5b — Şirketiniz kuruldu. Sakin kutlama: mühür halkası, tam unvan, kopyalanabilir sonuçlar, sonraki adımlar. */
+/** D-5b — Şirketiniz kuruldu. The four results with copy buttons, the next three things to do, the documents. */
 @Component({
   selector: 'app-screen-d5b',
-  imports: [IText, Icon, SidePanel, Stepper, TopBar],
+  imports: [Icon, StepPage],
   templateUrl: './d5b.html',
   host: { style: 'display:block' },
   changeDetection: ChangeDetectionStrategy.OnPush,

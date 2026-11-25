@@ -7,7 +7,9 @@ import { Icon } from './icon';
 
 /**
  * Header utilities shared by every header: help menu, light/dark theme toggle and language menu.
- * `dark` adapts the colours for the navy welcome hero.
+ * `dark` adapts the colours for the navy welcome hero. `collapse` shrinks it on phones (icons only,
+ * no demo screen pill, menus as wide as the header); used by the welcome page, the only screen laid
+ * out for phones so far.
  */
 @Component({
   selector: 'app-header-tools',
@@ -15,13 +17,14 @@ import { Icon } from './icon';
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '[class.dark]': 'dark()',
+    '[class.collapse]': 'collapse()',
     '(document:click)': 'outside($event)',
     '(document:keydown.escape)': 'open.set(null)',
   },
   template: `
     <div class="wrap">
       <app-screen-pill class="screens" [dark]="dark()" [compact]="compact()" />
-      <button type="button" class="btn" (click)="toggle('help')" [attr.aria-expanded]="open() === 'help'" aria-haspopup="menu">
+      <button type="button" class="btn help-btn" (click)="toggle('help')" [attr.aria-expanded]="open() === 'help'" aria-haspopup="menu" aria-label="Yardım">
         <app-icon name="help" size="17px" [stroke]="1.9" />
         <span class="label">Yardım</span>
       </button>
@@ -58,7 +61,7 @@ import { Icon } from './icon';
       <button type="button" class="btn" (click)="toggle('lang')" [attr.aria-expanded]="open() === 'lang'" aria-haspopup="menu" aria-label="Dil seçin">
         <img class="flag" [src]="flagOf(prefs.state().lang)" alt="" width="20" height="14" />
         <span class="code">{{ prefs.state().lang.toUpperCase() }}</span>
-        <app-icon name="chevron-down" size="14px" />
+        <app-icon class="chev" name="chevron-down" size="14px" />
       </button>
       @if (open() === 'lang') {
         <div class="menu lang" role="menu">
@@ -112,12 +115,27 @@ import { Icon } from './icon';
     :host(.dark) .btn { color: var(--fg-E6EBF7); }
     :host(.dark) .btn:hover, :host(.dark) .btn[aria-expanded='true'] { background: rgba(255, 255, 255, .12); color: var(--fg-FFFFFF); }
     @keyframes menuIn { from { opacity: 0; transform: translateY(-4px); } }
+    /* Phones, where the header asks for it: icons only, no demo screen pill. The menus drop the
+       wrapper as their anchor and span the nearest positioned ancestor (the header). */
+    @media (max-width: 640px) {
+      :host(.collapse) .wrap { position: static; gap: 2px; }
+      :host(.collapse) :is(.screens, .label, .chev) { display: none !important; }
+      :host(.collapse) .btn { padding: 0 6px; }
+      :host(.collapse) :is(.icon-only, .help-btn) { width: 32px; padding: 0; justify-content: center; }
+      :host(.collapse) .menu { left: 0; right: 0; width: auto; min-width: 0; }
+    }
+    /* The narrowest phones have no room for the theme toggle; the theme then follows the device. */
+    @media (max-width: 350px) {
+      :host(.collapse) .icon-only { display: none; }
+    }
   `,
 })
 export class HeaderTools {
   readonly dark = input(false);
   /** Tight headers (login/register panel): screen pill shows only the screen code. */
   readonly compact = input(false, { transform: booleanAttribute });
+  /** Shrink on phones (see the class comment). Only for headers that are laid out for phones. */
+  readonly collapse = input(false, { transform: booleanAttribute });
 
   protected readonly store = inject(ApplicationStore);
   protected readonly prefs = inject(Preferences);

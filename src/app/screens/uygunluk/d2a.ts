@@ -1,15 +1,19 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { IText } from '../../shared/icon';
-import { AiCard } from '../../shared/ai-card';
-import { SidePanel } from '../../shared/side-panel';
-import { Stepper } from '../../shared/stepper';
-import { TopBar } from '../../shared/top-bar';
+import { FormError } from '../../shared/form-error';
+import { Icon } from '../../shared/icon';
+import { QrCode } from '../../shared/qr-code';
+import { StepPage } from '../../shared/step-page';
 import { UygunlukData } from '../data/uygunluk.data';
 
-/** D-2a — Uygunluk · yarı yolda. Pasaport okundu, canlılık kontrolü sürüyor. Sonraki aşamalar soluk. */
+/**
+ * D-2a — Kimlik doğrulama. Opens on a pre-information view (what to have ready, do's and don'ts,
+ * the consent tick, "Doğrulamayı başlat", or "Telefonla devam et" for a QR code that opens the step on
+ * the founder's phone: see d2m); after that the camera area follows the automatic check: passport, then
+ * face, then waiting.
+ */
 @Component({
   selector: 'app-screen-d2a',
-  imports: [AiCard, IText, SidePanel, Stepper, TopBar],
+  imports: [FormError, Icon, QrCode, StepPage],
   templateUrl: './d2a.html',
   host: { style: 'display:block' },
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -1,16 +1,13 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { Icon } from '../../shared/icon';
 import { FormError } from '../../shared/form-error';
-import { AiCard } from '../../shared/ai-card';
-import { SidePanel } from '../../shared/side-panel';
-import { Stepper } from '../../shared/stepper';
-import { TopBar } from '../../shared/top-bar';
+import { StepPage } from '../../shared/step-page';
 import { KarsilamaData } from '../data/karsilama.data';
 
-/** D-1d — MERSİS ret durumu. Panel alt çubuğun yerini alır; alternatif bir tıkla seçilir ve yeniden sorgulanır. */
+/** D-1d — Unvan rezerve edilemedi. One request: pick another title (three suggestions or your own); it is queried again at once. */
 @Component({
   selector: 'app-screen-rejection',
-  imports: [AiCard, FormError, Icon, SidePanel, Stepper, TopBar],
+  imports: [FormError, Icon, StepPage],
   templateUrl: './rejection.html',
   host: { style: 'display:block' },
   changeDetection: ChangeDetectionStrategy.OnPush,

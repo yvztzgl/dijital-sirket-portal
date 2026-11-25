@@ -11,6 +11,8 @@ const ACCEPT = /\.(pdf|pptx|key)$/i;
 const MAX_BYTES = 50 * 1024 * 1024;
 
 type CardId = 'founder' | 'contact' | 'funding';
+/** What the pencil on a row of the confirm screen opens. */
+type Editor = 'title' | 'nace' | CardId;
 /** One-line explanation under each funding option in the picker. */
 const FUNDING_HINTS: Record<string, string> = {
   'own-abroad': 'Kendi adınıza yurt dışındaki bir hesaptan',
@@ -77,8 +79,8 @@ export class KarsilamaData {
   }
 
   private async upload(f: File) {
-    if (!ACCEPT.test(f.name)) return this.fileError.set('Yalnızca PDF, PowerPoint (.pptx) veya Keynote (.key) dosyası yükleyebilirsiniz.');
-    if (f.size > MAX_BYTES) return this.fileError.set('Dosya 50 MB’tan büyük. Daha küçük bir sürüm yükleyin.');
+    if (!ACCEPT.test(f.name)) return this.fileError.set('Yalnızca PDF, PowerPoint (.pptx) veya Keynote (.key) dosyası yüklenebilir.');
+    if (f.size > MAX_BYTES) return this.fileError.set('Dosya 50 MB’tan büyüktür. Daha küçük bir sürüm yükleyiniz.');
     this.fileError.set(null);
     await this.store.uploadDeck({ name: f.name, size: f.size });
   }
@@ -116,6 +118,27 @@ export class KarsilamaData {
       return { k: f.label, v: f.value, p: f.page ? `s. ${f.page}` : '…', done, pending: !done, op: done ? 1 : 0.7 };
     });
   });
+
+  /** The company's logo and name as found in the deck (shown once the title has been read). */
+  protected readonly brand = computed(() => {
+    const c = this.store.app()?.company;
+    return { name: c?.deckName ?? '', logo: c?.logo ?? '', initials: (c?.deckName ?? '').slice(0, 1).toLocaleUpperCase('tr-TR') };
+  });
+  protected readonly scanPages = computed(() => this.store.scan()?.pages ?? 0);
+
+  /** The logo on the confirm screen can be replaced with the founder's own image file. */
+  protected onLogoInput(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const f = input.files?.[0];
+    input.value = '';
+    if (!f) return;
+    if (!/^image\/(png|jpeg|svg\+xml|webp)$/.test(f.type)) return this.store.error.set('Logo için PNG, JPEG, SVG veya WebP biçiminde bir görsel seçiniz.');
+    // The mock keeps the image in localStorage, so it has to stay small.
+    if (f.size > 500 * 1024) return this.store.error.set('Görsel 500 KB’tan büyüktür. Daha küçük bir dosya seçiniz.');
+    const reader = new FileReader();
+    reader.onload = () => void this.store.updateReview({ company: { logo: String(reader.result) } }, []);
+    reader.readAsDataURL(f);
+  }
 
   // ---------------------------------------------------------------------------- D-1c review
 
@@ -199,7 +222,7 @@ export class KarsilamaData {
     const card = (id: CardId, t: string, keys: string[], s: string, fields: EditField[]) => {
       const warnN = keys.filter((k) => m[k] === 'check').length;
       const edited = keys.some((k) => m[k] === 'edited');
-      return { id, t, ok: warnN === 0, okText: edited ? '✎ Düzenlendi' : '✓ AI okudu', warn: warnN > 0, warnText: `${warnN} alanı kontrol edin`, s, open: this.openCard() === id, fields };
+      return { id, t, ok: warnN === 0, okText: edited ? '✎ Düzenlendi' : '✓ AI okudu', warn: warnN > 0, warnText: `${warnN} alanı kontrol ediniz`, s, open: this.openCard() === id, fields };
     };
     return [
       card('founder', 'Kurucu', ['name'], `${a.founder.firstName} ${a.founder.lastName} · ${a.founder.nationality || '—'} · Kimlik 2. adımda doğrulanır`, [
@@ -245,6 +268,79 @@ export class KarsilamaData {
           ? await this.store.updateReview({ contact: { email: d['email'], phone: d['phone'], address: d['address'], postalCode: d['postalCode'], country: d['country'] } }, ['phone', 'address', 'email'])
           : await this.store.updateReview({ funding: d['funding'] as FundingSource }, ['funding']);
     if (ok) this.openCard.set(null);
+    return ok;
+  }
+
+  // ------------------------------------------------ D-1c in the Odak layout (flat rows)
+
+  /** Which editor is open under the rows; one at a time. */
+  protected readonly editor = signal<Editor | null>(null);
+  /** Values typed into the "kontrol edilmesi gereken" block before they are saved. */
+  protected readonly flagDraft = signal<Partial<Record<string, string>>>({});
+
+  /**
+   * Every piece of information on the confirm screen as one row: what it is, its value, which
+   * editor its pencil opens (none for fixed facts) and whether the scan flagged it for checking.
+   */
+  protected readonly rows = computed(() => {
+    const a = this.store.app();
+    if (!a) return [];
+    const m = a.marks;
+    const name = `${a.founder.firstName} ${a.founder.lastName}`.trim();
+    const row = (key: string, label: string, value: string, edit: Editor | null, mark = key, raw = value) => ({
+      key, label, value: value || '—', raw, edit, flag: m[mark] === 'check', edited: m[mark] === 'edited',
+    });
+    return [
+      row('title', 'Şirket unvanı', this.store.fullTitle(), 'title'),
+      row('name', 'Kurucu', name, 'founder'),
+      row('nace', 'Faaliyet', (a.company.nace ?? []).map((c) => naceName(c)).join(', '), 'nace'),
+      row('nationality', 'Uyruk', a.founder.nationality, 'founder', 'name'),
+      row('type', 'Şirket türü', 'Tek pay sahipli anonim şirket', null),
+      row('share', 'Pay sahipliği', `%100, ${name}`, null),
+      row('capital', 'Sermaye', tl0(a.company.capital ?? CAPITAL), null),
+      row('funding', 'Sermaye kaynağı', FUNDING_LABELS[a.funding], 'funding', 'funding', a.funding),
+      row('email', 'E-posta', a.contact.email, 'contact'),
+      row('phone', 'Telefon', a.contact.phone, 'contact'),
+      row('address', 'Adres', [a.contact.address, a.contact.postalCode, a.contact.country].filter((x) => x?.trim()).join(', '), 'contact', 'address', a.contact.address),
+      row('office', 'Merkez adresi', 'Terminal İstanbul sanal ofisi, Gebze / Kocaeli', null),
+    ];
+  });
+  protected readonly okRows = computed(() => this.rows().filter((r) => !r.flag));
+  protected readonly flagRows = computed(() => this.rows().filter((r) => r.flag));
+
+  protected readonly fundingOptions = FUNDING_OPTIONS.map((v) => ({ value: v, label: FUNDING_LABELS[v], hint: FUNDING_HINTS[v] }));
+
+  /** The founder / contact / funding form shown when that editor is open. */
+  protected readonly editorCard = computed(() => this.collapsedCards().find((c) => c.id === this.editor()) ?? null);
+
+  protected openEditor(e: Editor | null) {
+    if (!e || this.editor() === e) return this.editor.set(null);
+    this.editor.set(e);
+    const card = this.collapsedCards().find((c) => c.id === e);
+    if (card) this.draft.set(Object.fromEntries(card.fields.map((f) => [f.key, f.value])));
+  }
+
+  protected async saveEditor() {
+    const e = this.editor();
+    if (e && e !== 'title' && e !== 'nace' && (await this.saveCard(e))) this.editor.set(null);
+  }
+
+  protected setFlag(key: string, v: string) {
+    this.flagDraft.update((d) => ({ ...d, [key]: v }));
+  }
+
+  /** Saves the values in the "kontrol edilmesi gereken" block; saving a flagged value clears its flag. */
+  protected async saveFlags() {
+    const d = this.flagDraft();
+    const rows = this.flagRows();
+    const val = (key: string) => d[key] ?? rows.find((r) => r.key === key)?.raw;
+    const has = (key: string) => rows.some((r) => r.key === key);
+    const contact = { ...(has('phone') ? { phone: val('phone') } : {}), ...(has('address') ? { address: val('address') } : {}), ...(has('email') ? { email: val('email') } : {}) };
+    const ok = await this.store.updateReview(
+      { ...(Object.keys(contact).length ? { contact } : {}), ...(has('funding') ? { funding: val('funding') as FundingSource } : {}) },
+      rows.map((r) => r.key).filter((k) => ['phone', 'address', 'email', 'funding'].includes(k)),
+    );
+    if (ok) this.flagDraft.set({});
   }
 
   /** "Başka sunum": pick a new deck and scan again. */

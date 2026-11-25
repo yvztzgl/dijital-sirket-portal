@@ -27,7 +27,7 @@ import { Icon } from './icon';
         <img [src]="flag(c.iso)" alt="" width="22" height="16" />
         <span class="text">{{ c.name }}</span>
       } @else {
-        <span class="text placeholder">{{ value() || 'Ülke seçin' }}</span>
+        <span class="text placeholder">{{ value() || 'Ülke seçiniz' }}</span>
       }
       <app-icon class="chev" name="chevron-down" size="16px" />
     </button>
@@ -37,14 +37,15 @@ import { Icon } from './icon';
   `,
   styles: `
     :host { position: relative; display: block; }
+    /* Same box as the wizard's text fields (.wz-input): 42 px, 10 px corners, the same border and type. */
     .field {
-      width: 100%; height: 44px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 0 12px;
-      border: 1px solid var(--bd-D6DEEE); border-radius: 9px; background: var(--bg-FFFFFF); cursor: pointer; text-align: left;
-      font: 500 15px/20px 'IBM Plex Sans', sans-serif; color: var(--fg-061262); transition: border-color .15s, box-shadow .15s;
+      width: 100%; height: 42px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 0 12px;
+      border: 1px solid var(--bd-C9D2E3); border-radius: 10px; background: var(--bg-FFFFFF); cursor: pointer; text-align: left;
+      font: 400 14.5px/20px 'IBM Plex Sans', sans-serif; color: var(--fg-1F2A44); transition: border-color .15s;
     }
-    .field:hover { border-color: var(--bd-C9D2E3); }
-    .field.open, .field:focus-visible { border-color: var(--bd-061262); box-shadow: 0 0 0 3px rgba(6, 18, 98, .14); outline: 0; }
-    img { flex: none; width: 22px; height: 16px; border-radius: 3px; object-fit: cover; box-shadow: 0 0 0 1px rgba(6, 18, 98, .12); }
+    .field:hover { border-color: var(--bd-5B6478); }
+    .field.open, .field:focus-visible { border-color: var(--bd-061262); outline: 0; }
+    img { flex: none; width: 22px; height: 16px; border-radius: 3px; object-fit: cover; outline: 1px solid rgba(6, 18, 98, .12); outline-offset: -1px; }
     .text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .placeholder { color: var(--fg-8A93A6); font-weight: 400; }
     .chev { color: var(--fg-5B6478); transition: transform .15s; }

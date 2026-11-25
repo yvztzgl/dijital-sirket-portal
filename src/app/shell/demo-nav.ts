@@ -23,6 +23,19 @@ export class DemoNav {
     if (!screen) return;
     const rule = SCREEN_STAGES[screenId];
     const stage = this.store.stage();
+    if (screenId === 'd2m') {
+      // The phone page opens from a link: put the demo founder on the identity step, not yet started, and make one.
+      this.jumping.set(true);
+      try {
+        if (stage !== 'eligibility' || this.store.app()?.eligibility) await this.store.seed('eligibility');
+        await this.store.createPhoneLink();
+      } finally {
+        this.jumping.set(false);
+      }
+      const token = this.store.app()?.phoneLink?.token;
+      if (token) await this.router.navigateByUrl(`/eligibility/phone/${token}`);
+      return;
+    }
     const reachable =
       !rule || (!!stage && rule.stages.includes(stage) && (!rule.founder || rule.founder === this.store.founderType()));
     if (!reachable) {

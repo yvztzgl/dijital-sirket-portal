@@ -23,6 +23,14 @@ export class Assistant {
   readonly status = signal<string | null>(null);
   /** Bumps whenever something asks the assistant, so the side panel can switch to its AI tab. */
   readonly focus = signal(0);
+  /** Bumps when something asks to write a question: the side panel opens its AI tab and focuses its input. */
+  readonly compose = signal(0);
+  /** Suggested questions for the current screen; set by the side panel, which knows the context. */
+  readonly suggestions = signal<string[]>([]);
+  /** Asks the side panel to show one of its views (a screen's "Belgeleri görüntüle" button, for example). */
+  readonly panel = signal<{ tab: 'ai' | 'docs' | 'log'; n: number }>({ tab: 'ai', n: 0 });
+  /** Number of AI suggestion cards on screen. They show the suggested questions, so the panel hides its own. */
+  readonly cards = signal(0);
 
   async ask(question: string) {
     const q = question.trim();
@@ -48,6 +56,11 @@ export class Assistant {
 
   clear() {
     this.thread.set([]);
+  }
+
+  /** Opens the side panel on its documents, its log or the conversation. */
+  show(tab: 'ai' | 'docs' | 'log') {
+    this.panel.update((p) => ({ tab, n: p.n + 1 }));
   }
 
   /** Writes the reply out a few words at a time, like a model generating it. */

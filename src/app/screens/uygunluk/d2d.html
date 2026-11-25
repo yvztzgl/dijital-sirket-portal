@@ -1,0 +1,56 @@
+<app-step-page [step]="2" [part]="2" [parts]="3" sub="Beyan" ctx="declare" label="D-2d Beyan">
+  @let d = declaration();
+  <div class="wz-head">
+    <h1 class="wz-h1">Adres belgenizi yükleyiniz</h1>
+    <p class="wz-lead">Beyan ettiğiniz adresi gösteren bir belge yükleyiniz ve bilgilerinizin doğruluğunu onaylayınız.</p>
+  </div>
+
+  <section class="wz-card wz-decl">
+    <input #addr type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" (change)="onAddrInput($event)" hidden>
+    @if (d.file) {
+      <div class="file">
+        <span class="ico" aria-hidden="true"><app-icon name="file" size="20px" [stroke]="1.8" /></span>
+        <span class="t"><b>{{ d.file.name }}</b><small>{{ d.file.size }}, yüklenmeye hazır</small></span>
+        <button type="button" class="wz-link" (click)="addr.click()">Değiştir</button>
+      </div>
+    } @else {
+      <div class="wz-drop wz-drop--sm" [class.over]="addrDragging()" role="button" tabindex="0" aria-label="Adres belgesi seç" (click)="addr.click()" (keydown.enter)="addr.click()" (keydown.space)="$event.preventDefault(); addr.click()" (dragover)="onAddrDragOver($event)" (dragleave)="addrDragging.set(false)" (drop)="onAddrDrop($event)">
+        <div class="t">
+          <strong>{{ addrDragging() ? 'Belgeyi bu alana bırakınız' : 'Adres belgenizi bu alana sürükleyiniz' }}</strong>
+          <span>veya bilgisayarınızdan seçiniz. PDF, JPG veya PNG; en fazla 10 MB.</span>
+        </div>
+        <span class="wz-btn wz-btn--ghost wz-btn--sm" aria-hidden="true">Dosya seç</span>
+      </div>
+    }
+
+    <div class="cols">
+      <div>
+        <h2 class="wz-card-h">Kabul edilen belgeler</h2>
+        <ul>
+          <li>Fatura (elektrik, su, doğal gaz, internet)</li>
+          <li>Banka hesap özeti</li>
+          <li>Yerleşim yeri belgesi</li>
+        </ul>
+        <p>Belge son üç ay içinde düzenlenmiş olmalı; adınız ve adresiniz okunmalıdır.</p>
+      </div>
+      <div>
+        <h2 class="wz-card-h">Beyan ettiğiniz bilgiler</h2>
+        <dl>
+          <dt>Adres</dt><dd>{{ d.address || '—' }}</dd>
+          <dt>Fon kaynağı</dt><dd>{{ d.funding || '—' }}</dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <label class="wz-check"><input type="checkbox" [checked]="declared()" (change)="declared.set($any($event.target).checked)"><span>Başvurumda yer alan bilgilerin doğru olduğunu ve fon kaynağı beyanımın gerçeği yansıttığını beyan ederim.</span></label>
+
+  <app-form-error [message]="addrError()" />
+  <app-form-error />
+  <div class="wz-actions">
+    <button type="button" class="wz-btn" (click)="submitDeclaration()" [disabled]="!d.ready || store.busy()">{{ store.busy() ? 'Kaydediliyor…' : 'Beyanı onayla' }}</button>
+  </div>
+  @if (!d.file) {<button type="button" class="wz-link wz-link--sm" (click)="useSampleAddr()">Demo: örnek belge kullan</button>}
+
+  <p class="wz-foot"><app-icon name="lock" size="13px" [stroke]="2" />Belgeniz yalnızca kimlik ve adres doğrulaması için kullanılır.</p>
+</app-step-page>
