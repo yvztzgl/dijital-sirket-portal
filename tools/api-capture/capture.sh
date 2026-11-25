@@ -13,8 +13,9 @@
 #   profile → verified → evaluating (deck, CV and answers sent; the outside evaluation runs, minutes)
 #   → review (defaults from the profile and the account) → review (title, codes, address typed)
 #   → titleChecking → titleConflict → titleChecking (new title) → the stage after a reserved title
-#   The evaluation's other ends (questions, failed, rejected) cannot be caused from here; their
-#   answers stay hand-written (src/app/core/testing/hand-written/).
+#   Then two more founders for the evaluation's other ends: the API's stand-in evaluator decides by
+#   the deck's file name ("questions" → evaluationQuestions; "failed" → every attempt fails, back to
+#   verified). Only `cancelled` cannot be caused from here.
 #
 # Step 2 (each founder first walks step 1 to a reserved title, saving nothing of it):
 #   A  foreign, own funds: the identity check handed to the phone (phone link, the phone routes with
@@ -52,9 +53,7 @@
 # the development database.
 #
 # The deck is a minimal real PDF of three pages (the evaluation takes 3 to 40), the CV and the
-# address document minimal real one-page PDFs. Step 1's evaluating, reference-evaluation,
-# review-defaults and review-edited files take the place of the hand-written ones of the same names
-# in src/app/core/testing/hand-written/ (move them there, or point api-fixtures.ts here).
+# address document minimal real one-page PDFs.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 PORTAL=$(pwd)
@@ -161,6 +160,18 @@ pdf() {
     printf '%s\n' 'trailer <</Root 1 0 R>>' '%%EOF'; } > "$1"
 }
 
+# upload_deck <deck file name>: the deck (3 pages), the CV (1 page) and the five answers. The stand-in
+# evaluator reads the deck's file name (see the header).
+upload_deck() {
+  local deck="$WORK/deck.pdf" cv="$WORK/cv.pdf"
+  pdf "$deck" 3; pdf "$cv" 1
+  call 202 "POST deck ($1, CV, answers)" -X POST -H 'X-DSP-Request: 1' \
+    -F "file=@$deck;filename=$1;type=application/pdf" -F "cv=@$cv;filename=Ozgecmis.pdf;type=application/pdf" \
+    --form-string 'summary=Lumora, küçük işletmelere veri analitiği yazılımı sunar; abonelikle satılır ve Avrupa pazarında büyür.' \
+    -F activityGroupId=1 -F activityId=3 -F businessModelIds=1 -F revenueModelIds=7 -F productTypeIds=2 \
+    -F noticeAcknowledged=true -F aiConsent=true "$API/api/application/deck"
+}
+
 # step_one <funding>: profile, deck with CV and answers, the evaluation, the company form, title asked.
 # Saves only when DEST is captured/. The evaluation takes minutes (the outside service).
 step_one() {
@@ -173,13 +184,7 @@ step_one() {
   write 204 "PUT profile" PUT "{\"brand\":\"Lumora\",\"sector\":\"software\",\"funding\":\"$funding\",\"nationality\":\"Almanya\",\"phone\":\"+49 151 2345 6700\",\"country\":\"Almanya\"}" /api/application/profile
   save verified
 
-  local deck="$WORK/Lumora Sunum.pdf" cv="$WORK/Ozgecmis.pdf"
-  pdf "$deck" 3; pdf "$cv" 1
-  call 202 "POST deck (deck, CV, answers)" -X POST -H 'X-DSP-Request: 1' \
-    -F "file=@$deck;filename=Lumora Sunum.pdf;type=application/pdf" -F "cv=@$cv;filename=Ozgecmis.pdf;type=application/pdf" \
-    --form-string 'summary=Lumora, küçük işletmelere veri analitiği yazılımı sunar; abonelikle satılır ve Avrupa pazarında büyür.' \
-    -F activityGroupId=1 -F activityId=3 -F businessModelIds=1 -F revenueModelIds=7 -F productTypeIds=2 \
-    -F noticeAcknowledged=true -F aiConsent=true "$API/api/application/deck"
+  upload_deck "Lumora Sunum.pdf"
   save evaluating
   call 200 "GET /api/application/status → status-evaluating.json" "$API/api/application/status"
   keep status-evaluating
@@ -226,6 +231,14 @@ if [ "$WHAT" = all ] || [ "$WHAT" = step1 ]; then
   reserve_title
   save title-reserved
   echo "step 1 done ($REF)"
+  for end in questions failed; do
+    echo "step 1 · evaluation ending $end"
+    new_founder foreign
+    write 204 "PUT profile" PUT '{"brand":"Lumora","sector":"software","funding":"own-abroad","nationality":"Almanya","phone":"+49 151 2345 6700","country":"Almanya"}' /api/application/profile
+    upload_deck "Lumora Sunum $end.pdf"
+    if [ "$end" = questions ]; then wait_stage evaluationQuestions 300; else sleep 2; wait_stage verified 600; fi
+    save "evaluation-$end"
+  done
 fi
 
 # step_two_quick: identity on the computer, declaration, list search, until the API is at `payment`. Saves nothing.

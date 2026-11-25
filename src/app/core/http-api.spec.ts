@@ -7,7 +7,7 @@ import { HttpApi, markApiWrites } from './http-api';
 import { callStartedAt } from './api-mapper';
 import { ApplicationWire, MeWire } from './api-types';
 import { Application } from './models';
-import { CAPTURED, HAND, IDENTITY_FAILED, ME, NEW_APPLICATION, NO_VALID_SIGNATURE } from './testing/api-fixtures';
+import { CAPTURED, IDENTITY_FAILED, ME, NEW_APPLICATION, NO_VALID_SIGNATURE } from './testing/api-fixtures';
 
 describe('HttpApi', () => {
   let api: HttpApi;
@@ -381,7 +381,7 @@ describe('HttpApi step 1', () => {
     expect(post.request.headers.has('Content-Type')).toBe(false);
     expect(post.request.headers.get('X-DSP-Request')).toBe('1');
     post.flush(...empty(202));
-    await read(HAND.evaluating);
+    await read(CAPTURED.evaluating);
     expect((await pending).stage).toBe('evaluating');
   });
 
@@ -397,22 +397,22 @@ describe('HttpApi step 1', () => {
   });
 
   it('sends only the review fields that changed, and nothing when none did', async () => {
-    await signedInAt(HAND.reviewDefaults);
+    await signedInAt(CAPTURED.reviewDefaults);
     let pending = api.updateReview({ contact: { email: 'kurucu@example.test', phone: '+49 151 2345 6700', address: 'Torstraße 45, Berlin', postalCode: '10119', country: 'Almanya' } }, ['address']);
     const patch = await next('PATCH', '/api/application/review');
     expect(patch.request.body).toEqual({ fields: { residence_address: 'Torstraße 45, Berlin', postal_code: '10119' } });
     patch.flush(...empty(204));
-    await read(HAND.reviewEdited);
+    await read(CAPTURED.reviewEdited);
     await pending;
 
     pending = api.updateReview({ founder: { firstName: 'Deneme', lastName: 'Kurucu-Berg', nationality: 'Almanya' } }, ['name']);
-    await read(HAND.reviewEdited);
+    await read(CAPTURED.reviewEdited);
     await pending;
     backend.expectNone('/api/application/review');
   });
 
   it('submits the review and passes on a refusal with its fields', async () => {
-    await signedInAt(HAND.reviewEdited);
+    await signedInAt(CAPTURED.reviewEdited);
     const refused = api.submitReview().catch((e: unknown) => e);
     (await next('POST', '/api/application/review/submit')).flush(
       { title: 'Eksik bilgileri tamamlayınız.', status: 400, code: 'validation_failed', requestId: 'r', errors: { given_name: ['Ad eksik.'], nationality: ['Uyruk eksik.'] } },
@@ -466,7 +466,7 @@ describe('HttpApi step 1', () => {
   it('reads the evaluation reference once per session', async () => {
     const first = api.evaluationReference();
     const second = api.evaluationReference();
-    (await next('GET', '/api/reference/evaluation')).flush(HAND.referenceEvaluation);
+    (await next('GET', '/api/reference/evaluation')).flush(CAPTURED.referenceEvaluation);
     expect((await first).activities).toHaveLength(216);
     expect(await second).toBe(await first);
   });

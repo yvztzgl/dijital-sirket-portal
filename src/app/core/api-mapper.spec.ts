@@ -1,5 +1,5 @@
 import { callStartedAt, LOG_TEXTS, splitNace, toAccount, toApplication, toReviewFields, toStage } from './api-mapper';
-import { CAPTURED, HAND, IDENTITY_FAILED, IDENTITY_FAILED_TWICE, ME, NEW_APPLICATION, REVIEW_APPLICATION, SIGNATURE_EXPIRED } from './testing/api-fixtures';
+import { CAPTURED, IDENTITY_FAILED, IDENTITY_FAILED_TWICE, ME, NEW_APPLICATION, REVIEW_APPLICATION, SIGNATURE_EXPIRED } from './testing/api-fixtures';
 import { AGENCIES } from './timeline';
 
 describe('api-mapper', () => {
@@ -118,7 +118,7 @@ describe('api-mapper on captured API answers', () => {
     expect(app.deck).toBeUndefined();
   });
 
-  it('verified, captured before the evaluation existed: no CV and no evaluation', () => {
+  it('verified: no CV and no evaluation before the first upload', () => {
     const app = map('verified');
     expect(app.cv).toBeUndefined();
     expect(app.evaluation).toBeUndefined();
@@ -167,7 +167,7 @@ describe('api-mapper on captured API answers', () => {
   });
 
   it('review changes back to the API: only what differs, titles and NACE lists as single strings', () => {
-    const view = HAND.reviewEdited;
+    const view = CAPTURED.reviewEdited;
     expect(toReviewFields({ company: { root: 'Lumora', activity: 'Analitik Yazılım' } }, view)).toEqual({});
     expect(toReviewFields({ company: { activity: 'Veri Analitiği A.Ş.' } }, view)).toEqual({ trade_name: 'Lumora Veri Analitiği' });
     expect(toReviewFields({ company: { nace: ['62.01', '63.11'] } }, view)).toEqual({});
@@ -185,40 +185,40 @@ describe('api-mapper on captured API answers', () => {
     // A cleared value is sent, so the API's own message about it comes back.
     expect(toReviewFields({ contact: { phone: '' } }, view)).toEqual({ phone: '' });
     // The name shown from the account before the review has one is sent, to become the founder's own.
-    expect(toReviewFields({ founder: { firstName: 'Deneme' } }, HAND.evaluating)).toEqual({ given_name: 'Deneme' });
+    expect(toReviewFields({ founder: { firstName: 'Deneme' } }, CAPTURED.evaluating)).toEqual({ given_name: 'Deneme' });
   });
 });
 
-/** The deck step with the outside evaluation, on the hand-written answers (testing/hand-written/, until recaptured). */
-describe('api-mapper on the evaluation answers (hand-written)', () => {
+/** The deck step with the outside evaluation, on the answers captured from the API's stand-in evaluator. */
+describe('api-mapper on the evaluation answers (captured)', () => {
   const account = toAccount({ firstName: 'Deneme', lastName: 'Kurucu', email: 'kurucu@example.test', founderType: 'foreign', verified: true });
 
   it('evaluating: the deck and the CV by name and size, the evaluation running, no form values', () => {
-    const app = toApplication(HAND.evaluating, account);
+    const app = toApplication(CAPTURED.evaluating, account);
     expect(app.stage).toBe('evaluating');
-    expect(app.deck).toEqual({ fileName: 'Lumora Sunum.pdf', sizeKb: 812 });
-    expect(app.cv).toEqual({ fileName: 'Ozgecmis.pdf', sizeKb: 164 });
-    expect(app.evaluation).toEqual({ status: 'running', attempt: 1, maxAttempts: 3, startedAt: '2026-11-25T10:08:02.112000+00:00', finishedAt: null });
+    expect(app.deck).toEqual({ fileName: 'Lumora Sunum.pdf', sizeKb: 1 });
+    expect(app.cv).toEqual({ fileName: 'Ozgecmis.pdf', sizeKb: 1 });
+    expect(app.evaluation).toMatchObject({ status: 'queued', attempt: 1, maxAttempts: 3, finishedAt: null });
     expect(app.marks).toEqual({});
     expect(app.docs.map((d) => d.name)).toEqual(['Sunum', 'Özgeçmiş']);
-    expect(toStage(HAND.statusEvaluating.stage)).toBe('evaluating');
+    expect(toStage(CAPTURED.statusEvaluating.stage)).toBe('evaluating');
   });
 
   it('more information needed: its own stage, the evaluation waiting on questions', () => {
-    const app = toApplication(HAND.evaluationQuestions, account);
+    const app = toApplication(CAPTURED.evaluationQuestions, account);
     expect(app.stage).toBe('evaluationQuestions');
     expect(app.evaluation!.status).toBe('questions');
   });
 
   it('a failed evaluation: back at the upload, the evaluation kept as failed', () => {
-    const app = toApplication(HAND.evaluationFailed, account);
+    const app = toApplication(CAPTURED.evaluationFailed, account);
     expect(app.stage).toBe('verified');
     expect(app.evaluation).toMatchObject({ status: 'failed', attempt: 3 });
-    expect(() => toApplication({ ...HAND.evaluationFailed, evaluation: { ...HAND.evaluationFailed.evaluation!, status: 'lost' as never } }, account)).toThrow('Unknown evaluation status');
+    expect(() => toApplication({ ...CAPTURED.evaluationFailed, evaluation: { ...CAPTURED.evaluationFailed.evaluation!, status: 'lost' as never } }, account)).toThrow('Unknown evaluation status');
   });
 
   it('the company form: defaults from the profile and the account marked profile; the empty title and codes carry no mark', () => {
-    const app = toApplication(HAND.reviewDefaults, account);
+    const app = toApplication(CAPTURED.reviewDefaults, account);
     expect(app.stage).toBe('review');
     expect(app.company).toMatchObject({ brand: 'Lumora', root: '', activity: '', nace: [] });
     expect(app.founder).toMatchObject({ firstName: 'Deneme', lastName: 'Kurucu', nationality: 'Almanya' });
@@ -228,13 +228,13 @@ describe('api-mapper on the evaluation answers (hand-written)', () => {
   });
 
   it('the company form after the founder typed: entered and edited are the founder\'s own', () => {
-    const app = toApplication(HAND.reviewEdited, account);
+    const app = toApplication(CAPTURED.reviewEdited, account);
     expect(app.company).toMatchObject({ root: 'Lumora', activity: 'Analitik Yazılım', nace: ['62.01', '63.11'] });
     expect(app.marks).toEqual({ title: 'edited', nace: 'edited', name: 'edited', email: 'profile', phone: 'profile', address: 'edited', funding: 'profile' });
   });
 
   it('the evaluation reference: the saved dictionary in the contract\'s shape', () => {
-    const r = HAND.referenceEvaluation;
+    const r = CAPTURED.referenceEvaluation;
     expect([r.activityGroups.length, r.activities.length, r.businessModels.length, r.revenueModels.length, r.productTypes.length]).toEqual([17, 216, 4, 8, 4]);
     expect(r.limits).toEqual({ deckMaxMb: 25, cvMaxMb: 5, deckMinPages: 3, deckMaxPages: 40, summaryMin: 50, summaryMax: 2000 });
   });
@@ -297,7 +297,7 @@ describe('api-mapper on captured API answers, step 2', () => {
     expect(app.stage).toBe('screening');
     expect(app.eligibility).toMatchObject({ declaredAt, screeningStartedAt: declaredAt });
     expect(app.eligibility!.result).toBeUndefined();
-    expect(app.docs.map((d) => d.name)).toEqual(['Sunum', 'Adres belgesi']);
+    expect(app.docs.map((d) => d.name)).toEqual(['Sunum', 'Özgeçmiş', 'Adres belgesi']);
     expect(app.docs[1].group).toBe('1 · Başvuru & Uygunluk');
   });
 

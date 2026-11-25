@@ -3,7 +3,7 @@
   "title": "Kod hatalı veya süresi dolmuş.",
   "status": 400,
   "code": "validation_failed",
-  "requestId": "01a2127b-bab6-7b84-9b0c-a33d09fbc27c",
+  "requestId": "01a21315-0375-7bac-b376-212a2cb4ef61",
   "errors": {
     "code": [
       "Kod hatalı veya süresi dolmuş."

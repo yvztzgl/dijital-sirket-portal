@@ -1,10 +1,10 @@
 {
-  "id": "01a21241-ed62-7baa-9845-05e222dfb971",
-  "referenceNo": "DS-26-09874291",
+  "id": "01a21313-92b3-7c32-bc40-bc5c7de28380",
+  "referenceNo": "DS-26-55707682",
   "stage": "screening",
   "status": "identity",
   "founderType": "foreign",
-  "createdAt": "2026-11-25T10:30:40.226478+00:00",
+  "createdAt": "2026-11-25T14:19:39.57193+00:00",
   "profile": {
     "brand": "Lumora",
     "sector": "software",
@@ -12,202 +12,77 @@
     "nationality": "Almanya",
     "phone": "+49 151 2345 6700",
     "country": "Almanya",
-    "at": "2026-11-25T10:30:40.4709+00:00"
+    "at": "2026-11-25T14:19:39.668578+00:00"
   },
   "deck": {
     "fileName": "Lumora Sunum.pdf",
-    "sizeKb": 1,
-    "pages": null,
-    "uploadedAt": "2026-11-25T10:30:40.583784+00:00",
-    "status": "read",
-    "fields": [
-      {
-        "key": "trade_name",
-        "label": "Şirket unvanı",
-        "value": "Lumora Veri Analitiği",
-        "page": 1,
-        "confidence": "high"
-      },
-      {
-        "key": "nace_codes",
-        "label": "NACE kodları",
-        "value": "62.01, 63.11",
-        "page": 2,
-        "confidence": "high"
-      },
-      {
-        "key": "shareholding",
-        "label": "Pay sahipliği",
-        "value": "%100",
-        "page": 3,
-        "confidence": "high"
-      },
-      {
-        "key": "given_name",
-        "label": "Ad",
-        "value": "Deneme",
-        "page": 4,
-        "confidence": "high"
-      },
-      {
-        "key": "family_name",
-        "label": "Soyad",
-        "value": "Kurucu",
-        "page": 5,
-        "confidence": "high"
-      },
-      {
-        "key": "nationality",
-        "label": "Uyruk",
-        "value": "Almanya",
-        "page": 6,
-        "confidence": "high"
-      },
-      {
-        "key": "email",
-        "label": "E-posta",
-        "value": "kurucu@example.test",
-        "page": 7,
-        "confidence": "high"
-      },
-      {
-        "key": "phone",
-        "label": "Telefon",
-        "value": "+49 151 2345 6700",
-        "page": 8,
-        "confidence": "high"
-      },
-      {
-        "key": "residence_address",
-        "label": "Adres",
-        "value": "Torstraße 45, 10119 Berlin",
-        "page": 9,
-        "confidence": "high"
-      },
-      {
-        "key": "source_of_funds",
-        "label": "Fon kaynağı",
-        "value": "own-abroad",
-        "page": 10,
-        "confidence": "high"
-      }
-    ]
+    "sizeKb": 1
   },
-  "crossCheck": [
-    {
-      "key": "brand",
-      "label": "Şirket / marka adı",
-      "stated": "Lumora",
-      "read": "Lumora Veri Analitiği",
-      "match": true,
-      "choice": null,
-      "at": null
-    },
-    {
-      "key": "country",
-      "label": "Yaşadığınız ülke",
-      "stated": "Almanya",
-      "read": "Torstraße 45, 10119 Berlin",
-      "match": false,
-      "choice": "stated",
-      "at": "2026-11-25T10:30:41.802093+00:00"
-    },
-    {
-      "key": "funding",
-      "label": "Sermaye kaynağı",
-      "stated": "Yurt dışı banka transferi",
-      "read": "own-abroad",
-      "match": true,
-      "choice": null,
-      "at": null
-    },
-    {
-      "key": "nationality",
-      "label": "Uyruk",
-      "stated": "Almanya",
-      "read": "Almanya",
-      "match": true,
-      "choice": null,
-      "at": null
-    },
-    {
-      "key": "phone",
-      "label": "Telefon",
-      "stated": "+49 151 2345 6700",
-      "read": "+49 151 2345 6700",
-      "match": true,
-      "choice": null,
-      "at": null
-    },
-    {
-      "key": "sector",
-      "label": "Faaliyet alanı",
-      "stated": "Yazılım ve bilişim",
-      "read": "62.01, 63.11",
-      "match": true,
-      "choice": null,
-      "at": null
-    }
-  ],
+  "cv": {
+    "fileName": "Ozgecmis.pdf",
+    "sizeKb": 1
+  },
+  "evaluation": {
+    "status": "done",
+    "attempt": 1,
+    "maxAttempts": 3,
+    "startedAt": "2026-11-25T14:19:39.729646+00:00",
+    "finishedAt": "2026-11-25T14:19:50.576588+00:00"
+  },
   "review": {
-    "email": {
-      "label": "E-posta",
-      "value": "kurucu@example.test",
-      "mark": "ai"
-    },
-    "family_name": {
-      "label": "Soyad",
-      "value": "Kurucu-Test",
-      "mark": "edited"
-    },
     "given_name": {
       "label": "Ad",
       "value": "Deneme",
-      "mark": "ai"
+      "mark": "edited"
     },
-    "nace_codes": {
-      "label": "NACE kodları",
-      "value": "62.01, 63.11",
-      "mark": "ai"
+    "family_name": {
+      "label": "Soyad",
+      "value": "Kurucu-Berg",
+      "mark": "edited"
     },
-    "nationality": {
-      "label": "Uyruk",
-      "value": "Almanya",
-      "mark": "ai"
+    "email": {
+      "label": "E-posta",
+      "value": "kurucu@example.test",
+      "mark": "profile"
     },
     "phone": {
       "label": "Telefon",
       "value": "+49 151 2345 6700",
-      "mark": "ai"
+      "mark": "profile"
     },
-    "residence_address": {
-      "label": "Adres",
-      "value": "Torstraße 45, 10119 Berlin",
-      "mark": "ai"
+    "nationality": {
+      "label": "Uyruk",
+      "value": "Almanya",
+      "mark": "profile"
     },
-    "shareholding": {
-      "label": "Pay sahipliği",
-      "value": "%100",
-      "mark": "ai"
+    "residence_country": {
+      "label": "Ülke",
+      "value": "Almanya",
+      "mark": "profile"
     },
     "source_of_funds": {
       "label": "Fon kaynağı",
       "value": "own-abroad",
-      "mark": "ai"
+      "mark": "profile"
     },
-    "trade_name": {
-      "label": "Şirket unvanı",
-      "value": "Lumora Veri Analitiği",
-      "mark": "ai"
+    "nace_codes": {
+      "label": "NACE kodları",
+      "value": "62.01, 63.11",
+      "mark": "entered"
     },
     "postal_code": {
       "label": "Posta kodu",
       "value": "10119",
       "mark": "entered"
     },
-    "residence_country": {
-      "label": "Ülke",
-      "value": "Almanya",
+    "residence_address": {
+      "label": "Adres",
+      "value": "Torstraße 45, Berlin",
+      "mark": "entered"
+    },
+    "trade_name": {
+      "label": "Şirket unvanı",
+      "value": "Lumora Veri Analitiği",
       "mark": "entered"
     }
   },
@@ -217,11 +92,11 @@
     "reason": null
   },
   "eligibility": {
-    "consentAt": "2026-11-25T10:30:44.512467+00:00",
+    "consentAt": "2026-11-25T14:19:53.159167+00:00",
     "running": false,
     "identityDone": true,
     "identityError": null,
-    "declaredAt": "2026-11-25T10:30:45.708926+00:00",
+    "declaredAt": "2026-11-25T14:19:54.378908+00:00",
     "screeningRunning": true,
     "result": null
   },
@@ -259,96 +134,107 @@
   "results": null,
   "documents": [
     {
-      "id": "01a21241-eeb4-7df1-a44e-9f717b87b093",
+      "id": "01a21313-934a-7eec-92be-af2c1a14d31f",
       "type": "deck",
       "sizeKb": 1,
-      "at": "2026-11-25T10:30:40.564468+00:00"
+      "at": "2026-11-25T14:19:39.722576+00:00"
     },
     {
-      "id": "01a21242-02c8-7bc7-af8a-fd5071493065",
+      "id": "01a21313-934b-7da6-ada2-b179df1d09ab",
+      "type": "cv",
+      "sizeKb": 1,
+      "at": "2026-11-25T14:19:39.723396+00:00"
+    },
+    {
+      "id": "01a21313-cc87-7594-b831-fb314dce6bcf",
       "type": "address_proof",
       "sizeKb": 1,
-      "at": "2026-11-25T10:30:45.704036+00:00"
+      "at": "2026-11-25T14:19:54.375147+00:00"
     }
   ],
   "logs": [
     {
-      "at": "2026-11-25T10:30:40.260573+00:00",
+      "at": "2026-11-25T14:19:39.575772+00:00",
       "text": "Başvuru oluşturuldu",
       "who": "s"
     },
     {
-      "at": "2026-11-25T10:30:40.47806+00:00",
+      "at": "2026-11-25T14:19:39.66923+00:00",
       "text": "Ön bilgiler kaydedildi",
       "who": "u"
     },
     {
-      "at": "2026-11-25T10:30:40.597142+00:00",
+      "at": "2026-11-25T14:19:39.731571+00:00",
       "text": "Sunum yüklendi · Lumora Sunum.pdf",
       "who": "u"
     },
     {
-      "at": "2026-11-25T10:30:41.551204+00:00",
-      "text": "AI Reviewer 10 alan çıkardı",
-      "who": "a"
-    },
-    {
-      "at": "2026-11-25T10:30:41.571504+00:00",
-      "text": "Ön bilgilerle karşılaştırıldı: 5 bilgi uyuşuyor, 1 bilgi farklı",
-      "who": "a"
-    },
-    {
-      "at": "2026-11-25T10:30:41.802105+00:00",
-      "text": "Yaşadığınız ülke: ön bilgilerdeki değer seçildi",
+      "at": "2026-11-25T14:19:39.731589+00:00",
+      "text": "Özgeçmiş yüklendi · Ozgecmis.pdf",
       "who": "u"
     },
     {
-      "at": "2026-11-25T10:30:41.839856+00:00",
-      "text": "Sunum bilgileri düzenlendi",
+      "at": "2026-11-25T14:19:40.484658+00:00",
+      "text": "Sunumunuz değerlendirmeye gönderildi",
+      "who": "s"
+    },
+    {
+      "at": "2026-11-25T14:19:50.57659+00:00",
+      "text": "Sunum değerlendirmesi tamamlandı",
+      "who": "s"
+    },
+    {
+      "at": "2026-11-25T14:19:51.394285+00:00",
+      "text": "Başvuru bilgileri düzenlendi",
       "who": "u"
     },
     {
-      "at": "2026-11-25T10:30:41.9292+00:00",
+      "at": "2026-11-25T14:19:51.512186+00:00",
+      "text": "Başvuru bilgileri düzenlendi",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T14:19:51.546314+00:00",
       "text": "Unvan MERSİS’e soruldu",
       "who": "s"
     },
     {
-      "at": "2026-11-25T10:30:41.935342+00:00",
+      "at": "2026-11-25T14:19:51.546876+00:00",
       "text": "Başvuru bilgileri onaylandı",
       "who": "u"
     },
     {
-      "at": "2026-11-25T10:30:43.711177+00:00",
+      "at": "2026-11-25T14:19:52.629461+00:00",
       "text": "Unvan MERSİS’te rezerve edildi",
       "who": "k"
     },
     {
-      "at": "2026-11-25T10:30:44.449951+00:00",
+      "at": "2026-11-25T14:19:53.075523+00:00",
       "text": "Telefonla doğrulama için QR kod oluşturuldu",
       "who": "u"
     },
     {
-      "at": "2026-11-25T10:30:44.512467+00:00",
-      "text": "Kimlik doğrulama telefondan başlatıldı",
-      "who": "u"
-    },
-    {
-      "at": "2026-11-25T10:30:44.512467+00:00",
+      "at": "2026-11-25T14:19:53.159167+00:00",
       "text": "Açık rıza metni onaylandı (yüz görüntüsü ile kimlik doğrulama)",
       "who": "u"
     },
     {
-      "at": "2026-11-25T10:30:44.840549+00:00",
+      "at": "2026-11-25T14:19:53.159167+00:00",
+      "text": "Kimlik doğrulama telefondan başlatıldı",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T14:19:53.768116+00:00",
       "text": "Kimlik doğrulandı",
       "who": "s"
     },
     {
-      "at": "2026-11-25T10:30:45.712822+00:00",
+      "at": "2026-11-25T14:19:54.379337+00:00",
       "text": "Adres belgesi yüklendi · adres-belgesi.pdf",
       "who": "u"
     },
     {
-      "at": "2026-11-25T10:30:45.712863+00:00",
+      "at": "2026-11-25T14:19:54.379359+00:00",
       "text": "Bilgilerin doğruluğu beyan edildi",
       "who": "u"
     }

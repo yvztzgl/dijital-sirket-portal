@@ -1,10 +1,10 @@
 {
-  "id": "01a2122c-144f-7242-8b31-e0bc12d7992a",
-  "referenceNo": "DS-26-76430541",
+  "id": "01a21313-1875-7e56-8e11-efe4f8ec7680",
+  "referenceNo": "DS-26-58859224",
   "stage": "evaluationQuestions",
-  "status": "draft",
+  "status": "deck_review",
   "founderType": "foreign",
-  "createdAt": "2026-11-25T10:06:48.399851+00:00",
+  "createdAt": "2026-11-25T14:19:08.277434+00:00",
   "profile": {
     "brand": "Lumora",
     "sector": "software",
@@ -12,22 +12,22 @@
     "nationality": "Almanya",
     "phone": "+49 151 2345 6700",
     "country": "Almanya",
-    "at": "2026-11-25T10:06:48.475671+00:00"
+    "at": "2026-11-25T14:19:08.298616+00:00"
   },
   "deck": {
-    "fileName": "Lumora Sunum.pdf",
-    "sizeKb": 812
+    "fileName": "Lumora Sunum questions.pdf",
+    "sizeKb": 1
   },
   "cv": {
     "fileName": "Ozgecmis.pdf",
-    "sizeKb": 164
+    "sizeKb": 1
   },
   "evaluation": {
     "status": "questions",
     "attempt": 1,
     "maxAttempts": 3,
-    "startedAt": "2026-11-25T10:08:02.112000+00:00",
-    "finishedAt": null
+    "startedAt": "2026-11-25T14:19:08.330998+00:00",
+    "finishedAt": "2026-11-25T14:19:14.143737+00:00"
   },
   "review": {},
   "titleCheck": null,
@@ -66,33 +66,48 @@
   "results": null,
   "documents": [
     {
-      "id": "01a2122c-0000-7000-8000-00000000d001",
+      "id": "01a21313-18a4-7550-86c1-dc400e2986ba",
       "type": "deck",
-      "sizeKb": 812,
-      "at": "2026-11-25T10:08:02.112000+00:00"
+      "sizeKb": 1,
+      "at": "2026-11-25T14:19:08.324074+00:00"
     },
     {
-      "id": "01a2122c-0000-7000-8000-00000000c001",
+      "id": "01a21313-18a5-70a9-b5a1-46827b9dbc1f",
       "type": "cv",
-      "sizeKb": 164,
-      "at": "2026-11-25T10:08:02.112000+00:00"
+      "sizeKb": 1,
+      "at": "2026-11-25T14:19:08.325172+00:00"
     }
   ],
   "logs": [
     {
-      "at": "2026-11-25T10:06:48.405029+00:00",
+      "at": "2026-11-25T14:19:08.281798+00:00",
       "text": "Başvuru oluşturuldu",
       "who": "s"
     },
     {
-      "at": "2026-11-25T10:06:48.476878+00:00",
+      "at": "2026-11-25T14:19:08.299121+00:00",
       "text": "Ön bilgiler kaydedildi",
       "who": "u"
     },
     {
-      "at": "2026-11-25T10:08:02.112000+00:00",
-      "text": "Sunum ve özgeçmiş yüklendi",
+      "at": "2026-11-25T14:19:08.334512+00:00",
+      "text": "Sunum yüklendi · Lumora Sunum questions.pdf",
       "who": "u"
+    },
+    {
+      "at": "2026-11-25T14:19:08.334533+00:00",
+      "text": "Özgeçmiş yüklendi · Ozgecmis.pdf",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T14:19:09.099371+00:00",
+      "text": "Sunumunuz değerlendirmeye gönderildi",
+      "who": "s"
+    },
+    {
+      "at": "2026-11-25T14:19:14.143739+00:00",
+      "text": "Değerlendirme için ek bilgi gerekiyor",
+      "who": "s"
     }
   ]
 }

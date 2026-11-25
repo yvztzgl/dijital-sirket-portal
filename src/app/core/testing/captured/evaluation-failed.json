@@ -1,0 +1,123 @@
+{
+  "id": "01a21313-3401-7c13-b6d9-20698b28fe8d",
+  "referenceNo": "DS-26-68595544",
+  "stage": "verified",
+  "status": "deck_review",
+  "founderType": "foreign",
+  "createdAt": "2026-11-25T14:19:15.329211+00:00",
+  "profile": {
+    "brand": "Lumora",
+    "sector": "software",
+    "funding": "own-abroad",
+    "nationality": "Almanya",
+    "phone": "+49 151 2345 6700",
+    "country": "Almanya",
+    "at": "2026-11-25T14:19:15.349265+00:00"
+  },
+  "deck": {
+    "fileName": "Lumora Sunum failed.pdf",
+    "sizeKb": 1
+  },
+  "cv": {
+    "fileName": "Ozgecmis.pdf",
+    "sizeKb": 1
+  },
+  "evaluation": {
+    "status": "failed",
+    "attempt": 3,
+    "maxAttempts": 3,
+    "startedAt": "2026-11-25T14:19:15.382268+00:00",
+    "finishedAt": "2026-11-25T14:19:31.385446+00:00"
+  },
+  "review": {},
+  "titleCheck": null,
+  "eligibility": null,
+  "payment": {
+    "amountMinor": 1275000,
+    "fees": [
+      {
+        "code": "tescil_ilan_harci",
+        "label": "Ticaret sicili tescil ve ilan harçları",
+        "amountMinor": 485000
+      },
+      {
+        "code": "noter_eimza",
+        "label": "Noter onayı ve e-İmza (ESHS)",
+        "amountMinor": 240000
+      },
+      {
+        "code": "sanal_ofis_yil1",
+        "label": "Sanal ofis · ilk yıl",
+        "amountMinor": 360000
+      },
+      {
+        "code": "platform",
+        "label": "Platform hizmet bedeli",
+        "amountMinor": 190000
+      }
+    ],
+    "status": null,
+    "last4": null,
+    "paidAt": null
+  },
+  "signature": null,
+  "callConsentAt": null,
+  "setup": null,
+  "results": null,
+  "documents": [
+    {
+      "id": "01a21313-3431-73f3-a0e6-31818d63c509",
+      "type": "deck",
+      "sizeKb": 1,
+      "at": "2026-11-25T14:19:15.377182+00:00"
+    },
+    {
+      "id": "01a21313-3432-78ae-8586-d7f4c33b4b8f",
+      "type": "cv",
+      "sizeKb": 1,
+      "at": "2026-11-25T14:19:15.37801+00:00"
+    }
+  ],
+  "logs": [
+    {
+      "at": "2026-11-25T14:19:15.333162+00:00",
+      "text": "Başvuru oluşturuldu",
+      "who": "s"
+    },
+    {
+      "at": "2026-11-25T14:19:15.349903+00:00",
+      "text": "Ön bilgiler kaydedildi",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T14:19:15.384555+00:00",
+      "text": "Sunum yüklendi · Lumora Sunum failed.pdf",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T14:19:15.384577+00:00",
+      "text": "Özgeçmiş yüklendi · Ozgecmis.pdf",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T14:19:16.195284+00:00",
+      "text": "Sunumunuz değerlendirmeye gönderildi",
+      "who": "s"
+    },
+    {
+      "at": "2026-11-25T14:19:21.272667+00:00",
+      "text": "Sunumunuz değerlendirmeye gönderildi",
+      "who": "s"
+    },
+    {
+      "at": "2026-11-25T14:19:26.339931+00:00",
+      "text": "Sunumunuz değerlendirmeye gönderildi",
+      "who": "s"
+    },
+    {
+      "at": "2026-11-25T14:19:31.388164+00:00",
+      "text": "Sunum değerlendirilemedi; lütfen yeniden yükleyiniz",
+      "who": "s"
+    }
+  ]
+}

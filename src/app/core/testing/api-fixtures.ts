@@ -1,12 +1,12 @@
 import { ApplicationWire, MeWire, PhoneStatusWire } from '../api-types';
 import { EvaluationReference, WizardReference } from '../models';
-import evaluationReference from '../evaluation-reference.json';
-import evaluating from './hand-written/evaluating.json';
-import evaluationFailed from './hand-written/evaluation-failed.json';
-import evaluationQuestions from './hand-written/evaluation-questions.json';
-import reviewDefaults from './hand-written/review-defaults.json';
-import reviewEdited from './hand-written/review-edited.json';
-import statusEvaluating from './hand-written/status-evaluating.json';
+import evaluating from './captured/evaluating.json';
+import evaluationFailed from './captured/evaluation-failed.json';
+import evaluationQuestions from './captured/evaluation-questions.json';
+import referenceEvaluation from './captured/reference-evaluation.json';
+import reviewDefaults from './captured/review-defaults.json';
+import reviewEdited from './captured/review-edited.json';
+import statusEvaluating from './captured/status-evaluating.json';
 import profile from './captured/profile.json';
 import reference from './captured/reference.json';
 import status from './captured/status.json';
@@ -133,39 +133,32 @@ export const REVIEW_APPLICATION: ApplicationWire = {
  */
 const wire = (json: unknown) => json as ApplicationWire;
 
-/**
- * HAND-WRITTEN until recaptured (see testing/hand-written/README.md): the deck step with the outside
- * evaluation, as the contract of 2026-11-25 describes it. Founder "Deneme Kurucu", the same profile as
- * `CAPTURED.verified`.
- */
-export const HAND = {
-  /** `GET /api/reference/evaluation`: the saved STB dictionary (17 groups, 216 activities, 4, 8, 4) and the limits. */
-  referenceEvaluation: evaluationReference as EvaluationReference,
-  /** Deck and CV uploaded; the evaluation runs (first attempt). */
-  evaluating: evaluating as ApplicationWire,
-  /** `GET /api/application/status` while it runs. */
-  statusEvaluating: statusEvaluating as { stage: 'evaluating'; changedAt: string },
-  /** The evaluation needs more information (a stop state). */
-  evaluationQuestions: evaluationQuestions as ApplicationWire,
-  /** The evaluation failed after three attempts: back at `verified` for a new upload. */
-  evaluationFailed: evaluationFailed as ApplicationWire,
-  /** Done: the company form with defaults from the profile and the account (`profile`), title and codes empty. */
-  reviewDefaults: reviewDefaults as ApplicationWire,
-  /** The founder typed the title, the codes, an address and a postal code, and changed the family name. */
-  reviewEdited: reviewEdited as ApplicationWire,
-};
 
 /**
  * `GET /api/application` as the running API answered it at each stage of step 1, captured on
  * 2026-11-25 with tools/api-capture/capture.sh (one made-up founder, "Deneme Kurucu"; every e-mail
  * address replaced with kurucu@example.test). Re-run that script to refresh them.
- * The deck was then read by the development deck reader (the step the outside evaluation replaced on
- * 2026-11-25); its answers (scanning, the review with differences) were removed with it, and their
- * successors are in `HAND` above. The later answers here still carry the reader's leftovers.
+ * Step 1 was recaptured on 2026-11-25 against the API with the outside evaluation (its stand-in
+ * evaluator). The answers of steps 4 and 5 are older and still carry the old deck reader's leftovers
+ * (`crossCheck`, deck fields), which the mapper ignores.
  */
 export const CAPTURED = {
   /** Right after `POST /api/application`. */
   profile: wire(profile),
+  /** `GET /api/reference/evaluation`: the evaluation service's dictionary (17 groups, 216 activities, 4, 8, 4) and the limits. */
+  referenceEvaluation: referenceEvaluation as EvaluationReference,
+  /** Deck (3 pages) and CV uploaded with the answers; the evaluation is queued. */
+  evaluating: evaluating as ApplicationWire,
+  /** `GET /api/application/status` right after the upload. */
+  statusEvaluating: statusEvaluating as { stage: 'evaluating'; changedAt: string },
+  /** Another founder, deck named "… questions.pdf": the stand-in evaluator asks for more information. */
+  evaluationQuestions: evaluationQuestions as ApplicationWire,
+  /** Another founder, deck named "… failed.pdf": every attempt failed, back at `verified`. */
+  evaluationFailed: evaluationFailed as ApplicationWire,
+  /** Done: the company form with defaults from the profile and the account (`profile`); no title and no codes yet. */
+  reviewDefaults: reviewDefaults as ApplicationWire,
+  /** The founder typed the title, the codes, an address and a postal code, and changed the family name. */
+  reviewEdited: reviewEdited as ApplicationWire,
   /** Profile saved, no deck. */
   verified: wire(verified),
   /** After "Onayla ve devam et": the trade name waits for staff. */
