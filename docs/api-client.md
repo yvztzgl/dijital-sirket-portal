@@ -21,8 +21,8 @@ screens ─► ApplicationStore ─► Api (abstract class, used as the injectio
 | `src/app/core/api-types.ts` | The API's JSON as it arrives (`MeWire`, `ApplicationWire`, …), written from the API's `Models/` records. |
 | `src/app/core/api-mapper.ts` | `toAccount(me)`, `toApplication(view, account)`, `toStage`: wire → portal model. Pure functions. |
 | `src/app/core/testing/api-fixtures.ts` | Literal API answers the specs use: hand-written ones, and `CAPTURED` (below). |
-| `src/app/core/testing/captured/*.json` | `GET /api/application` as the running API answered it at each stage of steps 1 to 3, plus the status read, the reference data, the phone routes, the closed application's 404 and the refusals of step 3 (2026-11-25). Made-up founders, e-mail addresses and the phone token replaced; the card is only ever a development token. |
-| `tools/api-capture/capture.sh` | Re-captures those files against a running stack (`capture.sh [step1\|step2\|step3\|all]`; needs `../dijital-sirket-api/dev/staff.sh` for the title and review steps and `dev/last-code.sh` for the second factor). |
+| `src/app/core/testing/captured/*.json` | `GET /api/application` as the running API answered it at each stage of steps 1 to 5, plus the status read, the reference data, the phone routes, the closed application's 404 and the refusals of steps 3 and 4 (2026-11-25). Made-up founders, e-mail addresses and the phone token replaced; the card is only ever a development token; no T.C. kimlik no. |
+| `tools/api-capture/capture.sh` | Re-captures those files against a running stack (`capture.sh [step1\|step2\|step3\|step45\|all]`; needs `../dijital-sirket-api/dev/staff.sh` for the title, review and set-up steps and `dev/last-code.sh` for the second factor). |
 | `src/app/shell/step-up-dialog.ts` | `StepUpDialog`: the second-factor dialog, rendered once by the app shell; its state and logic are in `ApplicationStore` (below). |
 | `src/app/core/status-poller.ts` | `StatusPoller` and `pollDelay`: the pacing of the status poll in HTTP mode. |
 | `src/app/core/rules.ts` | Pure checks the screens use (card, T.C. kimlik no, password strength, address document size, deck size and type, funding options, title suffix and title suggestions). Not part of either implementation. |
@@ -96,8 +96,8 @@ Inbox toasts belong to the mock, and nothing in HTTP mode sends to the Inbox).
 **Connected:** `submitProfile`, `uploadDeck`, `resolveCrossCheck`, `updateReview`, `submitReview`,
 `chooseTitle`, `reference`, and the background-work capability `work` (polling). Every write answers
 with an empty body (204/202); `HttpApi` then reads the application again (`fresh()`: the status read,
-then `GET /api/application`, mapped). Step 2 came in piece 6 and step 3 with the second factor in
-piece 7 (below); step 4 on still rejects with `not_connected`.
+then `GET /api/application`, mapped). Step 2 came in piece 6, step 3 with the second factor in
+piece 7, and steps 4 and 5 in piece 8 (below).
 
 ### Requests of step 1
 
@@ -309,10 +309,11 @@ Left neutral, not invented:
 | `company.root` / `activity` | first word / the rest of the title | The API keeps one string; joined again nothing is lost. |
 | `eligibility` | mapped since piece 6 (see "Step 2 over HTTP") | no score; times from the timeline |
 | `payment.holder`, `payment.last4` | what this page typed for this application (`HttpApi` memory), else `''` | Not in the view (`last4` is always null); see "Step 3 over HTTP" |
-| `signature.method` | `existing` / `edevlet` kept, anything else `eshs` | The API's certificate kinds were not seen yet. |
-| `setup`, `results`, `call` | absent | Different shapes; the next pieces. |
+| `signature.method` | `nes_daily` → `eshs`, `nes_existing` → `existing`, `nes_standard` → `edevlet` (piece 8) | the kinds the development provider issues |
+| `signature.holder` | the account's first and last name | the API sends no holder |
+| `setup`, `results`, `call` | mapped since piece 8 (see "Steps 4 and 5 over HTTP") | |
 | `phoneLink` | only in `HttpApi`'s memory while the QR code is shown | the API gives the token once, in the answer to `POST /phone-link` |
-| `docs[].group`, `docs[].name` | `deck` → "Sunum", `address_proof` → "Adres belgesi", both in "1 · Başvuru & Uygunluk"; any other type: `''` and the type | The view gives a type code, not a group and title. |
+| `docs[].group`, `docs[].name` | `deck` → "Sunum", `address_proof` → "Adres belgesi" (both "1 · Başvuru & Uygunluk"), and Turkish names for the other types the schema names (`DOC_NAMES`); any other type: "Diğer belgeler" and the type | The view gives a type code, not a group and title. |
 
 To refresh the captured JSON: run the stack, then `tools/api-capture/capture.sh` (it registers a new
 made-up founder each time and uses `dev/staff.sh -a <reference> title reject|reserve`).
@@ -485,8 +486,8 @@ nothing and changes nothing on the server.
 **What triggers it.** The API refuses four actions with **403 `step_up_required`** ("Bu işlem için
 e-posta adresinize gönderilen kodu girmeniz gerekir.") unless this session passed an e-mailed code in
 the last 15 minutes: `POST /api/application/payment`, `POST /api/application/esign/call/start`,
-`POST /api/application/esign/resident` and `POST /api/application/setup`. Today only the payment is
-connected; the others go through the same mechanism when the next pieces connect them.
+`POST /api/application/esign/resident` and `POST /api/application/setup`. All four are connected (the
+last three in piece 8) and go through the same mechanism.
 
 ```
 Send code    POST /api/auth/step-up                   202 (no body); nothing is sent within 60 s of the last code
@@ -594,6 +595,260 @@ was started, even a cancelled one, a reload goes to D-3a. Checked against `payme
 The 3-D Secure panel itself ("KART BANKANIZ") is still the portal's own lookalike in both modes. With a
 real provider the 3-D Secure step is the provider's (or the bank's) own page or frame.
 
+## Steps 4 and 5 over HTTP (since 2026-11-25, piece 8)
+
+**Connected:** `acceptCallTerms`, `startCall`, `endCall`, `completeCall`, `signResident`, `startSetup`,
+each followed by a fresh read, and polling of the e-signature and set-up waiting points. After this piece
+a founder goes from registration to "Şirketiniz kuruldu" in HTTP mode. What still answers
+`not_connected`: `backToReview` (no route; open decision 12) and Terminal AI's `ask`.
+
+### Requests of steps 4 and 5
+
+```
+Consent (D-4a)     POST /api/application/esign/consent {consent}          204, idempotent; view: callConsentAt
+Call (D-4a)        POST /api/application/esign/call/start                 204, stage calling        step-up
+                   409 consent_missing, 409 wrong_flow (residents)
+Hang up (D-4b)     POST /api/application/esign/call/end                   204, stage signing again
+                   409 no_open_call (re-reads the application)
+Script ended       POST /api/application/esign/call/complete              202; the Worker issues → signed
+                   409 no_open_call: completed before (a reload) or ended elsewhere; read again
+Resident (D-4d)    POST /api/application/esign/resident {method}          202, stage calling while issuing   step-up
+                   method "existing" | "edevlet"; 409 wrong_flow (foreign founders)
+Set-up (D-4c)      POST /api/application/setup {confirmed}                202, stage setup          step-up
+                   400 errors.confirmed; 409 no_valid_signature (expired; re-reads → signing)
+Polling            GET  /api/application/status (then GET /api/application only when it changed)
+```
+
+The three marked "step-up" open the second-factor dialog when this session has no code from the last 15
+minutes, and are repeated once after it (walked for the call start and for the resident's signing, below).
+
+### Full stage table, sign-in to done
+
+| API stage (+ view) | Portal stage | Screen | Polled? | What ends it |
+| --- | --- | --- | --- | --- |
+| (no session) | `null` | D-0a `/login`, D-0b `/register` | no | sign-in, registration |
+| (registered, code not confirmed) | `registered` | D-0c `/verify-email` | no | the code |
+| `profile` | `profile` | D-1e `/details` | no | the founder saves the profile |
+| `verified` | `verified` | D-1a `/deck` | no | deck upload |
+| `scanning` | `scanning` | D-1b `/deck/scan` | yes | the Worker |
+| `review` | `review` | D-1c `/deck/review` | no | submit |
+| `titleChecking` | `titleChecking` | D-1f `/deck/name-check` | yes | staff |
+| `titleConflict` | `titleConflict` | D-1d `/deck/name-rejected` | no | a new title |
+| `eligibility` | `eligibility` | D-2a `/eligibility` | while a check is open or the QR code shown | the Worker / the phone |
+| `declaration` | `declaration` | D-2d `/eligibility/declaration` | no | upload and declaration |
+| `screening` | `screening` | D-2e `/eligibility/screening` | yes | the Worker |
+| `payment` (result eligible, not yet seen) | `eligible` | D-2b `/eligibility/result` | no | "Ödemeye geç" (client-side) |
+| `manual` | `manual` | D-2c `/eligibility/manual-review` | yes (slow) | staff |
+| (404 while holding an application) | `closed` | `/application-closed` | no | sign-out |
+| `payment` | `payment` | D-3a `/payment` | no | card + step-up |
+| `threeDs` | `threeDs` | D-3b `/payment/3d-secure` | no | 3-D Secure code |
+| `signing` (foreign) | `signing` | D-4a `/e-signature` (pre-information until `callConsentAt`, then the camera lobby) | no | "Operatörü ara" (step-up) |
+| `signing` (resident) | `signing` | D-4d `/e-signature/turkish-citizen` | no | method + "Devam et" (step-up) |
+| `signing` + an expired `signature` | `signing` | D-4a / D-4d with "E-imzanızın süresi doldu…" | no | sign again |
+| `calling` (foreign, call open) | `calling` | D-4b `/e-signature/call`, the scripted call | **no** (the founder's own script runs) | the script ends → `call/complete`; or "Görüşmeyi bitir" → `call/end` |
+| `calling` (foreign, reported ended) | `calling` (`call.completed`) | D-4b "E-imzanız düzenleniyor" | yes | the Worker: `signed` |
+| `calling` (resident) | `calling` | D-4d "E-imzanız doğrulanıyor" | yes | the Worker: `signed` |
+| `signed` | `signed` | D-4c `/e-signature/ready` | no (one read when the certificate runs out) | "Kuruluşu başlat" (step-up) |
+| `setup`, `setup: null` | `setup` | D-5a `/setup`, "Kuruluş adımlarınız hazırlanıyor" | yes | the Worker creates the steps |
+| `setup` with steps | `setup` | D-5a, the server's steps, tasks and results | yes (settles at 15 s) | staff complete the institution tasks |
+| `done` | `done` | D-5a's finishing moment, then D-5b `/setup/complete` | **no** | — |
+
+`SERVER_WAITING_STAGES` is now `scanning`, `titleChecking`, `screening`, `manual`, `setup`;
+`waitsForServer(app)` adds the identity step (as before) and `calling` for a resident, after the call was
+reported ended, or when the portal cannot tell (no call start in the timeline). `done` is never polled.
+
+### The video call (D-4a, D-4b)
+
+- **The call is still simulated in both modes**: there is no video or e-signature vendor yet. D-4b is the
+  portal's 20-second scripted call. Its start is the newest "ESHS görüntülü görüşmesi başladı" line of the
+  timeline (the view has no field), so a reload continues where the script was.
+- In HTTP mode, when the script ends the store calls `call/complete` once per call (keyed by its start),
+  and D-4b says "Görüşme tamamlandı · E-imzanız düzenleniyor" with no end button until the poll sees
+  `signed`. The mock still moves on at once.
+- **API gap:** the API reports `calling` both while the call is open and while the certificate is being
+  issued (both are an open `esign_issue` work item; `call/complete` writes no timeline line). `HttpApi`
+  remembers in memory which call it reported ended (`callCompleted`, by application and call start). After a
+  reload the script runs to its end again, `call/complete` answers 409 `no_open_call`, and `HttpApi` then
+  treats the call as completed. A field such as `call: {status}` in the view would remove the guess.
+- "Görüşmeyi bitir" → `call/end` → `signing` → D-4a lobby (the consent is kept). 409 `no_open_call` re-reads.
+
+### The resident (D-4d)
+
+`esign/resident {method}` (step-up) → 202. **What the API reports while issuing:** `ApplicationStage` says
+`calling` whenever an `esign_issue` work item is waiting, queued or running, and a resident's signing is
+such an item, though there is no call. So in HTTP mode `routeFor('calling', 'resident')` is D-4d (D-4d
+accepts `signing` and `calling`; D-4b only foreign founders), and D-4d shows "E-imzanız doğrulanıyor" and
+polls until `signed`. The view does not say which method was chosen. The development provider answers in
+about a second (`nes_existing`, a year; `nes_standard` for e-Devlet, three years).
+
+### The signed screen (D-4c)
+
+- Serial, `issuedAt` and `validUntil` are the API's; the holder is the account's name (the API sends none;
+  in development the identity check renames a foreign founder's account to "John Doe" and e-Devlet's stand-in
+  gives "Mehmet Yılmaz"). Title "Günlük e-imza" for `eshs`, "Nitelikli e-imza" otherwise.
+- The countdown and bar use `validUntil` against the certificate's own validity (`validUntil − issuedAt`),
+  "23:59" style under two days, "1094 gün" style above.
+- Left out in HTTP mode: the passport/T.C. part of the holder line, "Kapsam: Yalnızca … kuruluş
+  belgeleri" (the API reports no scope) and "Görüşme tutanağı / Taahhütname belgelerinize eklendi" (the API
+  adds no such document).
+- **Expiry:** when `validUntil` passes on D-4c the store reads the application once; the API is then at
+  `signing` with the old certificate still in the view, so the portal goes back to D-4a / D-4d, which say
+  "E-imzanızın süresi doldu. Kuruluşu başlatabilmek için e-imza adımını yeniden yapmanız gerekir." A set-up
+  refused with 409 `no_valid_signature` re-reads the application the same way. (Tested with a hand-built
+  fixture, `SIGNATURE_EXPIRED`; not walked: it takes 24 hours.)
+
+### The set-up screen (D-5a) in HTTP mode: the rules
+
+D-5a is a status page. Staff and the institutions do the work; it can take days; the founder may close
+the page. It shows only what the server reports:
+
+- **Steps:** the server's nine steps line up with the portal's nine agencies by number, and eight titles are
+  word for word the same (the ninth is "Mali Müşavir Eşleştirme" on the API, "Müşavir Yönlendirme" in the
+  portal; checked in `api-mapper.spec.ts`). So the layout stays: the building, "Detayı gör" and the rows.
+  In HTTP mode the rows carry the server's titles and states ("Tamamlandı", "İşlemde", "Sırada", "Beklemede"
+  for a state the portal does not know), with no institution line (the API sends none). The list and its
+  sub-steps are open by default.
+- **"İşlemde":** the server leaves a step `pending` until one of its tasks is completed, even when a task is
+  already with the institution; the portal counts a step as running when the server says `in_progress` or
+  when one of its tasks has started (`waiting_external`, `in_progress`, `done`).
+- **Tasks** (under "Alt adımları göster", steps 4–9): the server's own (13 in all, fewer than the mock's 34
+  sub-steps), with "· kurumda bekliyor" (`waiting_external`), "· işlemde", "· sırada", "(muaf)" struck through
+  (`exempt`), ✓ when done. The count is tasks done or exempt / all tasks.
+- **The building** stands at the number of steps 4–9 completed, a whole floor each; it does not rise with
+  time. The floors are a count, not particular steps (several steps run side by side on the server).
+- **No percentage, no time estimate, no "current sub-step" line, no live log lines or documents made in
+  the browser** (`store.setup()` is null in HTTP mode).
+- **`setup: null`** (the Worker has not created the steps yet; seconds in development): "Kuruluş
+  adımlarınız hazırlanıyor".
+- **Results** appear under the list as they arrive (MERSİS no, ticaret sicili tescil no, VKN, vergi
+  dairesi, IBAN, e-Fatura kayıt no, SGK işyeri sicil no), only those the API has sent.
+- **Timeline:** the side panel's "İşlem kaydı" is the server's `logs`.
+- Lead text: "Kurum işlemleri ekibimiz ve ilgili kurumlar tarafından yürütülmektedir; bu süreç birkaç gün
+  sürebilir. … sayfa açıksa durum kendiliğinden güncellenir." (no promise of e-mails at each stage, which
+  the API does not send).
+- At `done` the finishing moment plays as in the mock, then D-5b.
+
+### The done screen (D-5b) in HTTP mode
+
+| Element | HTTP mode | Why |
+| --- | --- | --- |
+| Results | VKN (+ vergi dairesi), MERSİS no (+ tescil no), IBAN, e-Fatura kayıt no, SGK işyeri sicil no; each with "Kopyala"; only those sent | `results` keys `vkn`, `vergi_dairesi`, `mersis_no`, `tescil_no`, `iban`, `e_fatura_no`, `sgk_isyeri_no` (`ttsg_sayi` and others are not shown) |
+| Mali müşavir row and its "İletişim" | hidden | **API gap:** the view has no advisor name or firm; "İletişim" only sent a mock e-mail |
+| "Sermayenin %25'i (62.500 TL) bloke" under the IBAN, "Halkbank" in its label | hidden | the API sends no capital; the amount was the portal's constant |
+| "Tescil … · Gebze Ticaret Sicili Müdürlüğü · Merkez: …" | "Kuruluş <date> · Ticaret sicili tescil no <no>" | the date of "Şirketiniz kuruldu" in the timeline, the number from `results` |
+| "Sonraki adımlar" | hidden | names the mock's advisor, a capital amount and e-mails the API does not send |
+| "Tüm belgeleri indir (ZIP)" | hidden | the ZIP was made of browser placeholders |
+| "Şirket paneline git" | hidden | only sent a mock Inbox e-mail |
+| (new) note + "Belgeleri görüntüle" / "İşlem kaydını görüntüle" | "Şirketinize ait belgeler düzenlendiğinde Belgeler bölümünde listelenecektir." (**wording to be confirmed**) | |
+| Logo | absent | the API keeps no logo |
+
+### Documents in HTTP mode (all screens)
+
+- The side panel lists exactly the API's `documents`, by Turkish type name (`DOC_NAMES` in api-mapper.ts),
+  with size and date. No "PDF, e-imzalı", no PDF badge, **no preview and no download** (the API has no
+  route to download a document). Under the list: "Belgeler düzenlendiğinde buradan görüntülenebilecek ve
+  indirilebilecektir." (**wording to be confirmed**). Today the API lists the deck and the address document
+  only, and generates no company documents.
+- `ApplicationStore.documentPdf` refuses in HTTP mode, so no placeholder PDF can be produced there; the
+  preview dialog is reachable only from the mock's buttons.
+
+### Each screen element hidden or changed in HTTP mode (steps 4 and 5)
+
+| Screen | Element | HTTP mode |
+| --- | --- | --- |
+| D-4a | consent, "Operatörü ara" | connected (`esign/consent`, `call/start` with step-up) |
+| D-4a / D-4d | expired-certificate notice | new |
+| D-4b | scripted call | kept (no vendor); its end calls `call/complete` once |
+| D-4b | "E-imzanız düzenleniyor" | new, after the call was reported ended |
+| D-4b | "Görüşmeyi bitir" | connected (`call/end`); not shown while issuing |
+| D-4c | holder's document, "Kapsam", "… belgelerinize eklendi" | hidden |
+| D-4c | title, countdown | from the certificate's kind and validity |
+| D-4d | method choice | connected (`esign/resident` with step-up) |
+| D-4d | "E-imzanız doğrulanıyor" | new, while the API says `calling` |
+| D-5a | as in "The set-up screen" above | |
+| D-5b | as in "The done screen" above | |
+| side panel | documents | the API's list, no preview/download |
+
+### Captured answers and tests
+
+`capture.sh step45` (two founders, 2026-11-25): F (foreign) `esign-signing`, `esign-consent-missing`,
+`esign-consent`, `esign-call-open`, `esign-call-ended`, `esign-no-open-call`, `esign-issuing`,
+`esign-signed`, `setup-started`, `status-setup`, `setup-steps`, `setup-results` (registration done:
+`mersis_no`, `tescil_no`, `ttsg_sayi`), `setup-done`, `status-done`; R (resident) `resident-signing`,
+`resident-issuing`, `resident-signed`, `resident-setup-steps`. Staff are played in the background with
+`dev/staff.sh -a <ref> setup`. The resident's development address `<T.C. no>@edevlet.test` is replaced and
+the run stops if the T.C. kimlik no is found in a saved file. Hand-built: `SIGNATURE_EXPIRED`,
+`NO_VALID_SIGNATURE`.
+
+Tests: `api-mapper.spec.ts` "steps 4 and 5" (12), `http-api.spec.ts` "HttpApi steps 4 and 5" (6),
+`application.store.spec.ts` "in steps 4 and 5 (HTTP mode)" (6): the call reported once and not polled
+while it runs, the resident polled, the three step-up actions repeated once, `no_valid_signature`
+re-reading, the one read at expiry, the set-up's slow pace and no poll after `done`.
+
+### Walked end to end (2026-11-25, HTTP mode on port 4300, the API stack running)
+
+- Foreign founder `DS-26-91200727` (steps 1–3 by same-origin `fetch` in the page, `dev/staff.sh title
+  reserve`, then signed out and in again so the session had no second factor): D-4a consent → "Operatörü
+  ara" → **step-up dialog**, code from `dev/last-code.sh` → the call started by itself → "Görüşmeyi bitir",
+  confirmed → D-4a lobby → call again → after 20 s "E-imzanız düzenleniyor" for about 2 s → D-4c with the
+  API's serial (`ESHS-2611-8094-…`, matched against `GET /api/application`) and "26.11.2026 15:01
+  tarihine kadar geçerli", "23:59" → "Kuruluşu başlat" (no dialog: the code was under 15 minutes old) →
+  D-5a, steps appeared by polling → `dev/staff.sh setup` stopped after the first task: registration
+  "Tamamlandı", tax and bank "İşlemde" with "kurumda bekliyor", MERSİS no and tescil no listed, building
+  1/6, all without a reload → reload: same state → the rest of `staff.sh setup` → finishing moment → D-5b
+  with the API's VKN, MERSİS, IBAN, e-Fatura and SGK numbers. No request after the last full read at `done`.
+- Foreign founder `DS-26-53989913`: the same to D-4c on the old bundle (the dev server had served stale
+  lazy chunks; restarted), then on the new one: D-4c → "hazırlanıyor" → steps → `staff.sh setup` → done →
+  documents panel (Sunum, Adres belgesi; no preview, no download) → reload on D-5b: `/api/me`, the status
+  read and one full read, nothing after.
+- Resident `DS-26-11195495` (steps 1–3 with curl on its own session; then the e-Devlet dialog in the page
+  with the generated test T.C. no): D-4d, "e-Devlet ile yeni e-imza" → **step-up dialog** (403 → code →
+  repeated, 202) → "E-imzanız doğrulanıyor" for about 2 s → D-4c "Nitelikli e-imza", "24.11.2029 15:04",
+  "1094 gün" → set-up → steps appeared by polling (left at `setup`).
+- Network: while waiting only status reads, a full read only after a change. Browser storage: only
+  `dsp.prefs.v1`. Console: no errors from the portal (only the browser's lines for the expected 403
+  `step_up_required` and a 401 on the sign-in page).
+- Mock mode (default configuration, port 4301): D-4a → scripted call → D-4c (passport line, "Kapsam",
+  "Görüşme tutanağı belgelerinize eklendi") → scripted set-up (%53 with agencies' institution lines) →
+  done with the mock's results, "Sonraki adımlar", "Tüm belgeleri indir (ZIP, 20 belge)"; the side panel's
+  documents still have preview and download.
+- Not walked: an expired certificate (24 hours), the `no_valid_signature` refusal, a hang-up refused with
+  `no_open_call`, a reload during the scripted call, a set-up step in `exception` / `blocked`.
+
+## Still simulated or missing in HTTP mode
+
+Everything the portal shows against the real API that is not the API's, or that the API cannot do yet:
+
+- **Camera check (D-2a, D-2a-m):** the portal's own animation; no identity vendor. The development
+  provider always passes; a failed check was not walked.
+- **Video call (D-4b):** the portal's scripted call with a fixed operator ("Elif K.") and captions; no video
+  or e-signature vendor. The API cannot say whether a call is open or the certificate is being issued.
+- **Card entry (D-3a):** the portal's own form and a development token (`tok_test_` + last four digits); a
+  real provider's hosted fields are not built. The 3-D Secure panel is a lookalike.
+- **e-Devlet dialog:** a development stand-in for the redirect (`HttpApi.edevlet` plays the return trip).
+- **Terminal AI:** its answers are the mock's (`ask` is `not_connected`); the suggested questions are the
+  portal's.
+- **Documents and downloads:** no download route, no company documents generated; the side panel lists the
+  API's documents without preview or download.
+- **Advisor:** no name or firm in the view; D-5b leaves the row out.
+- **Logo:** the API keeps no logo; D-1c's logo replacement and D-5b's logo are absent.
+- **Capital:** the API sends none; the portal shows its constant (250 000 TL) where needed (D-1c), and
+  D-5b leaves out the blocked-capital line.
+- **Deck pages and reading:** `pages` is null with the development reader; D-1b lists no fields while the
+  deck is read; a failed reading was not walked.
+- **Title suggestions (D-1d):** the portal's own (`titleAlternatives`).
+- **Timeline codes:** the view carries Turkish texts only; the mapper reads times from them (`LOG_TEXTS`).
+- **Rejected founder:** the next sign-in creates a new application (the API cannot tell "closed").
+- **Consents:** the register screen's KVKK and terms ticks are not sent; the deck consents' labels are
+  placeholders.
+- **"Bu cihazda 30 gün oturumu açık tut":** does nothing (12-hour sessions).
+- **Landing page fees:** the portal's `FEES`, not the API's.
+- **D-2b/D-2e:** no per-list screening results or score (the API reports none).
+- **Back from manual review / review after manual review:** no route (open decision 12).
+- **Wording to be confirmed:** the documents notes on D-5b and in the side panel, D-5a's lead, and D-4d's
+  "e-Devlet ile yeni e-imza alacağım … günlük e-imza düzenlenir" (the development provider issues a
+  three-year `nes_standard` for it).
+
 ## Flow: the mock walks the API's path up to the review (since 2026-11-25)
 
 Piece 2 made the portal's step 1 follow the API's flow, still on the mock, so that both modes walk
@@ -632,9 +887,8 @@ in piece 3.)
 
 ## Known gaps for later pieces
 
-- Step 4 onward: call and setup are still `not_connected` in HTTP mode; when connected, their waiting
-  stages join `SERVER_WAITING_STAGES`, and their refusals for want of a second factor already go through
-  the dialog.
+- Steps 4 and 5: see "Steps 4 and 5 over HTTP" for their API gaps, and "Still simulated or missing in
+  HTTP mode" for the whole list.
 - Payment: the card form is the portal's own and the token a development stand-in (see "Card data never
   leaves the browser"); a real provider's hosted fields and its 3-D Secure page are not built.
 - The landing page (`/`, before sign-in) still lists the portal's `FEES`; the API's fee list is read
