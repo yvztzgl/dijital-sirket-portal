@@ -4,6 +4,11 @@
     <p class="wz-lead">Bu adımda sizden yalnızca bir dosya istenmektedir: Terminal Şirket sunum formatında hazırlanmış yatırımcı sunumunuz. Başvuru, şirket ve kurucu bilgileri bu dosyadan okunur ve ön bilgilerinizle karşılaştırılır.</p>
   </div>
 
+  @if (deckFailed()) {
+    <!-- The API's deck.status "failed": the reader gave up on the last file; a new upload starts again. -->
+    <p class="wz-notice" role="alert"><app-icon name="alert" size="16px" [stroke]="2.2" /><span><b>{{ scanFile() || 'Sunumunuz' }} okunamadı.</b> Lütfen dosyanızı kontrol ederek yeniden yükleyiniz. Dosya PDF veya PPTX biçiminde olmalı ve Terminal Şirket sunum formatına uymalıdır.</span></p>
+  }
+
   <!-- Both ticks are the founder's own act for this upload; the drop area opens only after them. -->
   <app-deck-consents [(notice)]="noticeAcknowledged" [(ai)]="aiConsent" />
 
@@ -31,7 +36,7 @@
   </section>
 
   <div class="wz-actions">
-    <a class="wz-link" routerLink="/details"><app-icon name="pencil" size="15px" [stroke]="2" />Ön bilgileri düzenle</a>
+    @if (profileEditable()) {<a class="wz-link" routerLink="/details"><app-icon name="pencil" size="15px" [stroke]="2" />Ön bilgileri düzenle</a>}
     <button type="button" class="wz-link" (click)="formatOpen.set(true)" aria-haspopup="dialog"><app-icon name="file" size="15px" [stroke]="2" />Sunum formatını inceleyiniz</button>
     <a class="wz-link" href="/assets/samples/lumora-analytics-pitch.pptx" download="ornek-sunum-lumora-analytics.pptx"><app-icon name="download" size="15px" [stroke]="2" />Örnek sunumu indir (PPTX, 16 sayfa)</a>
   </div>

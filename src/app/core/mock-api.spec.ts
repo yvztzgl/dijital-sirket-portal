@@ -119,11 +119,21 @@ describe('MockApi flow', () => {
     expect(app.deck!.fields.find((f) => f.key === 'name')!.value).toBe('Ayşe Kaya');
     app = await api.completeScan();
     app = await api.submitReview();
+    // The title waits for its answer, as on the API; the simulated check gives it.
+    expect(app.stage).toBe('titleChecking');
+    expect(app.titleCheck).toMatchObject({ status: 'checking', candidate: 'Acme Bulut Bilişim' });
+    expect(app.titleCheck!.requestedAt).toBeTruthy();
+    await expect(api.chooseTitle('Acme Bulut Yazılım')).rejects.toThrow('şu anki adımında');
+    app = await api.completeTitleCheck();
     expect(app.stage).toBe('titleConflict');
     expect(app.titleCheck!.conflictWith).toBe('Acme Bulut Bilişim Hizmetleri A.Ş.');
+    expect(app.titleCheck!.alternatives).toContain('Acme Bulut Yazılım');
     app = await api.chooseTitle('Acme Bulut Yazılım A.Ş.');
-    expect(app.stage).toBe('eligibility');
+    expect(app.stage).toBe('titleChecking');
     expect(app.company.activity).toBe('Bulut Yazılım');
+    app = await api.completeTitleCheck();
+    expect(app.stage).toBe('eligibility');
+    expect(app.titleCheck).toEqual({ status: 'ok', candidate: 'Acme Bulut Yazılım' });
   });
 
   it('hands the identity check to a phone through a short-lived link', async () => {
@@ -132,6 +142,7 @@ describe('MockApi flow', () => {
     await api.uploadDeck(deck('novalab-deck.pdf', 1000), CONSENTS);
     await api.completeScan();
     await api.submitReview();
+    await api.completeTitleCheck();
     expect(await api.phoneLinkStatus('nope')).toEqual({ state: 'invalid' });
 
     let app = await api.createPhoneLink();
@@ -167,6 +178,7 @@ describe('MockApi flow', () => {
     await api.uploadDeck(deck('novalab-deck.pdf', 1000), CONSENTS);
     await api.completeScan();
     await api.submitReview();
+    await api.completeTitleCheck();
     let app = await api.createPhoneLink();
     const token = app.phoneLink!.token;
     const realNow = Date.now;
@@ -203,7 +215,8 @@ describe('MockApi flow', () => {
     await api.uploadDeck(deck('novalab-deck.pdf', 1000), CONSENTS);
     await api.completeScan();
     await api.updateReview({ funding: 'third-party' }, ['funding']);
-    let app = await api.submitReview();
+    await api.submitReview();
+    let app = await api.completeTitleCheck();
     expect(app.stage).toBe('eligibility');
     // The identity check waits for the founder: nothing runs before "Doğrulamayı başlat".
     expect(app.eligibility).toBeUndefined();
@@ -357,7 +370,8 @@ describe('MockApi flow', () => {
     expect(phone.choice).toBe('read');
     expect(phone.at).toBeTruthy();
     expect(app.logs.at(-1)).toMatchObject({ text: 'Telefon: sunumdaki değer seçildi', who: 'u' });
-    expect((await api.submitReview()).stage).toBe('eligibility');
+    expect((await api.submitReview()).stage).toBe('titleChecking');
+    expect((await api.completeTitleCheck()).stage).toBe('eligibility');
   });
 
   it('counts a difference as decided when the founder types another value in the review', async () => {
@@ -368,7 +382,8 @@ describe('MockApi flow', () => {
     await api.completeScan();
     const app = await api.updateReview({ founder: { nationality: 'Kanada' } }, ['name']);
     expect(app.crossCheck.find((c) => c.key === 'nationality')!.choice).toBe('edited');
-    expect((await api.submitReview()).stage).toBe('eligibility');
+    expect((await api.submitReview()).stage).toBe('titleChecking');
+    expect((await api.completeTitleCheck()).stage).toBe('eligibility');
   });
 
   it('shows "—" for a compared value the deck did not give', async () => {
@@ -449,7 +464,8 @@ describe('MockApi flow', () => {
     await api.submitProfile(PROFILE);
     await api.uploadDeck(deck('novalab-deck.pdf'), CONSENTS);
     await api.completeScan();
-    expect((await api.submitReview()).stage).toBe('eligibility');
+    expect((await api.submitReview()).stage).toBe('titleChecking');
+    expect((await api.completeTitleCheck()).stage).toBe('eligibility');
   });
 
   // ------------------------------------------------------ sessions and password reset (2026-11-25)

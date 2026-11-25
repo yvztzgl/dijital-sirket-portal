@@ -2,13 +2,17 @@
   <div class="wz-head">
     <span class="wz-chip wz-chip--warn"><app-icon name="alert" size="13px" [stroke]="2.2" />Unvan rezerve edilemedi</span>
     <h1 class="wz-h1">Başka bir unvan seçiniz</h1>
-    <p class="wz-lead">Seçtiğiniz unvan MERSİS’te kayıtlı bir unvana benziyor, lütfen başka bir unvan seçiniz.</p>
+    <p class="wz-lead">Seçtiğiniz unvan rezerve edilemedi. Lütfen başka bir unvan seçiniz.</p>
   </div>
 
   <section class="wz-card wz-title" role="alert">
     <dl class="vs">
       <div><dt>Seçtiğiniz unvan</dt><dd>{{ titleCheck()?.candidate }} Anonim Şirketi</dd></div>
-      <div><dt>MERSİS’te kayıtlı unvan</dt><dd>{{ titleCheck()?.conflictWith }}</dd></div>
+      @if (titleCheck()?.conflictWith) {
+        <div><dt>MERSİS’te kayıtlı unvan</dt><dd>{{ titleCheck()?.conflictWith }}</dd></div>
+      } @else if (titleCheck()?.reason) {
+        <div><dt>Gerekçe</dt><dd>{{ titleCheck()?.reason }}</dd></div>
+      }
     </dl>
 
     <div class="pick">
@@ -35,7 +39,8 @@
           </div>
         </form>
       }
-      @if (store.busy()) {<p class="busy" aria-live="polite">MERSİS’te yeniden sorgulanıyor…</p>}
+      @if (fieldError('title'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
+      @if (store.busy()) {<p class="busy" aria-live="polite">Gönderiliyor…</p>}
     </div>
   </section>
 
@@ -43,5 +48,5 @@
   <div class="wz-actions">
     <button type="button" class="wz-link" (click)="editAgain()" [disabled]="store.busy()">Diğer bilgilere dön</button>
   </div>
-  <p class="wz-foot"><app-icon name="info" size="13px" [stroke]="2" />Seçtiğiniz unvan MERSİS’te hemen yeniden sorgulanır.</p>
+  <p class="wz-foot"><app-icon name="info" size="13px" [stroke]="2" />Seçtiğiniz unvan yeniden kontrol edilir; sonucu bu sayfada görürsünüz.</p>
 </app-step-page>

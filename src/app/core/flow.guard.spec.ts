@@ -52,6 +52,19 @@ describe('flowGuard', () => {
     expect(router.serializeUrl((await run('d1e')) as UrlTree)).toBe('/deck/scan');
   });
 
+  it('shows the title check while it runs, and lets D-1c open again after a refused title', async () => {
+    const store = TestBed.inject(ApplicationStore);
+    const router = TestBed.inject(Router);
+    await store.seed('titleChecking');
+    expect(store.stage()).toBe('titleChecking');
+    expect(await run('titlecheck')).toBe(true);
+    expect(router.serializeUrl((await run('d1c')) as UrlTree)).toBe('/deck/name-check');
+    await store.seed('titleConflict');
+    expect(await run('rejection')).toBe(true);
+    expect(await run('d1c')).toBe(true);
+    expect(router.serializeUrl((await run('titlecheck')) as UrlTree)).toBe('/deck/name-rejected');
+  });
+
   it('every stage has a screen that accepts it', () => {
     for (const stage of STAGE_ORDER) {
       const path = routeFor(stage);

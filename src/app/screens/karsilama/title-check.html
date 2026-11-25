@@ -1,0 +1,31 @@
+<app-step-page [step]="1" [part]="3" [parts]="3" sub="Kontrol" ctx="title" label="D-1f Unvan kontrolü" [width]="760">
+  <div class="wz-head">
+    <span class="wz-chip wz-chip--info"><app-icon name="clock" size="13px" [stroke]="2.2" />Kontrol ediliyor</span>
+    <h1 class="wz-h1">Şirket unvanınız kontrol ediliyor</h1>
+    <p class="wz-lead">Bilgileriniz alındı. Unvanınızın rezerve edilip edilemeyeceği ilgili personel tarafından kontrol edilmektedir; bu kontrol birkaç saat sürebilir.</p>
+  </div>
+
+  <!-- A status page, not a progress bar: the answer comes from people, and this page updates itself when it does. -->
+  <section class="wz-card wz-checks" role="status" aria-live="polite">
+    <ul>
+      <li>
+        <span class="ok" aria-hidden="true"><app-icon name="check" size="13px" [stroke]="3" /></span>
+        <span class="t"><b>Başvuru bilgileriniz onaylandı</b><small>Sunumdan okunan ve kontrol ettiğiniz bilgiler kaydedildi.</small></span>
+      </li>
+      <li>
+        <span class="wait" aria-hidden="true"><app-icon name="clock" size="13px" [stroke]="2.4" /></span>
+        <span class="t"><b class="pending">{{ checkingTitle() }} Anonim Şirketi</b><small>Unvan kontrolü sürüyor@if (checkingSince(); as at) { · {{ at }} tarihinde gönderildi}</small></span>
+      </li>
+      <li>
+        <span class="next" aria-hidden="true"></span>
+        <span class="t"><b>Kimlik doğrulama</b><small>Unvanınız rezerve edildiğinde 2. adım açılır.</small></span>
+      </li>
+    </ul>
+    <p class="note">
+      <b>Bu sayfada beklemeniz gerekmez.</b>
+      <span>Sayfayı kapatabilirsiniz; yeniden giriş yaptığınızda başvurunuz kaldığı yerden devam eder. Sayfa açıksa sonuç geldiğinde kendiliğinden güncellenir. Unvan rezerve edilemezse başka bir unvan seçmeniz istenir.</span>
+    </p>
+  </section>
+
+  <p class="wz-foot"><app-icon name="info" size="13px" [stroke]="2" />Unvan kontrolü sırasında başvuru bilgileriniz değiştirilemez.</p>
+</app-step-page>

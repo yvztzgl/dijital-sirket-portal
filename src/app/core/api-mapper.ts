@@ -1,5 +1,7 @@
-import { ApplicationWire, MeWire, ReviewFieldWire, ReviewKey, StageWire } from './api-types';
-import { Account, Application, CAPITAL, CrossCheck, CrossKey, FieldMark, FundingSource, FUNDING_LABELS, LogEntry, Profile, Sector, SECTORS, Stage } from './models';
+import type { ReviewPatch } from './api';
+import { ApplicationWire, DeckFieldWire, MeWire, ReviewFieldWire, ReviewKey, StageWire, TitleCheckWire } from './api-types';
+import { Account, Application, CAPITAL, CrossCheck, CrossKey, FieldMark, FundingSource, FUNDING_LABELS, LogEntry, Profile, ScanField, Sector, SECTORS, Stage } from './models';
+import { titleAlternatives, withoutSuffix } from './rules';
 
 /**
  * Turns the API's JSON (api-types.ts) into the portal's model (models.ts). Pure functions, no
@@ -22,20 +24,17 @@ export function toAccount(me: MeWire): Account {
 }
 
 /**
- * The API's stage → the portal's. Two differ:
- * - `titleChecking` (the trade name is being asked of MERSİS) has no screen in the portal yet;
- *   it is shown as `review` until a later piece adds one.
- * - the portal's `eligible` does not exist on the API (it moves straight to `payment`).
- * An unknown stage is an error: guessing one would put the founder on the wrong screen.
+ * The API's stage → the portal's. The names are the same; the portal's `eligible` does not exist on
+ * the API (it moves straight to `payment`). An unknown stage is an error: guessing one would put
+ * the founder on the wrong screen.
  */
 export function toStage(stage: StageWire): Stage {
-  if (stage === 'titleChecking') return 'review';
   if (SAME_STAGES.includes(stage)) return stage as Stage;
   throw new Error(`Unknown application stage from the API: ${stage}`);
 }
 
 const SAME_STAGES: string[] = [
-  'profile', 'verified', 'scanning', 'review', 'titleConflict', 'eligibility', 'declaration', 'screening', 'manual',
+  'profile', 'verified', 'scanning', 'review', 'titleChecking', 'titleConflict', 'eligibility', 'declaration', 'screening', 'manual',
   'payment', 'threeDs', 'signing', 'calling', 'signed', 'setup', 'done',
 ];
 
@@ -46,7 +45,12 @@ const SAME_STAGES: string[] = [
 export function toApplication(view: ApplicationWire, account: Account): Application {
   const review = (key: ReviewKey) => view.review[key]?.value.trim() ?? '';
   const tradeName = review('trade_name');
-  const [root = '', ...activity] = tradeName.replace(/\s+(A\.Ş\.|Anonim Şirketi)$/i, '').split(/\s+/).filter(Boolean);
+  // The title being checked or already reserved is the reservation's (D-1d may have chosen another
+  // one; the API keeps the review's trade name as it was). Otherwise it is the review's.
+  const title = view.titleCheck && view.titleCheck.status !== 'conflict' ? withoutSuffix(view.titleCheck.candidate) : withoutSuffix(tradeName);
+  // The portal shows a title as root + activity ("Acme" + "Bulut Bilişim"); the API keeps one
+  // string. The first word is taken as the root; joined again, nothing is lost.
+  const [root = '', ...activity] = title.split(/\s+/).filter(Boolean);
   const profile = view.profile ? toProfile(view.profile) : undefined;
   const funding = asFunding(review('source_of_funds')) ?? profile?.funding ?? 'own-abroad';
   const readName = view.deck?.fields.find((f) => f.key === 'trade_name')?.value ?? '';
@@ -86,13 +90,15 @@ export function toApplication(view: ApplicationWire, account: Account): Applicat
       ? {
           fileName: view.deck.fileName ?? '',
           sizeKb: view.deck.sizeKb,
+          // Not known while the deck is being read; the development reader leaves it null even after.
           pages: view.deck.pages ?? 0,
           startedAt: view.deck.uploadedAt,
-          fields: view.deck.fields.map((f) => ({ key: f.key, label: f.label, value: f.value, page: f.page })),
+          fields: view.deck.fields.map(toScanField),
+          status: view.deck.status,
         }
       : undefined,
     crossCheck: view.crossCheck.map(toCrossCheck),
-    titleCheck: toTitleCheck(view),
+    titleCheck: toTitleCheck(view.titleCheck),
     payment: view.payment.status
       ? { holder: '', last4: view.payment.last4 ?? '', amount: view.payment.amountMinor / 100, paidAt: view.payment.paidAt ?? undefined }
       : undefined,
@@ -127,6 +133,101 @@ function toProfile(p: NonNullable<ApplicationWire['profile']>): Profile {
 function asFunding(value: string): FundingSource | undefined {
   return value in FUNDING_LABELS ? (value as FundingSource) : undefined;
 }
+
+/** A funding key read from the deck ("own-abroad") as the founder reads it; any other text as it is. */
+const fundingText = (value: string) => FUNDING_LABELS[asFunding(value) as FundingSource] ?? value;
+
+/**
+ * A field the deck reader found, under the key the portal's scan and review screens use (the mock's
+ * keys: `title`, `nace`, …), so D-1b lists it and D-1c finds its page for a difference.
+ */
+function toScanField(f: DeckFieldWire): ScanField {
+  const key = DECK_FIELD_KEYS[f.key as ReviewKey] ?? f.key;
+  return { key, label: f.label, value: f.key === 'source_of_funds' ? fundingText(f.value) : f.value, page: f.page };
+}
+
+const DECK_FIELD_KEYS: Partial<Record<ReviewKey, string>> = {
+  trade_name: 'title',
+  nace_codes: 'nace',
+  shareholding: 'share',
+  given_name: 'name',
+  family_name: 'name',
+  nationality: 'nationality',
+  email: 'email',
+  phone: 'phone',
+  residence_address: 'address',
+  source_of_funds: 'funding',
+};
+
+/**
+ * The review screen's changes → the API's review fields (`PATCH /api/application/review`), only
+ * those that differ from what the review holds now (`current`, the last application read). The API
+ * refuses an empty request and empty values, and records every value it is sent as a new claim of
+ * the founder's; so a field left as it was is not sent. A value the portal only showed from the
+ * account (the name before the review has one) is sent, so that it becomes the founder's own.
+ */
+export function toReviewFields(patch: ReviewPatch, current: ApplicationWire): Partial<Record<ReviewKey, string>> {
+  const fields: Partial<Record<ReviewKey, string>> = {};
+  const put = (key: ReviewKey, value: string | undefined) => {
+    if (value === undefined) return;
+    const now = current.review[key]?.value.trim() ?? '';
+    const next = value.replace(/\s+/g, ' ').trim();
+    if (next !== now) fields[key] = next;
+  };
+  const c = patch.company;
+  if (c?.root !== undefined || c?.activity !== undefined) {
+    const [root = '', ...activity] = withoutSuffix(current.review.trade_name?.value ?? '').split(/\s+/);
+    put('trade_name', withoutSuffix(`${c.root ?? root} ${c.activity ?? activity.join(' ')}`));
+  }
+  if (c?.nace) {
+    const now = splitNace(current.review.nace_codes?.value ?? '').join(', ');
+    const next = splitNace(c.nace.join(', ')).join(', ');
+    if (next !== now) fields.nace_codes = next;
+  }
+  put('given_name', patch.founder?.firstName);
+  put('family_name', patch.founder?.lastName);
+  put('nationality', patch.founder?.nationality);
+  put('email', patch.contact?.email);
+  put('phone', patch.contact?.phone);
+  put('residence_address', patch.contact?.address);
+  put('postal_code', patch.contact?.postalCode);
+  put('residence_country', patch.contact?.country);
+  put('source_of_funds', patch.funding);
+  return fields;
+}
+
+/**
+ * The API's field names → the review screen's rows (D-1c), for showing a refusal's message at its
+ * row. Several API fields share a row: the name row holds given name and family name; the address
+ * row holds address, postal code and country.
+ */
+export const REVIEW_ROWS: Record<ReviewKey, string> = {
+  trade_name: 'title',
+  nace_codes: 'nace',
+  shareholding: 'share',
+  given_name: 'name',
+  family_name: 'name',
+  nationality: 'nationality',
+  email: 'email',
+  phone: 'phone',
+  residence_address: 'address',
+  postal_code: 'address',
+  residence_country: 'address',
+  source_of_funds: 'funding',
+};
+
+/** The API's field names → the inputs of the review screen's editors (founder, contact, funding cards). */
+export const REVIEW_INPUTS: Partial<Record<ReviewKey, string>> = {
+  given_name: 'firstName',
+  family_name: 'lastName',
+  nationality: 'nationality',
+  email: 'email',
+  phone: 'phone',
+  residence_address: 'address',
+  postal_code: 'postalCode',
+  residence_country: 'country',
+  source_of_funds: 'funding',
+};
 
 /** "62.01, 63.11" → ['62.01', '63.11']; the same separators the API's Claims.SplitNace accepts. */
 export function splitNace(value: string): string[] {
@@ -169,20 +270,29 @@ const MARK_NAMES: Partial<Record<ReviewKey, string>> = {
 
 const CROSS_KEYS: CrossKey[] = ['brand', 'sector', 'funding', 'nationality', 'phone', 'country'];
 
+/**
+ * One comparison of the profile with the deck. The API states the funding as its label but reads it
+ * from the deck as a key ("own-abroad"); the key is shown as its label too, so both sides read alike.
+ */
 function toCrossCheck(c: ApplicationWire['crossCheck'][number]): CrossCheck {
   if (!CROSS_KEYS.includes(c.key as CrossKey)) throw new Error(`Unknown cross-check key from the API: ${c.key}`);
   const choice = c.choice === 'stated' || c.choice === 'read' || c.choice === 'edited' ? c.choice : null;
-  return { key: c.key as CrossKey, label: c.label, stated: c.stated, read: c.read, match: c.match, choice, at: c.at };
+  const read = c.key === 'funding' ? fundingText(c.read) : c.read;
+  return { key: c.key as CrossKey, label: c.label, stated: c.stated, read, match: c.match, choice, at: c.at };
 }
 
 /**
- * The trade-name check. `checking` has no counterpart in the portal yet (left out). For a conflict
- * the API gives a reason, not the registered title it clashed with, and no alternatives.
+ * The trade-name check. The API's candidate carries the type suffix ("… A.Ş."); the portal keeps
+ * titles without it and the screens add "Anonim Şirketi". For a conflict the API gives the staff
+ * member's reason, not the registered title it clashed with, and no alternatives: those come from
+ * the portal's own suggestions (rules.ts), which the founder may ignore and type their own.
  */
-function toTitleCheck(view: ApplicationWire): Application['titleCheck'] {
-  const t = view.titleCheck;
-  if (!t || t.status === 'checking') return undefined;
-  return t.status === 'ok' ? { status: 'ok', candidate: t.candidate } : { status: 'conflict', candidate: t.candidate, alternatives: [] };
+function toTitleCheck(t: TitleCheckWire | null): Application['titleCheck'] {
+  if (!t) return undefined;
+  const candidate = withoutSuffix(t.candidate);
+  if (t.status !== 'conflict') return { status: t.status === 'checking' ? 'checking' : 'ok', candidate };
+  const root = candidate.split(/\s+/)[0] ?? '';
+  return { status: 'conflict', candidate, reason: t.reason ?? undefined, alternatives: titleAlternatives(root, candidate) };
 }
 
 function toLog(l: ApplicationWire['logs'][number]): LogEntry {

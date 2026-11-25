@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { environment } from '../../environments/environment';
-import { Account, Application, CrossKey, DeckConsents, FounderType, FundingSource, PhoneLinkStatus, Profile, Stage } from './models';
+import { Account, Application, CrossKey, DeckConsents, FounderType, FundingSource, PhoneLinkStatus, Profile, Stage, WizardReference } from './models';
 
 /**
  * What the portal needs from the platform backend. The store and Terminal AI inject `Api` and
@@ -22,6 +22,19 @@ export abstract class Api {
    * the demo panel, the screen navigator and `/screens` are shown only when it is set.
    */
   abstract readonly demo: DemoTools | null;
+
+  /**
+   * How work that goes on without the founder (reading the deck, the trade-name check, later the
+   * identity check and the formation) reaches the portal: simulated with timers in the mock, done
+   * by the server and polled for in HTTP mode. See `BackgroundWork`.
+   */
+  abstract readonly work: BackgroundWork;
+
+  /**
+   * The values the profile form and the review screen may offer: exactly what the API accepts.
+   * Read once per session in HTTP mode; the mock answers with the portal's constants.
+   */
+  abstract reference(): Promise<WizardReference>;
 
   // auth
   // Who is signed in is the server's business (a session cookie in HTTP mode, the mock's own memory
@@ -55,9 +68,14 @@ export abstract class Api {
   abstract submitProfile(input: Omit<Profile, 'at'>): Promise<Application>;
   /** D-1a: refused without a profile or without both consents. The HTTP client sends the file itself. */
   abstract uploadDeck(file: File, consents: DeckConsents): Promise<Application>;
-  abstract completeScan(): Promise<Application>;
+  /**
+   * D-1c: changes to the reviewed values. `edited` names the review rows the founder touched (the
+   * mock marks them; the API decides the marks itself and ignores it).
+   */
   abstract updateReview(patch: ReviewPatch, edited: string[]): Promise<Application>;
+  /** D-1c "Onayla ve devam et": refused while a difference is undecided; then the trade name is checked (`titleChecking`). */
   abstract submitReview(): Promise<Application>;
+  /** D-1d: another title after a refused one, without the type suffix; checked again (`titleChecking`). */
   abstract chooseTitle(title: string): Promise<Application>;
   /** D-1c: which value to keep where the profile and the deck differ. */
   abstract resolveCrossCheck(key: CrossKey, choice: 'stated' | 'read'): Promise<Application>;
@@ -66,7 +84,6 @@ export abstract class Api {
   abstract startEligibility(consent: boolean): Promise<Application>;
   abstract completeIdentity(): Promise<Application>;
   abstract submitDeclaration(input: { file: { name: string; size: number } | null; declared: boolean }): Promise<Application>;
-  abstract completeScreening(): Promise<Application>;
   abstract createPhoneLink(): Promise<Application>;
   abstract backToReview(): Promise<Application>;
   abstract proceedToPayment(): Promise<Application>;
@@ -91,7 +108,6 @@ export abstract class Api {
 
   // step 5 · formation
   abstract startSetup(confirmed: boolean): Promise<Application>;
-  abstract completeSetup(): Promise<Application>;
 
   // Terminal AI
   abstract ask(question: string): Promise<string>;
@@ -101,6 +117,37 @@ export abstract class Api {
 export interface Session {
   account: Account;
   app: Application | null;
+}
+
+/** The light status read (`GET /api/application/status`): no personal data, cheap to repeat. */
+export interface ApplicationStatus {
+  stage: Stage;
+  /** When anything the founder can see last changed (an ISO time from the server). Compared, never parsed. */
+  changedAt: string;
+}
+
+/**
+ * How work that runs without the founder reaches the store (ApplicationStore):
+ * - `simulated` (the mock): nothing runs anywhere. The store derives progress from the step's start
+ *   time and, when the simulated duration is up, calls `complete(stage)`, which moves the stage on.
+ * - `server` (HTTP): the API's Worker or its staff do the work. While the stage is a waiting one the
+ *   store polls `status()`, and reads `application()` only when the stage or `changedAt` differs
+ *   from `seen()`, the status read made just before the last full read. The full read writes access
+ *   log rows on the server (it decrypts the founder's data); the status read does not.
+ */
+export type BackgroundWork = SimulatedWork | ServerWork;
+
+export interface SimulatedWork {
+  readonly kind: 'simulated';
+  /** Finishes the simulated step of `stage`; null when that stage has none. */
+  complete(stage: Stage): Promise<Application> | null;
+}
+
+export interface ServerWork {
+  readonly kind: 'server';
+  status(): Promise<ApplicationStatus>;
+  application(): Promise<Application>;
+  seen(): ApplicationStatus | null;
 }
 
 /** The fields the review screen (D-1c) can change. */

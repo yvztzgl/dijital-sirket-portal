@@ -29,7 +29,8 @@ export const SCREENS: ScreenInfo[] = [
   { id: 'd1a', code: 'D-1a', title: 'Proje sunumu yükleme', desc: 'Tek istek: sunum dosyası. Aydınlatma metni ve yapay zekâ ile işleme onayı, yükleme alanı (PDF veya PPTX, en fazla 25 MB), yüklemeden sonra olacaklar ve ön bilgileri düzenleme bağlantısı.', path: 'deck', group: 'karsilama' },
   { id: 'd1b', code: 'D-1b', title: 'AI taraması', desc: 'Okunan sayfa (bulununca şirketin logosu ve adıyla) ve tek tek gelen bilgiler.', path: 'deck/scan', group: 'karsilama' },
   { id: 'd1c', code: 'D-1c', title: 'Bulunanları inceleyin', desc: 'Üstte ön bilgilerle karşılaştırma: uyuşanlar ve farklı olanlar; her fark için kurucu ön bilgideki veya sunumdaki değeri seçer. Altında tek kart: şirket, kurucu, iletişim ve fon kaynağı; her bölüm yerinde düzenlenir.', path: 'deck/review', group: 'karsilama' },
-  { id: 'rejection', code: 'D-1d', title: 'MERSİS ret durumu', desc: 'Tek istek: başka bir unvan. Seçilen ve kayıtlı unvan yan yana, üç öneri ve kendi unvanını yazma; seçilen hemen yeniden sorgulanır.', path: 'deck/name-rejected', group: 'karsilama' },
+  { id: 'titlecheck', code: 'D-1f', title: 'Unvan kontrolü', desc: 'Bir şey istenmez: onaylanan bilgiler, kontrolü süren unvan ve sonraki adım. Kontrolü personel yapar ve saatler sürebilir; sayfa kapatılabilir, sonuç gelince kendiliğinden ilerler.', path: 'deck/name-check', group: 'karsilama' },
+  { id: 'rejection', code: 'D-1d', title: 'MERSİS ret durumu', desc: 'Tek istek: başka bir unvan. Seçilen ve kayıtlı unvan yan yana, üç öneri ve kendi unvanını yazma; seçilen yeniden kontrol edilir (D-1f). “Diğer bilgilere dön” D-1c’yi açar.', path: 'deck/name-rejected', group: 'karsilama' },
   { id: 'd2a', code: 'D-2a', title: 'Kimlik doğrulama', desc: 'Adım 2’nin ilk ekranı. Önce ön bilgilendirme: gerekenler, dikkat edilecekler, açık rıza onayı ve “Doğrulamayı başlat”; ya da “Telefonla devam et” ile QR kod. Başlayınca kamera alanı otomatik kontrolü izler: pasaport, yüz, bekleme.', path: 'eligibility', group: 'uygunluk' },
   { id: 'd2m', code: 'D-2a-m', title: 'Kimlik doğrulama · telefon', desc: 'D-2a’daki QR kodla telefonda açılan, yalnızca bu adıma ait sayfa: uyarılar, açık rıza, kamera kontrolü, “bilgisayarınıza dönünüz”. Oturum gerektirmez.', path: 'eligibility/phone', group: 'uygunluk' },
   { id: 'd2d', code: 'D-2d', title: 'Beyan', desc: 'Adım 2’nin ikinci ekranı. Tek istek: adres belgesi. Yükleme alanı, kabul edilen belgeler, beyan edilen adres ve fon kaynağı, doğruluk beyanı onayı.', path: 'eligibility/declaration', group: 'uygunluk' },
@@ -117,6 +118,13 @@ export const screenRoutes: Routes = [
     data: { screen: 'd1c' },
     canActivate: [flowGuard],
     loadComponent: () => import('./karsilama/d1c').then((m) => m.ScreenD1c),
+  },
+  {
+    path: 'deck/name-check',
+    title: 'Unvan kontrolü · Terminal Şirket',
+    data: { screen: 'titlecheck' },
+    canActivate: [flowGuard],
+    loadComponent: () => import('./karsilama/title-check').then((m) => m.ScreenTitleCheck),
   },
   {
     path: 'deck/name-rejected',

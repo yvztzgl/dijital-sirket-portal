@@ -1,6 +1,10 @@
 <app-step-page [step]="1" [part]="3" [parts]="3" sub="Kontrol" ctx="review" label="D-1c İnceleme" [width]="840">
   <div class="wz-head">
-    <span class="wz-chip"><app-icon name="check" size="13px" [stroke]="2.6" />{{ scanFile() }} okundu</span>
+    @if (titleRefused()) {
+      <span class="wz-chip wz-chip--warn"><app-icon name="alert" size="13px" [stroke]="2.2" />Unvan rezerve edilemedi</span>
+    } @else {
+      <span class="wz-chip"><app-icon name="check" size="13px" [stroke]="2.6" />{{ scanFile() }} okundu</span>
+    }
     <h1 class="wz-h1">Okunan bilgileri kontrol ediniz</h1>
     <p class="wz-lead">Sunumunuzdan okunan bilgileri kontrol ediniz ve hataları düzeltiniz.</p>
   </div>
@@ -54,17 +58,22 @@
   <section class="wz-card wz-review" aria-label="Sunumdan okunan bilgiler">
     <header class="co">
       <input #logoIn type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" (change)="onLogoInput($event)" hidden>
-      <button type="button" class="logo" (click)="logoIn.click()" aria-label="Logoyu değiştir" title="Logoyu değiştir">
-        @if (brand().logo) {<img [src]="brand().logo" alt="{{ brand().name }} logosu">} @else {<span class="mono">{{ brand().initials }}</span>}
-        <span class="ov" aria-hidden="true"><app-icon name="pencil" size="18px" [stroke]="2" /></span>
-      </button>
+      <!-- The logo can be replaced only where one was found (the mock's); the API keeps no logo yet. -->
+      @if (brand().logo) {
+        <button type="button" class="logo" (click)="logoIn.click()" aria-label="Logoyu değiştir" title="Logoyu değiştir">
+          <img [src]="brand().logo" alt="{{ brand().name }} logosu">
+          <span class="ov" aria-hidden="true"><app-icon name="pencil" size="18px" [stroke]="2" /></span>
+        </button>
+      } @else {
+        <span class="logo" aria-hidden="true"><span class="mono">{{ brand().initials }}</span></span>
+      }
       <b>{{ brand().name }}</b>
     </header>
 
     <dl class="rows">
       @for (r of okRows(); track r.key) {
         <div class="row" [class.on]="r.edit && r.edit === editor()">
-          <span class="t"><dt>{{ r.label }}@if (r.edited) {<em>Kontrol edildi</em>}</dt><dd>{{ r.value }}</dd></span>
+          <span class="t"><dt>{{ r.label }}@if (r.edited) {<em>Kontrol edildi</em>}</dt><dd>{{ r.value }}</dd>@if (rowErrors()[r.key]; as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}</span>
           @if (r.edit) {<button type="button" (click)="openEditor(r.edit)" [attr.aria-expanded]="r.edit === editor()" [attr.aria-label]="r.label + ' bilgisini düzelt'"><app-icon name="pencil" size="15px" [stroke]="2" /></button>}
         </div>
       }
@@ -123,10 +132,12 @@
               } @else {
                 <app-phone-input [label]="f.label" [value]="draft()[f.key] ?? ''" [defaultCountry]="draft()['country'] ?? ''" (valueChange)="setDraftValue(f.key, $event)" />
               }
+              @if (inputErrors()[f.key]; as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
             </div>
           } @else {
             <label class="wz-field" [class.wide]="f.wide">{{ f.label }}
               <input class="wz-input" [value]="draft()[f.key] ?? ''" (input)="setDraft(f.key, $event)">
+              @if (inputErrors()[f.key]; as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
             </label>
           }
         }
@@ -147,7 +158,7 @@
             @if (r.key === 'phone') {
               <div class="wz-field"><span>{{ r.label }}</span><app-phone-input [label]="r.label" [value]="flagDraft()[r.key] ?? r.raw" [defaultCountry]="store.app()?.contact?.country ?? ''" (valueChange)="setFlag(r.key, $event)" /></div>
             } @else if (r.key === 'funding') {
-              <div class="wz-field"><span>{{ r.label }}</span><app-select [label]="r.label" [options]="fundingOptions" [value]="flagDraft()[r.key] ?? r.raw" (valueChange)="setFlag(r.key, $event)" /></div>
+              <div class="wz-field"><span>{{ r.label }}</span><app-select [label]="r.label" [options]="fundingOptions()" [value]="flagDraft()[r.key] ?? r.raw" (valueChange)="setFlag(r.key, $event)" /></div>
             } @else if (r.key === 'address' || r.key === 'email') {
               <label class="wz-field">{{ r.label }}<input class="wz-input" [value]="flagDraft()[r.key] ?? r.raw" (input)="setFlag(r.key, $any($event.target).value)"></label>
             } @else {
@@ -176,9 +187,14 @@
 
   <app-form-error />
   <div class="wz-actions">
-    <button type="button" class="wz-link" (click)="openReupload()" [attr.aria-expanded]="reuploadOpen()">Başka dosya yükle</button>
-    <button type="button" class="wz-btn" (click)="submitReview()" [disabled]="store.busy() || crossOpen().length > 0">{{ store.busy() ? 'MERSİS’te sorgulanıyor…' : 'Onayla ve devam et' }}</button>
+    <!-- After a refused title a new deck would be read and land on the refusal again (the API keeps the refused reservation as the latest), so it is not offered then. -->
+    @if (titleRefused()) {
+      <button type="button" class="wz-link" (click)="backToTitles()">Başka unvan seç</button>
+    } @else {
+      <button type="button" class="wz-link" (click)="openReupload()" [attr.aria-expanded]="reuploadOpen()">Başka dosya yükle</button>
+    }
+    <button type="button" class="wz-btn" (click)="submitReview()" [disabled]="store.busy() || crossOpen().length > 0">{{ store.busy() ? 'Gönderiliyor…' : 'Onayla ve devam et' }}</button>
   </div>
   @if (crossOpen().length) {<p class="wz-hold">Devam etmek için farklı bilgilerde doğru değeri seçiniz.</p>}
-  <p class="wz-foot"><app-icon name="info" size="13px" [stroke]="2" />Onayınızın ardından şirket unvanı MERSİS’te sorgulanır ve rezerve edilir.</p>
+  <p class="wz-foot"><app-icon name="info" size="13px" [stroke]="2" />Onayınızın ardından şirket unvanınızın rezerve edilip edilemeyeceği kontrol edilir; sonucu bu ekranlarda görürsünüz.</p>
 </app-step-page>

@@ -1,0 +1,86 @@
+{
+  "id": "01a2122c-144f-7242-8b31-e0bc12d7992a",
+  "referenceNo": "DS-26-76430541",
+  "stage": "scanning",
+  "status": "deck_review",
+  "founderType": "foreign",
+  "createdAt": "2026-11-25T10:06:48.399851+00:00",
+  "profile": {
+    "brand": "Lumora",
+    "sector": "software",
+    "funding": "own-abroad",
+    "nationality": "Almanya",
+    "phone": "+49 151 2345 6700",
+    "country": "Almanya",
+    "at": "2026-11-25T10:06:48.475671+00:00"
+  },
+  "deck": {
+    "fileName": "Lumora Sunum.pdf",
+    "sizeKb": 1,
+    "pages": null,
+    "uploadedAt": "2026-11-25T10:06:48.52661+00:00",
+    "status": "reading",
+    "fields": []
+  },
+  "crossCheck": [],
+  "review": {},
+  "titleCheck": null,
+  "eligibility": null,
+  "payment": {
+    "amountMinor": 1275000,
+    "fees": [
+      {
+        "code": "tescil_ilan_harci",
+        "label": "Ticaret sicili tescil ve ilan harçları",
+        "amountMinor": 485000
+      },
+      {
+        "code": "noter_eimza",
+        "label": "Noter onayı ve e-İmza (ESHS)",
+        "amountMinor": 240000
+      },
+      {
+        "code": "sanal_ofis_yil1",
+        "label": "Sanal ofis · ilk yıl",
+        "amountMinor": 360000
+      },
+      {
+        "code": "platform",
+        "label": "Platform hizmet bedeli",
+        "amountMinor": 190000
+      }
+    ],
+    "status": null,
+    "last4": null,
+    "paidAt": null
+  },
+  "signature": null,
+  "callConsentAt": null,
+  "setup": null,
+  "results": null,
+  "documents": [
+    {
+      "id": "01a2122c-14c9-75ac-b75b-648ec3aafe4e",
+      "type": "deck",
+      "sizeKb": 1,
+      "at": "2026-11-25T10:06:48.521537+00:00"
+    }
+  ],
+  "logs": [
+    {
+      "at": "2026-11-25T10:06:48.405029+00:00",
+      "text": "Başvuru oluşturuldu",
+      "who": "s"
+    },
+    {
+      "at": "2026-11-25T10:06:48.476878+00:00",
+      "text": "Ön bilgiler kaydedildi",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T10:06:48.528521+00:00",
+      "text": "Sunum yüklendi · Lumora Sunum.pdf",
+      "who": "u"
+    }
+  ]
+}

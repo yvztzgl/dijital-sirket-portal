@@ -1,0 +1,107 @@
+{
+  "sectors": [
+    {
+      "key": "software",
+      "label": "Yazılım ve bilişim",
+      "naceCodes": [
+        "62.01",
+        "62.02",
+        "63.11"
+      ]
+    },
+    {
+      "key": "ecommerce",
+      "label": "E-ticaret",
+      "naceCodes": [
+        "47.91"
+      ]
+    },
+    {
+      "key": "consulting",
+      "label": "Danışmanlık",
+      "naceCodes": [
+        "70.22"
+      ]
+    },
+    {
+      "key": "design",
+      "label": "Tasarım ve reklam",
+      "naceCodes": [
+        "74.10",
+        "73.11"
+      ]
+    },
+    {
+      "key": "education",
+      "label": "Eğitim",
+      "naceCodes": [
+        "85.59"
+      ]
+    },
+    {
+      "key": "other",
+      "label": "Diğer",
+      "naceCodes": []
+    }
+  ],
+  "funding": [
+    {
+      "key": "own-abroad",
+      "label": "Yurt dışı banka transferi"
+    },
+    {
+      "key": "own-turkey",
+      "label": "Türkiye’deki kendi hesabımdan"
+    },
+    {
+      "key": "investor",
+      "label": "Yatırımcı sermayesi (sözleşmeli)"
+    },
+    {
+      "key": "third-party",
+      "label": "Üçüncü taraf transferi"
+    }
+  ],
+  "naceCodes": [
+    {
+      "code": "47.91",
+      "title": "Posta yoluyla veya internet üzerinden yapılan perakende ticaret"
+    },
+    {
+      "code": "58.29",
+      "title": "Diğer yazılım programlarının yayımlanması"
+    },
+    {
+      "code": "62.01",
+      "title": "Bilgisayar programlama faaliyetleri"
+    },
+    {
+      "code": "62.02",
+      "title": "Bilgisayar danışmanlık faaliyetleri"
+    },
+    {
+      "code": "62.09",
+      "title": "Diğer bilgi teknolojisi ve bilgisayar hizmet faaliyetleri"
+    },
+    {
+      "code": "63.11",
+      "title": "Veri işleme, barındırma ve ilgili faaliyetler"
+    },
+    {
+      "code": "70.22",
+      "title": "İşletme ve diğer idari danışmanlık faaliyetleri"
+    },
+    {
+      "code": "73.11",
+      "title": "Reklam ajanslarının faaliyetleri"
+    },
+    {
+      "code": "74.10",
+      "title": "Özel tasarım faaliyetleri"
+    },
+    {
+      "code": "85.59",
+      "title": "Başka yerde sınıflandırılmamış diğer eğitim"
+    }
+  ]
+}

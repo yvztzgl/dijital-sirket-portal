@@ -1,0 +1,317 @@
+{
+  "id": "01a2122c-144f-7242-8b31-e0bc12d7992a",
+  "referenceNo": "DS-26-76430541",
+  "stage": "titleConflict",
+  "status": "deck_review",
+  "founderType": "foreign",
+  "createdAt": "2026-11-25T10:06:48.399851+00:00",
+  "profile": {
+    "brand": "Lumora",
+    "sector": "software",
+    "funding": "own-abroad",
+    "nationality": "Almanya",
+    "phone": "+49 151 2345 6700",
+    "country": "Almanya",
+    "at": "2026-11-25T10:06:48.475671+00:00"
+  },
+  "deck": {
+    "fileName": "Lumora Sunum.pdf",
+    "sizeKb": 1,
+    "pages": null,
+    "uploadedAt": "2026-11-25T10:06:48.52661+00:00",
+    "status": "read",
+    "fields": [
+      {
+        "key": "trade_name",
+        "label": "Şirket unvanı",
+        "value": "Lumora Veri Analitiği",
+        "page": 1,
+        "confidence": "high"
+      },
+      {
+        "key": "nace_codes",
+        "label": "NACE kodları",
+        "value": "62.01, 63.11",
+        "page": 2,
+        "confidence": "high"
+      },
+      {
+        "key": "shareholding",
+        "label": "Pay sahipliği",
+        "value": "%100",
+        "page": 3,
+        "confidence": "high"
+      },
+      {
+        "key": "given_name",
+        "label": "Ad",
+        "value": "Deneme",
+        "page": 4,
+        "confidence": "high"
+      },
+      {
+        "key": "family_name",
+        "label": "Soyad",
+        "value": "Kurucu",
+        "page": 5,
+        "confidence": "high"
+      },
+      {
+        "key": "nationality",
+        "label": "Uyruk",
+        "value": "Almanya",
+        "page": 6,
+        "confidence": "high"
+      },
+      {
+        "key": "email",
+        "label": "E-posta",
+        "value": "kurucu@example.test",
+        "page": 7,
+        "confidence": "high"
+      },
+      {
+        "key": "phone",
+        "label": "Telefon",
+        "value": "+49 151 2345 6789",
+        "page": 8,
+        "confidence": "high"
+      },
+      {
+        "key": "residence_address",
+        "label": "Adres",
+        "value": "Torstraße 45, 10119 Berlin",
+        "page": 9,
+        "confidence": "high"
+      },
+      {
+        "key": "source_of_funds",
+        "label": "Fon kaynağı",
+        "value": "own-abroad",
+        "page": 10,
+        "confidence": "high"
+      }
+    ]
+  },
+  "crossCheck": [
+    {
+      "key": "phone",
+      "label": "Telefon",
+      "stated": "+49 151 2345 6700",
+      "read": "+49 151 2345 6789",
+      "match": false,
+      "choice": "read",
+      "at": "2026-11-25T10:06:49.645296+00:00"
+    },
+    {
+      "key": "sector",
+      "label": "Faaliyet alanı",
+      "stated": "Yazılım ve bilişim",
+      "read": "62.01, 63.11",
+      "match": true,
+      "choice": null,
+      "at": null
+    },
+    {
+      "key": "nationality",
+      "label": "Uyruk",
+      "stated": "Almanya",
+      "read": "Almanya",
+      "match": true,
+      "choice": null,
+      "at": null
+    },
+    {
+      "key": "funding",
+      "label": "Sermaye kaynağı",
+      "stated": "Yurt dışı banka transferi",
+      "read": "own-abroad",
+      "match": true,
+      "choice": null,
+      "at": null
+    },
+    {
+      "key": "country",
+      "label": "Yaşadığınız ülke",
+      "stated": "Almanya",
+      "read": "Torstraße 45, 10119 Berlin",
+      "match": false,
+      "choice": "stated",
+      "at": "2026-11-25T10:06:49.66565+00:00"
+    },
+    {
+      "key": "brand",
+      "label": "Şirket / marka adı",
+      "stated": "Lumora",
+      "read": "Lumora Veri Analitiği",
+      "match": true,
+      "choice": null,
+      "at": null
+    }
+  ],
+  "review": {
+    "email": {
+      "label": "E-posta",
+      "value": "kurucu@example.test",
+      "mark": "ai"
+    },
+    "family_name": {
+      "label": "Soyad",
+      "value": "Kurucu-Test",
+      "mark": "edited"
+    },
+    "given_name": {
+      "label": "Ad",
+      "value": "Deneme",
+      "mark": "ai"
+    },
+    "nace_codes": {
+      "label": "NACE kodları",
+      "value": "62.01, 63.11",
+      "mark": "ai"
+    },
+    "nationality": {
+      "label": "Uyruk",
+      "value": "Almanya",
+      "mark": "ai"
+    },
+    "phone": {
+      "label": "Telefon",
+      "value": "+49 151 2345 6789",
+      "mark": "ai"
+    },
+    "residence_address": {
+      "label": "Adres",
+      "value": "Torstraße 45, 10119 Berlin",
+      "mark": "ai"
+    },
+    "shareholding": {
+      "label": "Pay sahipliği",
+      "value": "%100",
+      "mark": "ai"
+    },
+    "source_of_funds": {
+      "label": "Fon kaynağı",
+      "value": "own-abroad",
+      "mark": "ai"
+    },
+    "trade_name": {
+      "label": "Şirket unvanı",
+      "value": "Lumora Veri Analitiği",
+      "mark": "ai"
+    },
+    "postal_code": {
+      "label": "Posta kodu",
+      "value": "10119",
+      "mark": "entered"
+    },
+    "residence_country": {
+      "label": "Ülke",
+      "value": "Almanya",
+      "mark": "entered"
+    }
+  },
+  "titleCheck": {
+    "status": "conflict",
+    "candidate": "Lumora Veri Analitiği A.Ş.",
+    "reason": "Benzer bir unvan sicilde kayıtlıdır."
+  },
+  "eligibility": null,
+  "payment": {
+    "amountMinor": 1275000,
+    "fees": [
+      {
+        "code": "tescil_ilan_harci",
+        "label": "Ticaret sicili tescil ve ilan harçları",
+        "amountMinor": 485000
+      },
+      {
+        "code": "noter_eimza",
+        "label": "Noter onayı ve e-İmza (ESHS)",
+        "amountMinor": 240000
+      },
+      {
+        "code": "sanal_ofis_yil1",
+        "label": "Sanal ofis · ilk yıl",
+        "amountMinor": 360000
+      },
+      {
+        "code": "platform",
+        "label": "Platform hizmet bedeli",
+        "amountMinor": 190000
+      }
+    ],
+    "status": null,
+    "last4": null,
+    "paidAt": null
+  },
+  "signature": null,
+  "callConsentAt": null,
+  "setup": null,
+  "results": null,
+  "documents": [
+    {
+      "id": "01a2122c-14c9-75ac-b75b-648ec3aafe4e",
+      "type": "deck",
+      "sizeKb": 1,
+      "at": "2026-11-25T10:06:48.521537+00:00"
+    }
+  ],
+  "logs": [
+    {
+      "at": "2026-11-25T10:06:48.405029+00:00",
+      "text": "Başvuru oluşturuldu",
+      "who": "s"
+    },
+    {
+      "at": "2026-11-25T10:06:48.476878+00:00",
+      "text": "Ön bilgiler kaydedildi",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T10:06:48.528521+00:00",
+      "text": "Sunum yüklendi · Lumora Sunum.pdf",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T10:06:49.006905+00:00",
+      "text": "AI Reviewer 10 alan çıkardı",
+      "who": "a"
+    },
+    {
+      "at": "2026-11-25T10:06:49.010653+00:00",
+      "text": "Ön bilgilerle karşılaştırıldı: 4 bilgi uyuşuyor, 2 bilgi farklı",
+      "who": "a"
+    },
+    {
+      "at": "2026-11-25T10:06:49.645296+00:00",
+      "text": "Telefon: sunumdaki değer seçildi",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T10:06:49.66565+00:00",
+      "text": "Yaşadığınız ülke: ön bilgilerdeki değer seçildi",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T10:06:49.685312+00:00",
+      "text": "Sunum bilgileri düzenlendi",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T10:06:49.742087+00:00",
+      "text": "Unvan MERSİS’e soruldu",
+      "who": "s"
+    },
+    {
+      "at": "2026-11-25T10:06:49.742989+00:00",
+      "text": "Başvuru bilgileri onaylandı",
+      "who": "u"
+    },
+    {
+      "at": "2026-11-25T10:06:51.056758+00:00",
+      "text": "Unvan MERSİS’te rezerve edilemedi",
+      "who": "k"
+    }
+  ]
+}

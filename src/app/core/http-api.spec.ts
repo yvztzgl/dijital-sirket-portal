@@ -4,7 +4,8 @@ import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { ApiError } from './api-error';
 import { HttpApi, markApiWrites } from './http-api';
-import { ME, NEW_APPLICATION } from './testing/api-fixtures';
+import { ApplicationWire } from './api-types';
+import { CAPTURED, ME, NEW_APPLICATION } from './testing/api-fixtures';
 
 describe('HttpApi', () => {
   let api: HttpApi;
@@ -32,9 +33,9 @@ describe('HttpApi', () => {
     return error as ApiError;
   }
 
-  it('has no demo tools and rejects every call until it is connected', async () => {
+  it('has no demo tools and rejects a call that is not connected yet', async () => {
     expect(api.demo).toBeNull();
-    const error = await api.submitProfile().catch((e: unknown) => e);
+    const error = await api.startEligibility().catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).message).toBe('Bu işlem henüz sunucuya bağlanmadı.');
     expect((error as ApiError).code).toBe('not_connected');
@@ -118,10 +119,16 @@ describe('HttpApi sign-in', () => {
   const problem = (status: number, code: string, title: string, errors?: Record<string, string[]>) =>
     [{ title, status, code, requestId: 'r1', ...(errors ? { errors } : {}) }, { status, statusText: 'x' }] as const;
 
+  /** A full read of the application: the status read first (what is then "seen"), then the application. */
+  async function answerRead(view: ApplicationWire = NEW_APPLICATION, changedAt = '2026-11-25T09:41:12.408113+00:00') {
+    (await next('GET', '/api/application/status')).flush({ stage: view.stage, changedAt });
+    (await next('GET', '/api/application')).flush(view);
+  }
+
   /** The reads every sign-in ends with, when the application already exists. */
-  async function answerSession() {
+  async function answerSession(view: ApplicationWire = NEW_APPLICATION) {
     (await next('GET', '/api/me')).flush(ME);
-    (await next('GET', '/api/application')).flush(NEW_APPLICATION);
+    await answerRead(view);
   }
 
   it('registers with the typed data and the anti-forgery header, and expects nothing back', async () => {
@@ -148,12 +155,13 @@ describe('HttpApi sign-in', () => {
     expect(verify.request.body).toEqual({ email: 'ayse@example.test', code: '424346' });
     verify.flush(null, { status: 204, statusText: 'No Content' });
     (await next('GET', '/api/me')).flush(ME);
-    (await next('GET', '/api/application')).flush(...problem(404, 'no_application', 'Başvuru bulunamadı.'));
+    // The status read answers like the full read: 404 until the application exists.
+    (await next('GET', '/api/application/status')).flush(...problem(404, 'no_application', 'Başvuru bulunamadı.'));
     const create = await next('POST', '/api/application');
     expect(create.request.body).toBeNull();
     expect(create.request.headers.get('X-DSP-Request')).toBe('1');
     create.flush(null, { status: 204, statusText: 'No Content' });
-    (await next('GET', '/api/application')).flush(NEW_APPLICATION);
+    await answerRead();
     const session = await pending;
     expect(session.account).toEqual({ email: 'ayse@example.test', firstName: 'Ayşe', lastName: 'Kaya', founderType: 'foreign', verified: true });
     expect(session.app!.id).toBe('DS-26-03403699');
@@ -241,7 +249,7 @@ describe('HttpApi sign-in', () => {
     expect(signIn.request.body).toEqual({ code: '10000000146', state: 's7a7e+x' });
     signIn.flush(null, { status: 204, statusText: 'No Content' });
     (await next('GET', '/api/me')).flush({ ...ME, founderType: 'resident' });
-    (await next('GET', '/api/application')).flush({ ...NEW_APPLICATION, founderType: 'resident' });
+    await answerRead({ ...NEW_APPLICATION, founderType: 'resident' });
     const session = await pending;
     expect(session.account.founderType).toBe('resident');
     expect(session.app!.founderType).toBe('resident');
@@ -300,5 +308,146 @@ describe('markApiWrites', () => {
     expect(headerOf('HEAD', '/api/me')).toBeNull();
     expect(headerOf('OPTIONS', '/api/me')).toBeNull();
     expect(headerOf('POST', '/assets/x.json')).toBeNull();
+  });
+});
+
+describe('HttpApi step 1', () => {
+  let api: HttpApi;
+  let backend: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(withInterceptors([markApiWrites])), provideHttpClientTesting()],
+    });
+    api = TestBed.inject(HttpApi);
+    backend = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => backend.verify());
+
+  async function next(method: string, url: string) {
+    await new Promise((resolve) => setTimeout(resolve));
+    const req = backend.expectOne(url);
+    expect(req.request.method).toBe(method);
+    return req;
+  }
+
+  async function read(view: ApplicationWire, changedAt = 't1') {
+    (await next('GET', '/api/application/status')).flush({ stage: view.stage, changedAt });
+    (await next('GET', '/api/application')).flush(view);
+  }
+
+  /** Signs in (restore) at the given application, so the API object knows the founder and the review. */
+  async function signedInAt(view: ApplicationWire) {
+    const pending = api.restore();
+    (await next('GET', '/api/me')).flush({ ...ME, firstName: 'Deneme', lastName: 'Kurucu', email: 'kurucu@example.test' });
+    await read(view);
+    await pending;
+  }
+
+  const empty = (status: number) => [null, { status, statusText: 'x' }] as const;
+
+  it('saves the profile with exactly its six fields and reads the application again', async () => {
+    await signedInAt(CAPTURED.profile);
+    const pending = api.submitProfile({ brand: 'Lumora', sector: 'software', funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
+    const put = await next('PUT', '/api/application/profile');
+    expect(put.request.body).toEqual({ brand: 'Lumora', sector: 'software', funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
+    put.flush(...empty(204));
+    await read(CAPTURED.verified);
+    expect((await pending).stage).toBe('verified');
+  });
+
+  it('uploads the deck as multipart with the file and the ticks as given, without setting the Content-Type itself', async () => {
+    await signedInAt(CAPTURED.verified);
+    const file = new File(['%PDF-1.4'], 'Lumora Sunum.pdf', { type: 'application/pdf' });
+    const pending = api.uploadDeck(file, { noticeAcknowledged: true, aiConsent: false });
+    const post = await next('POST', '/api/application/deck');
+    const body = post.request.body as FormData;
+    expect(body).toBeInstanceOf(FormData);
+    expect((body.get('file') as File).name).toBe('Lumora Sunum.pdf');
+    expect(body.get('noticeAcknowledged')).toBe('true');
+    expect(body.get('aiConsent')).toBe('false');
+    expect(post.request.headers.has('Content-Type')).toBe(false);
+    expect(post.request.headers.get('X-DSP-Request')).toBe('1');
+    post.flush(...empty(202));
+    await read(CAPTURED.scanning);
+    expect((await pending).deck!.status).toBe('reading');
+  });
+
+  it('decides a difference by its key', async () => {
+    await signedInAt(CAPTURED.reviewOpen);
+    const pending = api.resolveCrossCheck('phone', 'read');
+    const post = await next('POST', '/api/application/cross-checks/phone');
+    expect(post.request.body).toEqual({ choice: 'read' });
+    post.flush(...empty(204));
+    await read(CAPTURED.reviewDecided);
+    await pending;
+  });
+
+  it('sends only the review fields that changed, and nothing when none did', async () => {
+    await signedInAt(CAPTURED.reviewOpen);
+    let pending = api.updateReview({ contact: { email: 'kurucu@example.test', phone: '+49 151 2345 6789', address: 'Torstraße 45, 10119 Berlin', postalCode: '10119', country: 'Almanya' } }, ['address']);
+    const patch = await next('PATCH', '/api/application/review');
+    expect(patch.request.body).toEqual({ fields: { postal_code: '10119', residence_country: 'Almanya' } });
+    patch.flush(...empty(204));
+    await read(CAPTURED.reviewDecided);
+    await pending;
+
+    pending = api.updateReview({ founder: { firstName: 'Deneme', lastName: 'Kurucu-Test', nationality: 'Almanya' } }, ['name']);
+    await read(CAPTURED.reviewDecided);
+    await pending;
+    backend.expectNone('/api/application/review');
+  });
+
+  it('submits the review and passes on a refusal with its fields', async () => {
+    await signedInAt(CAPTURED.reviewDecided);
+    const refused = api.submitReview().catch((e: unknown) => e);
+    (await next('POST', '/api/application/review/submit')).flush(
+      { title: 'Eksik bilgileri tamamlayınız.', status: 400, code: 'validation_failed', requestId: 'r', errors: { given_name: ['Ad eksik.'], nationality: ['Uyruk eksik.'] } },
+      { status: 400, statusText: 'x' },
+    );
+    const error = (await refused) as ApiError;
+    expect(error.message).toBe('Eksik bilgileri tamamlayınız.');
+    expect(error.fields).toEqual({ given_name: ['Ad eksik.'], nationality: ['Uyruk eksik.'] });
+
+    const pending = api.submitReview();
+    (await next('POST', '/api/application/review/submit')).flush(...empty(202));
+    await read(CAPTURED.titleChecking);
+    expect((await pending).stage).toBe('titleChecking');
+  });
+
+  it('asks for another title after a refusal', async () => {
+    await signedInAt(CAPTURED.titleConflict);
+    const pending = api.chooseTitle(' Lumora Analitik Yazılım ');
+    const post = await next('POST', '/api/application/title');
+    expect(post.request.body).toEqual({ title: 'Lumora Analitik Yazılım' });
+    post.flush(...empty(202));
+    await read(CAPTURED.titleCheckingAgain);
+    expect((await pending).titleCheck).toEqual({ status: 'checking', candidate: 'Lumora Analitik Yazılım' });
+  });
+
+  it('remembers the status read just before the full read, for the poller to compare', async () => {
+    expect(api.work.kind).toBe('server');
+    await signedInAt(CAPTURED.titleChecking);
+    expect(api.work.kind === 'server' && api.work.seen()).toEqual({ stage: 'titleChecking', changedAt: 't1' });
+    const status = api.work.kind === 'server' ? api.work.status() : null;
+    (await next('GET', '/api/application/status')).flush({ stage: 'titleConflict', changedAt: 't2' });
+    expect(await status).toEqual({ stage: 'titleConflict', changedAt: 't2' });
+    // A status read alone does not change what was seen.
+    expect(api.work.kind === 'server' && api.work.seen()).toEqual({ stage: 'titleChecking', changedAt: 't1' });
+  });
+
+  it('reads the reference data once per session', async () => {
+    const first = api.reference();
+    const second = api.reference();
+    (await next('GET', '/api/reference/wizard')).flush(CAPTURED.reference);
+    expect(await first).toEqual(CAPTURED.reference);
+    expect(await second).toBe(await first);
+    const out = api.logout();
+    (await next('POST', '/api/auth/logout')).flush(...empty(204));
+    await out;
+    const again = api.reference();
+    (await next('GET', '/api/reference/wizard')).flush(CAPTURED.reference);
+    expect((await again).naceCodes).toHaveLength(10);
   });
 });

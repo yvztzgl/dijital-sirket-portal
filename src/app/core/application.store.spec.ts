@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
-import { Api, Session } from './api';
+import { Api, ApplicationStatus, Session } from './api';
 import { ApiError } from './api-error';
 import { ApplicationStore } from './application.store';
 import { Account, Application } from './models';
@@ -10,7 +10,8 @@ import { Account, Application } from './models';
  * test makes are filled in.
  */
 function fakeApi(calls: Partial<Record<keyof Api, unknown>>): Api {
-  return { demo: null, restore: async () => null, ...calls } as unknown as Api;
+  const work = { kind: 'server', status: async () => ({ stage: 'profile', changedAt: 't0' }), application: async () => SESSION.app, seen: () => null };
+  return { demo: null, work, restore: async () => null, ...calls } as unknown as Api;
 }
 
 const ACCOUNT: Account = { email: 'ayse@example.test', firstName: 'Ayşe', lastName: 'Kaya', founderType: 'foreign', verified: true };
@@ -95,5 +96,111 @@ describe('ApplicationStore sessions', () => {
     finishRestore(null);
     await store.restored;
     expect(store.account()).toEqual(ACCOUNT);
+  });
+});
+
+describe('ApplicationStore while the server works (HTTP mode)', () => {
+  const at = (stage: Application['stage']) => ({ ...SESSION.app!, stage }) as Application;
+
+  /** A ServerWork whose answers the test sets; counts the reads. */
+  function serverWork() {
+    const work = {
+      kind: 'server' as const,
+      current: { stage: 'scanning', changedAt: 't1' } as ApplicationStatus,
+      seenStatus: { stage: 'scanning', changedAt: 't1' } as ApplicationStatus | null,
+      next: at('review'),
+      statusReads: 0,
+      fullReads: 0,
+      fail: null as ApiError | null,
+      status: async () => {
+        work.statusReads++;
+        if (work.fail) throw work.fail;
+        return work.current;
+      },
+      application: async () => {
+        work.fullReads++;
+        work.seenStatus = work.current;
+        return work.next;
+      },
+      seen: () => work.seenStatus,
+    };
+    return work;
+  }
+
+  function setUp(work: ReturnType<typeof serverWork>, stage: Application['stage'] = 'scanning') {
+    localStorage.clear();
+    const api = { demo: null, work, restore: async () => ({ account: ACCOUNT, app: at(stage) }), logout: async () => undefined } as unknown as Api;
+    TestBed.configureTestingModule({ providers: [provideRouter([{ path: '**', children: [] }]), { provide: Api, useValue: api }] });
+    return TestBed.inject(ApplicationStore);
+  }
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('polls the status read, reads the application only when it changed, and stops when the stage is not a waiting one', async () => {
+    const work = serverWork();
+    const store = setUp(work);
+    await store.restored;
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(6_000);
+    expect(work.statusReads).toBe(3);
+    expect(work.fullReads).toBe(0);
+    expect(store.stage()).toBe('scanning');
+
+    work.current = { stage: 'review', changedAt: 't2' };
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(work.fullReads).toBe(1);
+    expect(store.stage()).toBe('review');
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(work.statusReads).toBe(4);
+  });
+
+  it('reads the application when only changedAt moved', async () => {
+    const work = serverWork();
+    work.current = { stage: 'titleChecking', changedAt: 't1' };
+    work.seenStatus = work.current;
+    work.next = at('titleChecking');
+    const store = setUp(work, 'titleChecking');
+    await store.restored;
+    TestBed.tick();
+    work.current = { stage: 'titleChecking', changedAt: 't2' };
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(work.fullReads).toBe(1);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(work.fullReads).toBe(1);
+  });
+
+  it('signs out and stops on a 401, and does not poll after sign-out', async () => {
+    const work = serverWork();
+    const store = setUp(work);
+    await store.restored;
+    TestBed.tick();
+    work.fail = unauthenticated();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(store.signedIn()).toBe(false);
+    TestBed.tick();
+    const reads = work.statusReads;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(work.statusReads).toBe(reads);
+  });
+
+  it('does not poll outside the waiting stages', async () => {
+    const work = serverWork();
+    const store = setUp(work, 'review');
+    await store.restored;
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(work.statusReads).toBe(0);
+    await store.logout();
+  });
+
+  it('never lets the scan reach 100% on its own', async () => {
+    const work = serverWork();
+    const store = setUp(work);
+    await store.restored;
+    (store as unknown as { app: { set(a: Application): void } }).app.set({ ...at('scanning'), deck: { fileName: 'a.pdf', sizeKb: 1, pages: 0, startedAt: new Date(Date.now() - 3_600_000).toISOString(), fields: [] } });
+    expect(store.scan()!.percent).toBeLessThan(100);
+    expect(store.scan()!.p).toBeLessThanOrEqual(0.95);
   });
 });

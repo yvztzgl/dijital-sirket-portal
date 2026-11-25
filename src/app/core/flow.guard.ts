@@ -10,7 +10,9 @@ export const SCREEN_STAGES: Record<string, { stages: Stage[]; founder?: FounderT
   d1e: { stages: ['profile', 'verified'] },
   d1a: { stages: ['verified'] },
   d1b: { stages: ['scanning'] },
-  d1c: { stages: ['review'] },
+  // D-1c also opens after a refused title ("Diğer bilgilere dön" on D-1d): the API still takes review changes then.
+  d1c: { stages: ['review', 'titleConflict'] },
+  titlecheck: { stages: ['titleChecking'] },
   rejection: { stages: ['titleConflict'] },
   d2a: { stages: ['eligibility'] },
   d2d: { stages: ['declaration'] },

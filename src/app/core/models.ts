@@ -12,6 +12,7 @@ export type Stage =
   | 'verified' // profile saved, ready to upload a pitch deck (the profile can still be changed)
   | 'scanning' // AI Reviewer reading the deck
   | 'review' // founder checks extracted fields
+  | 'titleChecking' // the trade name is being checked for reservation; done by staff, so it can take hours
   | 'titleConflict' // MERSİS could not reserve the title
   | 'eligibility' // step 2, first screen: identity check (pre-information, then passport and face on camera)
   | 'declaration' // step 2, second screen: the founder uploads an address document and confirms the declaration
@@ -27,7 +28,7 @@ export type Stage =
   | 'done';
 
 export const STAGE_ORDER: Stage[] = [
-  'registered', 'profile', 'verified', 'scanning', 'review', 'titleConflict', 'eligibility', 'declaration', 'screening', 'eligible', 'manual',
+  'registered', 'profile', 'verified', 'scanning', 'review', 'titleChecking', 'titleConflict', 'eligibility', 'declaration', 'screening', 'eligible', 'manual',
   'payment', 'threeDs', 'signing', 'calling', 'signed', 'setup', 'done',
 ];
 
@@ -39,6 +40,7 @@ export function stepOf(stage: Stage): number {
     case 'verified':
     case 'scanning':
     case 'review':
+    case 'titleChecking':
     case 'titleConflict':
       return 1;
     case 'eligibility':
@@ -178,10 +180,37 @@ export interface Application {
    * `noticeAt` / `aiConsentAt`: when the founder ticked the privacy notice and the AI-processing
    * consent for this deck (absent on decks uploaded before 2026-11-25).
    */
-  deck?: { fileName: string; sizeKb: number; pages: number; startedAt: string; fields: ScanField[]; noticeAt?: string; aiConsentAt?: string };
+  deck?: {
+    fileName: string;
+    sizeKb: number;
+    pages: number;
+    startedAt: string;
+    fields: ScanField[];
+    noticeAt?: string;
+    aiConsentAt?: string;
+    /**
+     * Where reading the deck stands (the API's `deck.status`). `failed`: the reader gave up; the
+     * application is back at `verified` and the founder uploads again. Absent on mock decks saved
+     * before 2026-11-25, which were all read.
+     */
+    status?: 'reading' | 'read' | 'failed';
+  };
   /** The profile compared with the deck, from the end of the scan; empty until both exist. */
   crossCheck: CrossCheck[];
-  titleCheck?: { status: 'ok' | 'conflict'; candidate: string; conflictWith?: string; alternatives?: string[] };
+  /**
+   * The trade-name check after the review. `candidate`: the title asked for, without the type suffix.
+   * `checking` (stage `titleChecking`): waiting for the answer; `requestedAt` is when it was asked
+   * (the mock's simulated check runs from it; the API does not send it). `conflict`: refused, with
+   * the registered title it clashed with (mock) or the staff member's `reason` (API).
+   */
+  titleCheck?: {
+    status: 'checking' | 'ok' | 'conflict';
+    candidate: string;
+    requestedAt?: string;
+    conflictWith?: string;
+    reason?: string;
+    alternatives?: string[];
+  };
   /**
    * `consentAt`: when the founder ticked the consent on D-2a's pre-information view (absent on
    * applications saved before 2026-11-17). `via: 'phone'`: the check was started from the phone page.
@@ -223,6 +252,17 @@ export interface Application {
   results?: { vkn: string; mersis: string; iban: string; advisor: string; advisorFirm: string; taxOffice: string };
   docs: DocItem[];
   logs: LogEntry[];
+}
+
+/**
+ * The values the API accepts on the profile form and the review screen (`GET /api/reference/wizard`):
+ * activity areas with their NACE codes, capital sources, and the NACE codes a review may name.
+ * The mock answers with the portal's own constants in the same shape.
+ */
+export interface WizardReference {
+  sectors: { key: string; label: string; naceCodes: string[] }[];
+  funding: { key: string; label: string }[];
+  naceCodes: { code: string; title: string }[];
 }
 
 /** Fee breakdown for the one-off payment (sums to the total). */

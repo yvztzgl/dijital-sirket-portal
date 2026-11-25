@@ -7,10 +7,19 @@ import { Application, DocItem, LogEntry } from './models';
  */
 
 /** Base durations at 1× speed (ms). */
-export const DURATION = { scan: 5_000, identity: 6_000, screening: 5_000, call: 20_000, setup: 45_000 };
+/** Simulated durations in the mock (ms). `titleCheck` stands for staff work that takes hours on the real API. */
+export const DURATION = { scan: 5_000, titleCheck: 4_000, identity: 6_000, screening: 5_000, call: 20_000, setup: 45_000 };
 
 export const progress = (startedAt: string | undefined, duration: number, now: number) =>
   startedAt ? Math.min(1, Math.max(0, (now - Date.parse(startedAt)) / duration)) : 0;
+
+/**
+ * Progress for work whose end only the server knows (HTTP mode): it moves with time like `progress`
+ * but slows down and never passes `cap`, so the screen never shows 100% before the server says so.
+ * About 63% of `cap` after one `duration`, 86% after two.
+ */
+export const openEndedProgress = (startedAt: string | undefined, duration: number, now: number, cap = 0.95) =>
+  startedAt ? cap * (1 - Math.exp(-Math.max(0, now - Date.parse(startedAt)) / duration)) : 0;
 
 const at = (startedAt: string, duration: number, f: number) => new Date(Date.parse(startedAt) + f * duration).toISOString();
 
@@ -20,7 +29,8 @@ const doc = (group: string, name: string, sizeKb: number, when: string): DocItem
 
 export function scanView(app: Application, p: number) {
   const fields = app.deck?.fields ?? [];
-  const pages = app.deck?.pages ?? 12;
+  // The API knows the page count only once the deck is read.
+  const pages = app.deck?.pages || 12;
   const shown = Math.min(fields.length, Math.floor(p * (fields.length + 1)));
   return {
     p,

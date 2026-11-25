@@ -13,9 +13,10 @@
       <div class="grid">
         <label class="wz-field wide">Şirket veya marka adı
           <input class="wz-input" [value]="p.brand" (input)="setProfile('brand', $any($event.target).value)" placeholder="Örneğin Acme Cloud" autocomplete="organization">
+          @if (fieldError('brand'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
         </label>
-        <div class="wz-field"><span>Faaliyet alanı</span><app-select label="Faaliyet alanı" [options]="sectorOptions" [value]="p.sector" (valueChange)="setProfile('sector', $event)" placeholder="Seçiniz" /></div>
-        <div class="wz-field"><span>Sermaye kaynağı</span><app-select label="Sermaye kaynağı" [options]="fundingOptions" [value]="p.funding" (valueChange)="setProfile('funding', $event)" placeholder="Seçiniz" /></div>
+        <div class="wz-field"><span>Faaliyet alanı</span><app-select label="Faaliyet alanı" [options]="sectorOptions()" [value]="p.sector" (valueChange)="setProfile('sector', $event)" placeholder="Seçiniz" />@if (fieldError('sector'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}</div>
+        <div class="wz-field"><span>Sermaye kaynağı</span><app-select label="Sermaye kaynağı" [options]="fundingOptions()" [value]="p.funding" (valueChange)="setProfile('funding', $event)" placeholder="Seçiniz" />@if (fieldError('funding'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}</div>
       </div>
     </section>
 
@@ -23,9 +24,9 @@
       <h2 id="pf-fo" class="wz-card-h">Kurucu bilgileri</h2>
       <p class="who"><app-icon name="user" size="15px" [stroke]="2" /><b>{{ founderName() }}</b><small>Hesabınızdan alınmıştır.</small></p>
       <div class="grid">
-        <div class="wz-field"><span>Uyruk</span><app-country-select label="Uyruk" [value]="p.nationality" (valueChange)="setProfile('nationality', $event)" /></div>
-        <div class="wz-field"><span>Yaşadığınız ülke</span><app-country-select label="Yaşadığınız ülke" [value]="p.country" (valueChange)="setProfile('country', $event)" /></div>
-        <div class="wz-field wide"><span>Telefon</span><app-phone-input label="Telefon" [value]="p.phone" [defaultCountry]="p.country" (valueChange)="setProfile('phone', $event)" /></div>
+        <div class="wz-field"><span>Uyruk</span><app-country-select label="Uyruk" [value]="p.nationality" (valueChange)="setProfile('nationality', $event)" />@if (fieldError('nationality'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}</div>
+        <div class="wz-field"><span>Yaşadığınız ülke</span><app-country-select label="Yaşadığınız ülke" [value]="p.country" (valueChange)="setProfile('country', $event)" />@if (fieldError('country'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}</div>
+        <div class="wz-field wide"><span>Telefon</span><app-phone-input label="Telefon" [value]="p.phone" [defaultCountry]="p.country" (valueChange)="setProfile('phone', $event)" />@if (fieldError('phone'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}</div>
       </div>
     </section>
 

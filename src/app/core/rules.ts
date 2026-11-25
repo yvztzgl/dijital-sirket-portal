@@ -72,3 +72,29 @@ export function passwordStrength(p: string): { score: 0 | 1 | 2 | 3 | 4; label: 
 }
 
 export const FUNDING_OPTIONS: FundingSource[] = ['own-abroad', 'own-turkey', 'investor', 'third-party'];
+
+/** "Acme Bulut Bilişim A.Ş." → "Acme Bulut Bilişim": the type suffix is added by the API (and shown by the screens), never typed. */
+export function withoutSuffix(title: string): string {
+  return title.trim().replace(/\s+(A\.Ş\.|AŞ|Anonim Şirketi)$/i, '').trim();
+}
+
+/**
+ * Two titles clash when one (ignoring the type suffix) is a word-prefix of the other,
+ * e.g. "Acme Bulut Bilişim" vs registered "Acme Bulut Bilişim Hizmetleri A.Ş.".
+ */
+export function sameStem(a: string, b: string) {
+  const words = (s: string) => withoutSuffix(s).toLocaleLowerCase('tr-TR').split(/\s+/).filter(Boolean);
+  const [x, y] = [words(a), words(b)].sort((p, q) => p.length - q.length);
+  return x.length >= 2 && x.every((w, i) => w === y[i]);
+}
+
+/**
+ * Up to three titles to offer on D-1d after a refused one. Suggestions only: the founder may also
+ * type their own, and whichever is chosen is checked again. `taken` lists titles known to be
+ * registered (the mock's simulated MERSİS); the API gives none, so in HTTP mode nothing is left out.
+ */
+export function titleAlternatives(root: string, candidate: string, taken: string[] = []): string[] {
+  return [`${root} Bulut Yazılım`, `${root}nova Bilişim`, `${root} Cloudline Teknoloji`, `${root} Dijital Çözümler`]
+    .filter((t) => t !== candidate && !taken.some((r) => sameStem(r, t)))
+    .slice(0, 3);
+}

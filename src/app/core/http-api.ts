@@ -1,18 +1,23 @@
 import { HttpClient, HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import type { Api, Session } from './api';
+import type { Api, ApplicationStatus, ReviewPatch, ServerWork, Session } from './api';
 import { ApiError } from './api-error';
-import { toAccount, toApplication } from './api-mapper';
-import { ApplicationWire, EdevletStartWire, MeWire } from './api-types';
-import { Application, PhoneLinkStatus } from './models';
+import { toAccount, toApplication, toReviewFields, toStage } from './api-mapper';
+import { ApplicationWire, EdevletStartWire, MeWire, StageWire } from './api-types';
+import { Account, Application, CrossKey, DeckConsents, PhoneLinkStatus, Profile, WizardReference } from './models';
 
 /**
  * The real platform API over HTTP, used by the `http` build (see docs/api-client.md).
  *
- * Connected so far: sign-in (register, code, login, logout, password reset, e-Devlet) and reading
- * the session back after a reload. The session is an HttpOnly cookie the server sets; this class
- * never sees it, and nothing about the founder is kept in the browser's storage.
+ * Connected so far: sign-in (register, code, login, logout, password reset, e-Devlet), reading
+ * the session back after a reload, and step 1 (profile, deck, review, cross-checks, title, the
+ * reference data, and polling the status read while the server works). The session is an HttpOnly
+ * cookie the server sets; this class never sees it, and nothing about the founder is kept in the
+ * browser's storage (only in this object's memory, until sign-out or reload).
+ *
+ * Every write answers with an empty body (204 or 202); each write here is followed by a fresh read
+ * of the application (`fresh`).
  *
  * Everything else still rejects with "Bu işlem henüz sunucuya bağlanmadı." (code `not_connected`).
  * Parameters are left off until a method is connected; TypeScript accepts an implementation that
@@ -27,6 +32,23 @@ export class HttpApi implements Api {
 
   /** No demo tools against a real server. */
   readonly demo = null;
+
+  /** The server does the background work; the store polls (see `Api.work`). */
+  readonly work: ServerWork = {
+    kind: 'server',
+    status: () => this.status(),
+    application: () => this.fresh(),
+    seen: () => this.seenStatus,
+  };
+
+  /** Who is signed in (the mapper takes the name from it until the review has one). */
+  private account: Account | null = null;
+  /** The last application as the API sent it: `updateReview` sends only what differs from it. */
+  private view: ApplicationWire | null = null;
+  /** The status read made just before the last full read (see `ServerWork.seen`). */
+  private seenStatus: ApplicationStatus | null = null;
+  /** The reference data, read once per session. */
+  private referenceData: Promise<WizardReference> | null = null;
 
   // auth
 
@@ -53,6 +75,7 @@ export class HttpApi implements Api {
   }
 
   async logout(): Promise<void> {
+    this.forget();
     await this.request('POST', '/api/auth/logout');
   }
 
@@ -97,32 +120,113 @@ export class HttpApi implements Api {
    * reading again.
    */
   private async session(): Promise<Session> {
+    this.forget();
     const account = toAccount(await this.request<MeWire>('GET', '/api/me'));
-    let view: ApplicationWire;
+    this.account = account;
+    let app: Application;
     try {
-      view = await this.request<ApplicationWire>('GET', '/api/application');
+      app = await this.fresh();
     } catch (error) {
       if (!(error instanceof ApiError) || error.code !== 'no_application') throw error;
       await this.request('POST', '/api/application');
-      view = await this.request<ApplicationWire>('GET', '/api/application');
+      app = await this.fresh();
     }
-    return { account, app: toApplication(view, account) };
+    return { account, app };
+  }
+
+  /** Drops what this object remembers of the founder (sign-out, a new sign-in). */
+  private forget() {
+    this.account = null;
+    this.view = null;
+    this.seenStatus = null;
+    this.referenceData = null;
+  }
+
+  /** The light read: stage and change time, nothing decrypted on the server. */
+  private async status(): Promise<ApplicationStatus> {
+    const s = await this.request<{ stage: StageWire; changedAt: string }>('GET', '/api/application/status');
+    return { stage: toStage(s.stage), changedAt: s.changedAt };
+  }
+
+  /**
+   * The full read, mapped to the portal's model. The status read goes first, so that the status
+   * remembered as seen is never newer than the application read after it: anything that changes in
+   * between shows up as a different `changedAt` at the next poll.
+   */
+  private async fresh(): Promise<Application> {
+    const status = await this.status();
+    const view = await this.request<ApplicationWire>('GET', '/api/application');
+    const account = this.account ?? (this.account = toAccount(await this.request<MeWire>('GET', '/api/me')));
+    this.view = view;
+    this.seenStatus = status;
+    return toApplication(view, account);
+  }
+
+  /** `GET /api/reference/wizard`, once per session; read again after a failure. */
+  reference(): Promise<WizardReference> {
+    this.referenceData ??= this.request<WizardReference>('GET', '/api/reference/wizard').catch((error: unknown) => {
+      this.referenceData = null;
+      throw error;
+    });
+    return this.referenceData;
   }
 
   // step 1 · profile and deck
-  submitProfile(): Promise<Application> { return notConnected(); }
-  uploadDeck(): Promise<Application> { return notConnected(); }
-  completeScan(): Promise<Application> { return notConnected(); }
-  updateReview(): Promise<Application> { return notConnected(); }
-  submitReview(): Promise<Application> { return notConnected(); }
-  chooseTitle(): Promise<Application> { return notConnected(); }
-  resolveCrossCheck(): Promise<Application> { return notConnected(); }
+
+  /** 204; only before a deck is uploaded (409 `wrong_stage` after). 400 with `errors.<field>`. */
+  async submitProfile(input: Omit<Profile, 'at'>): Promise<Application> {
+    const { brand, sector, funding, nationality, phone, country } = input;
+    await this.request('PUT', '/api/application/profile', { brand, sector, funding, nationality, phone, country });
+    return this.fresh();
+  }
+
+  /**
+   * 202, then the Worker reads the deck (stage `scanning`). Multipart: the file itself and the two
+   * ticks exactly as the founder gave them. The browser sets the multipart Content-Type with its
+   * boundary; setting it here would break the body.
+   */
+  async uploadDeck(file: File, consents: DeckConsents): Promise<Application> {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    form.append('noticeAcknowledged', String(consents.noticeAcknowledged === true));
+    form.append('aiConsent', String(consents.aiConsent === true));
+    await this.request('POST', '/api/application/deck', form);
+    return this.fresh();
+  }
+
+  /** 204; 422 `no_choice_needed` on an item that matches. */
+  async resolveCrossCheck(key: CrossKey, choice: 'stated' | 'read'): Promise<Application> {
+    await this.request('POST', `/api/application/cross-checks/${encodeURIComponent(key)}`, { choice });
+    return this.fresh();
+  }
+
+  /**
+   * 204. Only the fields that differ from the review as last read are sent (the API refuses an empty
+   * change and records each value sent as a new claim). `edited` is the mock's: the API sets the marks.
+   */
+  async updateReview(patch: ReviewPatch, _edited: string[] = []): Promise<Application> {
+    if (!this.view) await this.fresh();
+    const fields = toReviewFields(patch, this.view!);
+    if (Object.keys(fields).length > 0) await this.request('PATCH', '/api/application/review', { fields });
+    return this.fresh();
+  }
+
+  /** 202, stage `titleChecking`. 422 `crosscheck_open`; 400 with one `errors.<field>` per missing field; 400 `nace_codes`. */
+  async submitReview(): Promise<Application> {
+    await this.request('POST', '/api/application/review/submit');
+    return this.fresh();
+  }
+
+  /** 202, back to `titleChecking`; only after a refused title. The server adds " A.Ş.". */
+  async chooseTitle(title: string): Promise<Application> {
+    await this.request('POST', '/api/application/title', { title: title.trim() });
+    return this.fresh();
+  }
 
   // step 2 · eligibility
   startEligibility(): Promise<Application> { return notConnected(); }
   completeIdentity(): Promise<Application> { return notConnected(); }
   submitDeclaration(): Promise<Application> { return notConnected(); }
-  completeScreening(): Promise<Application> { return notConnected(); }
   createPhoneLink(): Promise<Application> { return notConnected(); }
   backToReview(): Promise<Application> { return notConnected(); }
   proceedToPayment(): Promise<Application> { return notConnected(); }
@@ -145,7 +249,6 @@ export class HttpApi implements Api {
 
   // step 5 · formation
   startSetup(): Promise<Application> { return notConnected(); }
-  completeSetup(): Promise<Application> { return notConnected(); }
 
   // Terminal AI
   ask(): Promise<string> { return notConnected(); }

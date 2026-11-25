@@ -1,9 +1,21 @@
 import { ApplicationWire, MeWire } from '../api-types';
+import { WizardReference } from '../models';
+import profile from './captured/profile.json';
+import reference from './captured/reference.json';
+import reviewDecided from './captured/review-decided.json';
+import reviewOpen from './captured/review-open.json';
+import scanning from './captured/scanning.json';
+import status from './captured/status.json';
+import titleCheckingAgain from './captured/title-checking-again.json';
+import titleChecking from './captured/title-checking.json';
+import titleConflict from './captured/title-conflict.json';
+import titleReserved from './captured/title-reserved.json';
+import verified from './captured/verified.json';
 
 /**
  * Literal API answers for the specs, in the shape `GET /api/me` and `GET /api/application` send
- * (records in dijital-sirket-api/src/DijitalSirket.Api/Models/). The next piece replaces or
- * extends these with JSON captured from the running API.
+ * (records in dijital-sirket-api/src/DijitalSirket.Api/Models/). The hand-written ones come first;
+ * `CAPTURED` holds what the running API answered on 2026-11-25 (below).
  */
 
 export const ME: MeWire = { firstName: 'Ayşe', lastName: 'Kaya', email: 'ayse@example.test', founderType: 'foreign', verified: true };
@@ -84,3 +96,42 @@ export const REVIEW_APPLICATION: ApplicationWire = {
     { at: '2026-11-25T09:46:30+00:00', text: 'Sunum okundu', who: 'a' },
   ],
 };
+
+/**
+ * `GET /api/application` as the running API answered it at each stage of step 1, captured on
+ * 2026-11-25 with tools/api-capture/capture.sh (one made-up founder, "Deneme Kurucu"; every e-mail
+ * address replaced with kurucu@example.test). Re-run that script to refresh them.
+ * The deck is a text "PDF" the development deck reader reads field by field; its phone and its
+ * address line differ from the profile, so the review has two differences.
+ */
+export const CAPTURED = {
+  /** Right after `POST /api/application`. */
+  profile: profile as ApplicationWire,
+  /** Profile saved, no deck. */
+  verified: verified as ApplicationWire,
+  /** Deck uploaded, the Worker has not read it yet (`deck.status: "reading"`, no fields). */
+  scanning: scanning as ApplicationWire,
+  /** Deck read; the phone and the country differ from the profile and wait for a choice. */
+  reviewOpen: reviewOpen as ApplicationWire,
+  /** Phone: the deck's value; country: the profile's; postal code typed, family name changed. */
+  reviewDecided: reviewDecided as ApplicationWire,
+  /** After "Onayla ve devam et": the trade name waits for staff. */
+  titleChecking: titleChecking as ApplicationWire,
+  /** Staff refused it (dev/staff.sh title reject "Benzer bir unvan sicilde kayıtlıdır."). */
+  titleConflict: titleConflict as ApplicationWire,
+  /** The founder chose "Lumora Analitik Yazılım" on D-1d. */
+  titleCheckingAgain: titleCheckingAgain as ApplicationWire,
+  /** Staff reserved it: on to the identity step (foreign founder). */
+  titleReserved: titleReserved as ApplicationWire,
+  /** `GET /api/application/status` while the title was being checked. */
+  status: status as { stage: 'titleChecking'; changedAt: string },
+  /** `GET /api/reference/wizard`. */
+  reference: reference as WizardReference,
+};
+
+/**
+ * Reading the deck failed for good: the API puts the stage back at `verified` with
+ * `deck.status: "failed"`. Not captured (the development reader does not fail; the Worker gives up
+ * only after five failures): the captured scanning answer with those two values changed.
+ */
+export const DECK_FAILED: ApplicationWire = { ...CAPTURED.scanning, stage: 'verified', deck: { ...CAPTURED.scanning.deck!, status: 'failed' } };

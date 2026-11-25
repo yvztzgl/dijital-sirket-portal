@@ -1,11 +1,14 @@
 import { computed, effect, inject, signal, untracked } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApplicationStore } from '../../core/application.store';
+import { REVIEW_INPUTS, REVIEW_ROWS } from '../../core/api-mapper';
+import { ReviewKey } from '../../core/api-types';
 import { followFlow } from '../../core/follow';
 import { tl0 } from '../../core/format';
-import { DECK_CONSENT_ERROR, deckFileError, FUNDING_OPTIONS } from '../../core/rules';
-import { CAPITAL, CrossKey, FUNDING_LABELS, FundingSource, Profile, Sector, SECTORS } from '../../core/models';
-import { companyPurpose, naceName, searchNace } from '../../core/nace';
+import { dateTime } from '../../core/format';
+import { DECK_CONSENT_ERROR, deckFileError } from '../../core/rules';
+import { CAPITAL, CrossKey, FUNDING_LABELS, FundingSource, Profile, Sector } from '../../core/models';
+import { companyPurpose, naceName as localNaceName } from '../../core/nace';
 
 type CardId = 'founder' | 'contact' | 'funding';
 /** What the pencil on a row of the confirm screen opens. */
@@ -19,7 +22,7 @@ const FUNDING_HINTS: Record<string, string> = {
 };
 
 /** One line under each activity area in the D-1e picker. */
-const SECTOR_HINTS: Record<Sector, string> = {
+const SECTOR_HINTS: Partial<Record<string, string>> = {
   software: 'Yazılım, veri işleme ve bulut hizmetleri',
   ecommerce: 'İnternet üzerinden ürün veya hizmet satışı',
   consulting: 'İşletme ve yönetim danışmanlığı',
@@ -51,6 +54,8 @@ export class KarsilamaData {
   constructor() {
     this.store.clearError();
     followFlow();
+    // The choices offered on D-1e and D-1c are the API's own list (Api.reference).
+    void this.store.loadReference();
     // Once both ticks are given, the message asking for them has done its job.
     effect(() => {
       if (this.consentsGiven() && untracked(this.fileError) === DECK_CONSENT_ERROR) this.fileError.set(null);
@@ -72,7 +77,17 @@ export class KarsilamaData {
 
   // --------------------------------------------------------------------------- D-1e profile
 
-  protected readonly sectorOptions = (Object.keys(SECTORS) as Sector[]).map((v) => ({ value: v, label: SECTORS[v].label, hint: SECTOR_HINTS[v] }));
+  protected readonly sectorOptions = computed(() =>
+    (this.store.reference()?.sectors ?? []).map((v) => ({ value: v.key, label: v.label, hint: SECTOR_HINTS[v.key] })),
+  );
+  /** The capital sources the API accepts, on D-1e and in D-1c's funding editor. */
+  protected readonly fundingOptions = computed(() =>
+    (this.store.reference()?.funding ?? []).map((v) => ({ value: v.key, label: v.label, hint: FUNDING_HINTS[v.key] })),
+  );
+  /** A refusal's message for one field, under the API's field name (only HTTP mode names fields). */
+  protected fieldError(key: string): string | null {
+    return this.store.fieldErrors()[key]?.[0] ?? null;
+  }
   protected readonly founderName = computed(() => {
     const a = this.store.app();
     return a ? `${a.founder.firstName} ${a.founder.lastName}`.trim() : '';
@@ -102,7 +117,7 @@ export class KarsilamaData {
   protected async submitProfile() {
     const p = this.profileDraft();
     if (!p.sector || !p.funding) return;
-    if (await this.store.submitProfile({ ...p, sector: p.sector, funding: p.funding })) void this.router.navigateByUrl('/deck');
+    if (await this.store.submitProfile({ ...p, sector: p.sector as Sector, funding: p.funding as FundingSource })) void this.router.navigateByUrl('/deck');
   }
 
   /**
@@ -114,6 +129,14 @@ export class KarsilamaData {
   }
 
   // ---------------------------------------------------------------------------- D-1a upload
+
+  /**
+   * Reading the last deck failed for good (the API's `deck.status: "failed"`; the stage is back at
+   * `verified`). D-1a says so and takes a new upload.
+   */
+  protected readonly deckFailed = computed(() => this.store.app()?.deck?.status === 'failed');
+  /** The profile can be changed only until a deck is uploaded (the API refuses it afterwards, also after a failed reading). */
+  protected readonly profileEditable = computed(() => !this.store.app()?.deck);
 
   protected readonly dragging = signal(false);
   protected readonly fileError = signal<string | null>(null);
@@ -266,16 +289,29 @@ export class KarsilamaData {
     });
   });
 
-  protected readonly naceChips = computed(() => (this.store.app()?.company.nace ?? []).map((code) => ({ code, name: naceName(code) })));
+  /** The NACE codes the API accepts (Api.reference), code → title. */
+  private readonly naceTitles = computed(() => new Map((this.store.reference()?.naceCodes ?? []).map((n) => [n.code, n.title])));
+  protected naceName(code: string) {
+    return this.naceTitles().get(code) ?? localNaceName(code);
+  }
 
+  protected readonly naceChips = computed(() => (this.store.app()?.company.nace ?? []).map((code) => ({ code, name: this.naceName(code) })));
+
+  /** Search results and suggestions, only among the codes the API accepts. */
   protected readonly naceOptions = computed(() => {
     const c = this.store.app()?.company;
     if (!c) return [];
-    const q = this.naceQuery();
-    if (q.trim()) return searchNace(q, c.nace).map((o) => ({ ...o, ai: false }));
-    const suggested = c.suggestedNace.filter((x) => !c.nace.includes(x)).map((code) => ({ code, name: naceName(code), ai: true }));
-    const related = ['63.12', '62.09'].filter((x) => !c.nace.includes(x) && !c.suggestedNace.includes(x)).map((code) => ({ code, name: naceName(code), ai: false }));
-    return [...suggested, ...related].slice(0, 3);
+    const allowed = this.naceTitles();
+    const q = this.naceQuery().trim().toLocaleLowerCase('tr-TR');
+    if (q) {
+      return [...allowed]
+        .filter(([code, name]) => !c.nace.includes(code) && (code.startsWith(q) || name.toLocaleLowerCase('tr-TR').includes(q)))
+        .slice(0, 5)
+        .map(([code, name]) => ({ code, name, ai: false }));
+    }
+    const offer = (codes: string[], ai: boolean) => codes.filter((x) => allowed.has(x) && !c.nace.includes(x)).map((code) => ({ code, name: this.naceName(code), ai }));
+    const related = ['63.12', '62.09'].filter((x) => !c.suggestedNace.includes(x));
+    return [...offer(c.suggestedNace, true), ...offer(related, false)].slice(0, 3);
   });
 
   protected readonly purpose = computed(() => companyPurpose(this.store.app()?.company.nace ?? []));
@@ -322,7 +358,7 @@ export class KarsilamaData {
         { key: 'country', label: 'Ülke', value: a.contact.country, kind: 'country' },
       ]),
       card('funding', 'Fon kaynağı', ['funding'], FUNDING_LABELS[a.funding], [
-        { key: 'funding', label: 'Sermaye nereden geliyor?', value: a.funding, wide: true, kind: 'select', options: FUNDING_OPTIONS.map((v) => ({ value: v, label: FUNDING_LABELS[v], hint: FUNDING_HINTS[v] })) },
+        { key: 'funding', label: 'Sermaye nereden geliyor?', value: a.funding, wide: true, kind: 'select', options: this.fundingOptions() },
       ]),
     ];
   });
@@ -377,7 +413,7 @@ export class KarsilamaData {
     return [
       row('title', 'Şirket unvanı', this.store.fullTitle(), 'title'),
       row('name', 'Kurucu', name, 'founder'),
-      row('nace', 'Faaliyet', (a.company.nace ?? []).map((c) => naceName(c)).join(', '), 'nace'),
+      row('nace', 'Faaliyet', (a.company.nace ?? []).map((c) => this.naceName(c)).join(', '), 'nace'),
       row('nationality', 'Uyruk', a.founder.nationality, 'founder', 'name'),
       row('type', 'Şirket türü', 'Tek pay sahipli anonim şirket', null),
       row('share', 'Pay sahipliği', `%100, ${name}`, null),
@@ -390,6 +426,26 @@ export class KarsilamaData {
     ];
   });
   protected readonly okRows = computed(() => this.rows().filter((r) => !r.flag));
+
+  /** A refusal's messages at the review rows (e.g. "Ad eksik." under Kurucu after "Onayla ve devam et"). */
+  protected readonly rowErrors = computed(() => {
+    const out: Record<string, string> = {};
+    for (const [key, messages] of Object.entries(this.store.fieldErrors())) {
+      const row = REVIEW_ROWS[key as ReviewKey];
+      if (row && messages[0]) out[row] = out[row] ? `${out[row]} ${messages[0]}` : messages[0];
+    }
+    return out;
+  });
+
+  /** A refusal's message at an input of the open editor (founder, contact or funding). */
+  protected readonly inputErrors = computed(() => {
+    const out: Record<string, string> = {};
+    for (const [key, messages] of Object.entries(this.store.fieldErrors())) {
+      const input = REVIEW_INPUTS[key as ReviewKey];
+      if (input && messages[0]) out[input] = messages[0];
+    }
+    return out;
+  });
   /** Flagged rows, less those already asked about as a difference from the profile. */
   protected readonly flagRows = computed(() => {
     const asked = new Set(this.crossOpen().map((c) => CROSS_ROW[c.key]));
@@ -403,10 +459,12 @@ export class KarsilamaData {
   /** Differences, each with the deck page its value was read from. */
   protected readonly crossDiffs = computed(() => {
     const fields = this.store.app()?.deck?.fields ?? [];
-    const field: Record<CrossKey, string> = { brand: 'title', sector: 'nace', funding: 'funding', nationality: 'nationality', phone: 'phone', country: 'postal' };
+    // The mock reads the country with the postal code; the API compares it with the address line.
+    const field: Record<CrossKey, string[]> = { brand: ['title'], sector: ['nace'], funding: ['funding'], nationality: ['nationality'], phone: ['phone'], country: ['postal', 'address'] };
+    const page = (key: CrossKey) => field[key].map((k) => fields.find((f) => f.key === k)?.page).find((p) => p != null) ?? null;
     return this.cross()
       .filter((c) => !c.match)
-      .map((c) => ({ ...c, page: fields.find((f) => f.key === field[c.key])?.page ?? null }));
+      .map((c) => ({ ...c, page: page(c.key) }));
   });
   /** Differences still waiting for the founder's choice; the review cannot be submitted while any remain. */
   protected readonly crossOpen = computed(() => this.crossDiffs().filter((c) => !c.choice));
@@ -414,8 +472,6 @@ export class KarsilamaData {
   protected resolveCross(key: CrossKey, choice: 'stated' | 'read') {
     void this.store.resolveCrossCheck(key, choice);
   }
-
-  protected readonly fundingOptions = FUNDING_OPTIONS.map((v) => ({ value: v, label: FUNDING_LABELS[v], hint: FUNDING_HINTS[v] }));
 
   /** The founder / contact / funding form shown when that editor is open. */
   protected readonly editorCard = computed(() => this.collapsedCards().find((c) => c.id === this.editor()) ?? null);
@@ -480,9 +536,32 @@ export class KarsilamaData {
     void this.store.chooseTitle(t);
   }
 
+  /**
+   * "Diğer bilgilere dön": after a refused title the API still takes changes to the review and a new
+   * "Onayla ve devam et" (which asks for the review's trade name again), with no call that changes
+   * the stage. So this only opens D-1c, which accepts `titleConflict` too.
+   */
   protected editAgain() {
-    void this.store.backToReview();
+    void this.router.navigateByUrl('/deck/review');
   }
+
+  /** D-1c opened from D-1d: back to the title choice. */
+  protected backToTitles() {
+    void this.router.navigateByUrl('/deck/name-rejected');
+  }
+
+  /** D-1c opened from D-1d: the title was refused; a new deck is not offered here (see d1c.html). */
+  protected readonly titleRefused = computed(() => this.store.stage() === 'titleConflict');
+
+  // ------------------------------------------------------------- D-1f title being checked
+
+  /** "Lumora Analitik Yazılım", the title waiting for its answer. */
+  protected readonly checkingTitle = computed(() => this.store.app()?.titleCheck?.candidate ?? this.store.title());
+  /** When it was asked, if known (the mock knows; the API does not send it). */
+  protected readonly checkingSince = computed(() => {
+    const at = this.store.app()?.titleCheck?.requestedAt;
+    return at ? dateTime(at) : null;
+  });
 
   protected readonly collapsedOk = computed(() => {
     const a = this.store.app();

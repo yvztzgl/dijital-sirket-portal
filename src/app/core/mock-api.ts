@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import type { Api, DemoTools, ReviewPatch } from './api';
+import type { Api, DemoTools, ReviewPatch, SimulatedWork } from './api';
 import { ApiError } from './api-error';
 import { DemoSettings } from './demo-settings';
 import { titleCase, tl } from './format';
@@ -23,8 +23,20 @@ import {
   Sector,
   SECTORS,
   Stage,
+  WizardReference,
 } from './models';
-import { ADDRESS_DOC_MAX, DECK_CONSENT_ERROR, deckFileError, FUNDING_OPTIONS, validateCard, validTckn } from './rules';
+import { NACE } from './nace';
+import {
+  ADDRESS_DOC_MAX,
+  DECK_CONSENT_ERROR,
+  deckFileError,
+  FUNDING_OPTIONS,
+  sameStem,
+  titleAlternatives,
+  validateCard,
+  validTckn,
+  withoutSuffix,
+} from './rules';
 import { DURATION, identityEvents, screeningEvents, setupEvents, signatureDocs, titleDocs } from './timeline';
 
 /**
@@ -40,7 +52,7 @@ import { DURATION, identityEvents, screeningEvents, setupEvents, signatureDocs, 
 // Moved to their own files; re-exported so existing imports keep working.
 export { ApiError } from './api-error';
 export type { ReviewPatch } from './api';
-export { ADDRESS_DOC_MAX, FUNDING_OPTIONS, luhn, passwordStrength, validateCard, validTckn } from './rules';
+export { ADDRESS_DOC_MAX, FUNDING_OPTIONS, luhn, passwordStrength, sameStem, validateCard, validTckn } from './rules';
 
 /**
  * An account as the mock stores it. The password is kept in plain text in the browser: prototype
@@ -110,6 +122,43 @@ export class MockApi implements Api {
     rememberedEmail: () => localStorage.getItem(LAST_EMAIL_KEY) ?? '',
     rememberEmail: (email) => localStorage.setItem(LAST_EMAIL_KEY, email.trim()),
   };
+
+  /**
+   * Nothing runs in the background here: the store finishes each simulated step with timers by
+   * calling `complete` (see `Api.work`). HTTP mode polls the server instead.
+   */
+  readonly work: SimulatedWork = {
+    kind: 'simulated',
+    complete: (stage) => {
+      switch (stage) {
+        case 'scanning':
+          return this.completeScan();
+        case 'titleChecking':
+          return this.completeTitleCheck();
+        case 'eligibility':
+          return this.completeIdentity();
+        case 'screening':
+          return this.completeScreening();
+        case 'calling':
+          return this.completeCall();
+        case 'setup':
+          return this.completeSetup();
+        default:
+          return null;
+      }
+    },
+  };
+
+  /** The portal's own constants in the shape of the API's `GET /api/reference/wizard`. */
+  async reference(): Promise<WizardReference> {
+    return {
+      sectors: (Object.keys(SECTORS) as Sector[]).map((key) => ({ key, label: SECTORS[key].label, naceCodes: SECTORS[key].nace })),
+      funding: FUNDING_OPTIONS.map((key) => ({ key, label: FUNDING_LABELS[key] })),
+      naceCodes: Object.keys(NACE)
+        .sort()
+        .map((code) => ({ code, title: NACE[code] })),
+    };
+  }
 
   /**
    * The signed-in founder's e-mail: the mock's stand-in for the API's session cookie. Set by
@@ -343,7 +392,7 @@ export class MockApi implements Api {
         { key: 'postal', label: 'Posta kodu · Ülke', value: `${app.contact.postalCode} · ${app.contact.country}`, page: pg.contact },
       ];
       const at = nowIso();
-      app.deck = { fileName: file.name, sizeKb: Math.max(1, Math.round(file.size / 1024)), pages: pg.total ?? 10 + (file.name.length % 5), startedAt: at, fields, noticeAt: at, aiConsentAt: at };
+      app.deck = { fileName: file.name, sizeKb: Math.max(1, Math.round(file.size / 1024)), pages: pg.total ?? 10 + (file.name.length % 5), startedAt: at, fields, noticeAt: at, aiConsentAt: at, status: 'reading' };
       app.titleCheck = undefined;
       app.crossCheck = [];
       app.stage = 'scanning';
@@ -356,6 +405,7 @@ export class MockApi implements Api {
   async completeScan() {
     return this.mutate(['scanning'], (app) => {
       app.stage = 'review';
+      if (app.deck) app.deck.status = 'read';
       log(app, `AI Reviewer ${(app.deck?.fields.length ?? 10) + 3} alan çıkardı`, 'a');
       if (app.profile) {
         app.crossCheck = crossCheck(app, app.profile);
@@ -385,43 +435,63 @@ export class MockApi implements Api {
     });
   }
 
-  /** Submit the reviewed data: reserve the title in MERSİS, then open the identity step (see startEligibility). */
+  /**
+   * Submit the reviewed data: the title is asked of MERSİS (stage `titleChecking`). The simulated
+   * answer comes from `completeTitleCheck` after `DURATION.titleCheck`, as the API's comes from staff.
+   */
   async submitReview() {
     await this.wait(1_200);
     return this.mutate(['review', 'titleConflict'], (app) => {
       if (app.crossCheck.some((c) => !c.match && !c.choice)) throw new ApiError('Ön bilgilerinizle uyuşmayan bilgilerde doğru değeri seçiniz.');
-      this.reserveAndStart(app);
+      if (app.company.nace.length === 0) throw new ApiError('En az bir NACE faaliyet kodu seçiniz.');
+      log(app, 'Başvuru bilgileri onaylandı', 'u');
+      this.requestTitle(app);
     });
   }
 
+  /** D-1d: another title, only after a refused one (as on the API). */
   async chooseTitle(title: string) {
     await this.wait(1_000);
-    return this.mutate(['titleConflict', 'review'], (app) => {
-      const [root, ...rest] = title.replace(/\s+(A\.Ş\.|Anonim Şirketi)$/i, '').trim().split(/\s+/);
+    if (withoutSuffixWords(title).length < 3) throw new ApiError('Yeni bir unvan yazınız.');
+    return this.mutate(['titleConflict'], (app) => {
+      const [root, ...rest] = withoutSuffixWords(title).split(/\s+/);
       app.company.root = root;
       app.company.activity = rest.join(' ');
       app.marks['title'] = 'edited';
       log(app, 'Şirket unvanı düzenlendi', 'u');
-      this.reserveAndStart(app);
+      this.requestTitle(app);
     });
   }
 
-  private reserveAndStart(app: Application) {
+  private requestTitle(app: Application) {
     const candidate = `${app.company.root} ${app.company.activity}`.trim();
-    if (app.company.nace.length === 0) throw new ApiError('En az bir NACE faaliyet kodu seçin.');
-    const firstCheck = !app.titleCheck;
-    const hit = MERSIS_REGISTRY.find((t) => sameStem(t, candidate));
-    if (hit || (firstCheck && this.settings.state().forceConflict)) {
-      app.titleCheck = {
-        status: 'conflict',
-        candidate,
-        conflictWith: hit ?? `${candidate} Hizmetleri A.Ş.`,
-        alternatives: alternativesFor(app.company.root, candidate),
-      };
-      app.stage = 'titleConflict';
-      log(app, 'Unvan MERSİS’te rezerve edilemedi', 'k');
-      return;
-    }
+    app.titleCheck = { status: 'checking', candidate, requestedAt: nowIso() };
+    app.stage = 'titleChecking';
+    log(app, TITLE_ASKED, 's');
+  }
+
+  /** The simulated MERSİS answer: a clash with a registered title (or the demo panel's forced conflict on the first check) is refused. */
+  async completeTitleCheck() {
+    return this.mutate(['titleChecking'], (app) => {
+      const candidate = app.titleCheck?.candidate ?? `${app.company.root} ${app.company.activity}`.trim();
+      const firstCheck = app.logs.filter((l) => l.text === TITLE_ASKED).length <= 1;
+      const hit = MERSIS_REGISTRY.find((t) => sameStem(t, candidate));
+      if (hit || (firstCheck && this.settings.state().forceConflict)) {
+        app.titleCheck = {
+          status: 'conflict',
+          candidate,
+          conflictWith: hit ?? `${candidate} Hizmetleri A.Ş.`,
+          alternatives: alternativesFor(app.company.root, candidate),
+        };
+        app.stage = 'titleConflict';
+        log(app, 'Unvan MERSİS’te rezerve edilemedi', 'k');
+        return;
+      }
+      this.reserved(app, candidate);
+    });
+  }
+
+  private reserved(app: Application, candidate: string) {
     app.titleCheck = { status: 'ok', candidate };
     log(app, 'Unvan MERSİS’te rezerve edildi', 'k');
     // The identity step opens on its pre-information view; nothing runs until the founder starts it.
@@ -1027,18 +1097,15 @@ export function brandFromFile(name: string): string {
  * Two titles clash when one (ignoring the type suffix) is a word-prefix of the other,
  * e.g. "Acme Bulut Bilişim" vs registered "Acme Bulut Bilişim Hizmetleri A.Ş.".
  */
-export function sameStem(a: string, b: string) {
-  const words = (s: string) =>
-    s.replace(/\s+(A\.Ş\.|Anonim Şirketi)$/i, '').toLocaleLowerCase('tr-TR').split(/\s+/).filter(Boolean);
-  const [x, y] = [words(a), words(b)].sort((p, q) => p.length - q.length);
-  return x.length >= 2 && x.every((w, i) => w === y[i]);
+/** Suggestions after a refused title, leaving out what the simulated MERSİS already has (rules.ts). */
+export function alternativesFor(root: string, candidate: string): string[] {
+  return titleAlternatives(root, candidate, MERSIS_REGISTRY);
 }
 
-export function alternativesFor(root: string, candidate: string): string[] {
-  return [`${root} Bulut Yazılım`, `${root}nova Bilişim`, `${root} Cloudline Teknoloji`, `${root} Dijital Çözümler`]
-    .filter((t) => t !== candidate && !MERSIS_REGISTRY.some((r) => sameStem(r, t)))
-    .slice(0, 3);
-}
+/** The log line of a title request; the simulated check counts them to force a conflict only on the first one. */
+const TITLE_ASKED = 'Unvan MERSİS’e soruldu';
+
+const withoutSuffixWords = (title: string) => withoutSuffix(title).replace(/\s+/g, ' ');
 
 /**
  * What the simulated AI Reviewer "reads" from a deck. The downloadable sample deck
@@ -1107,12 +1174,14 @@ async function fastForward(api: MockApi, email: string, want: Stage) {
   if (want === 'review') return;
   for (const c of scanned.crossCheck) if (!c.match) await api.resolveCrossCheck(c.key, 'read');
   // The demo deck's first title clashes in MERSİS; pick a free alternative unless we want the conflict.
-  if (want === 'titleConflict') {
+  if (want === 'titleChecking' || want === 'titleConflict') {
     await api.submitReview();
+    if (want === 'titleConflict') await api.completeTitleCheck();
     return;
   }
   await api.updateReview({ company: { activity: 'Bulut Yazılım' }, funding: want === 'manual' ? 'third-party' : 'own-abroad' }, ['title']);
   await api.submitReview();
+  await api.completeTitleCheck();
   if (want === 'eligibility') return; // D-2a opens on its pre-information view
   await api.startEligibility(true);
   await backdate(email, 'identity');

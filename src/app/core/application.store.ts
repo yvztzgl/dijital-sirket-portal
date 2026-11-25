@@ -1,16 +1,18 @@
-import { computed, effect, inject, Injectable, signal, untracked } from '@angular/core';
+import { computed, DestroyRef, effect, inject, Injectable, signal, untracked } from '@angular/core';
 import { Router } from '@angular/router';
-import { Api, ReviewPatch, Session } from './api';
+import { Api, ReviewPatch, ServerWork, Session } from './api';
 import { ApiError } from './api-error';
 import { Clock } from './clock';
 import { pdfBytes, zipBytes } from './files';
 import { dateTime, initials } from './format';
-import { Account, Application, CrossKey, DeckConsents, DocItem, FounderType, LogEntry, PhoneLinkStatus, Profile, Stage, stepOf } from './models';
+import { Account, Application, CrossKey, DeckConsents, DocItem, FounderType, LogEntry, PhoneLinkStatus, Profile, Stage, stepOf, WizardReference } from './models';
+import { StatusPoller } from './status-poller';
 import {
   callView,
   DURATION,
   identityEvents,
   identityView,
+  openEndedProgress,
   progress,
   scanView,
   screeningEvents,
@@ -34,6 +36,8 @@ export function routeFor(stage: Stage | null, founderType: FounderType = 'foreig
       return '/deck/scan';
     case 'review':
       return '/deck/review';
+    case 'titleChecking':
+      return '/deck/name-check';
     case 'titleConflict':
       return '/deck/name-rejected';
     case 'eligibility':
@@ -62,6 +66,13 @@ export function routeFor(stage: Stage | null, founderType: FounderType = 'foreig
       return '/setup/complete';
   }
 }
+
+/**
+ * Stages in which the server (or its staff) works and the founder waits; in HTTP mode the store
+ * polls the status read while the application is in one of them. Later pieces add step 2's and
+ * step 5's waiting stages.
+ */
+export const SERVER_WAITING_STAGES: Stage[] = ['scanning', 'titleChecking'];
 
 /**
  * Single source of truth for the signed-in founder and their application. Screens read signals
@@ -93,6 +104,13 @@ export class ApplicationStore {
   readonly busy = signal(false);
   /** Last action error, shown next to the action that failed. */
   readonly error = signal<string | null>(null);
+  /**
+   * The last refusal's messages per field, under the API's field names (`brand`, `given_name`, …);
+   * empty when the refusal named no field (always, in the mock). Screens show them at the field.
+   */
+  readonly fieldErrors = signal<Record<string, string[]>>({});
+  /** What the profile form and the review screen may offer (`Api.reference`); null until loaded. */
+  readonly reference = signal<WizardReference | null>(null);
 
   // ------------------------------------------------------------------------------ derived
 
@@ -121,10 +139,23 @@ export class ApplicationStore {
   readonly fullTitle = computed(() => (this.title() ? `${this.title()} Anonim Şirketi` : ''));
   readonly resumeRoute = computed(() => routeFor(this.stage(), this.founderType()));
 
+  /** True when the server does the background work and the store polls for it (HTTP mode). */
+  private readonly serverWork: ServerWork | null = this.api.work.kind === 'server' ? this.api.work : null;
+
+  /**
+   * The deck being read. In the mock the reading ends when its simulated time is up. With the
+   * server the animation still moves with time but stops short of 100%: only the server's next
+   * stage ends it.
+   */
   readonly scan = computed(() => {
     const a = this.app();
     if (!a?.deck) return null;
-    const p = a.stage === 'scanning' ? progress(a.deck.startedAt, this.dur(DURATION.scan), this.now()) : 1;
+    const p =
+      a.stage !== 'scanning'
+        ? 1
+        : this.serverWork
+          ? openEndedProgress(a.deck.startedAt, this.dur(DURATION.scan), this.now())
+          : progress(a.deck.startedAt, this.dur(DURATION.scan), this.now());
     return scanView(a, p);
   });
 
@@ -174,18 +205,8 @@ export class ApplicationStore {
 
   constructor() {
     this.restored = this.restore();
-    // Finish time-based steps when their simulated duration has elapsed.
-    effect(() => {
-      const a = this.app();
-      if (!a) return;
-      const done =
-        (a.stage === 'scanning' && this.scan()?.p === 1) ||
-        (a.stage === 'eligibility' && this.identity()?.p === 1) ||
-        (a.stage === 'screening' && this.screening()?.p === 1) ||
-        (a.stage === 'calling' && this.call()?.p === 1) ||
-        (a.stage === 'setup' && this.setup()?.p === 1);
-      if (done) untracked(() => this.complete(a.stage));
-    });
+    if (this.serverWork) this.followServer(this.serverWork);
+    else this.finishSimulatedSteps();
     // The same for a check that runs on the phone page.
     let finishing = false;
     effect(() => {
@@ -195,6 +216,58 @@ export class ApplicationStore {
     });
     // Another tab or device moved the application on (the phone page starts the identity check): pick it up.
     this.api.demo?.onExternalChange(() => void this.restore());
+  }
+
+  /** Mock: finish time-based steps when their simulated duration has elapsed. */
+  private finishSimulatedSteps() {
+    effect(() => {
+      const a = this.app();
+      if (!a) return;
+      const done =
+        (a.stage === 'scanning' && this.scan()?.p === 1) ||
+        (a.stage === 'titleChecking' && progress(a.titleCheck?.requestedAt, this.dur(DURATION.titleCheck), this.now()) === 1) ||
+        (a.stage === 'eligibility' && this.identity()?.p === 1) ||
+        (a.stage === 'screening' && this.screening()?.p === 1) ||
+        (a.stage === 'calling' && this.call()?.p === 1) ||
+        (a.stage === 'setup' && this.setup()?.p === 1);
+      if (done) untracked(() => this.complete(a.stage));
+    });
+  }
+
+  /**
+   * HTTP mode: while the application waits for the server (`SERVER_WAITING_STAGES`), poll the light
+   * status read; stop when the stage moves on, on sign-out and on a 401 (which signs out).
+   */
+  private followServer(work: ServerWork) {
+    const poller = new StatusPoller(() => this.poll(work));
+    effect(() => {
+      const waiting = this.signedIn() && SERVER_WAITING_STAGES.includes(this.app()?.stage as Stage);
+      untracked(() => (waiting ? poller.start() : poller.stop()));
+    });
+    inject(DestroyRef).onDestroy(() => poller.stop());
+  }
+
+  /** Counts changes made by the founder's own actions, so that a poll answer that started before one cannot overwrite it. */
+  private writes = 0;
+
+  /**
+   * One poll: the status read, and the full read only when the stage or `changedAt` differs from
+   * the status seen just before the last full read. The full read decrypts the founder's data and
+   * leaves access-log rows on the server, so it is not repeated while nothing changed.
+   */
+  private async poll(work: ServerWork) {
+    const writes = this.writes;
+    try {
+      const status = await work.status();
+      const seen = work.seen();
+      if (seen && status.stage === seen.stage && status.changedAt === seen.changedAt) return;
+      const app = await work.application();
+      if (writes === this.writes && this.signedIn()) this.app.set(app);
+    } catch (e) {
+      if (this.sessionLost(e)) return;
+      // A network hiccup or a restarting server: the next poll tries again.
+      console.warn('status poll failed', e instanceof ApiError ? (e.code ?? e.status) : e);
+    }
   }
 
   // ---------------------------------------------------------------------------- actions
@@ -280,7 +353,19 @@ export class ApplicationStore {
     this.update(() => this.api.submitDeclaration(input));
   /** D-2a "Telefonla devam et": make (or renew) the link the QR code carries. */
   createPhoneLink = () => this.update(() => this.api.createPhoneLink());
+  /** From manual review (step 2): reopen the deck data. Step 1's "Diğer bilgilere dön" only navigates (D-1d). */
   backToReview = () => this.update(() => this.api.backToReview());
+
+  /** Loads `reference` once; the profile form and the review screen call it. A failure is shown as the screen's error. */
+  async loadReference() {
+    if (this.reference()) return;
+    try {
+      this.reference.set(await this.api.reference());
+    } catch (e) {
+      if (this.sessionLost(e)) return;
+      this.error.set(e instanceof ApiError ? e.message : 'Seçenekler yüklenemedi. Lütfen sayfayı yenileyiniz.');
+    }
+  }
   proceedToPayment = () => this.update(() => this.api.proceedToPayment());
   pay = (card: { holder: string; number: string; expiry: string; cvv: string }) => this.update(() => this.api.pay(card));
   resendOtp = () => this.update(() => this.api.resendOtp());
@@ -349,6 +434,7 @@ export class ApplicationStore {
 
   clearError() {
     this.error.set(null);
+    this.fieldErrors.set({});
   }
 
   /** Placeholder PDF for a generated document. */
@@ -377,14 +463,9 @@ export class ApplicationStore {
     if (this.completing === stage) return;
     this.completing = stage;
     try {
-      const fn = {
-        scanning: () => this.api.completeScan(),
-        eligibility: () => this.api.completeIdentity(),
-        screening: () => this.api.completeScreening(),
-        calling: () => this.api.completeCall(),
-        setup: () => this.api.completeSetup(),
-      }[stage as 'scanning'];
-      if (fn) this.app.set(await fn());
+      if (this.api.work.kind !== 'simulated') return;
+      const finished = this.api.work.complete(stage);
+      if (finished) this.app.set(await finished);
     } catch (e) {
       if (this.sessionLost(e)) return;
       // Another tab may have advanced the application already: resync.
@@ -433,6 +514,8 @@ export class ApplicationStore {
     this.sessionVersion++;
     this.account.set(session?.account ?? null);
     this.app.set(session?.app ?? null);
+    // Read again for the next session (HTTP mode reads it once per session).
+    this.reference.set(null);
     if (session) {
       this.pendingEmail.set(null);
       this.notice = null;
@@ -469,19 +552,41 @@ export class ApplicationStore {
   }
 
   private async update(fn: () => Promise<Application>) {
-    return this.run(async () => this.app.set(await fn()));
+    return this.run(async () => {
+      this.writes++;
+      try {
+        this.app.set(await fn());
+      } catch (e) {
+        // 409 wrong_stage: this screen was out of date (another tab, or the server moved on). Show
+        // where the application really is; the refusal's sentence stays on screen.
+        if (e instanceof ApiError && e.code === 'wrong_stage') void this.refresh();
+        throw e;
+      }
+    });
+  }
+
+  /** Reads the application again (after a `wrong_stage` refusal). */
+  private async refresh() {
+    try {
+      const app = this.serverWork ? await this.serverWork.application() : (await this.api.restore())?.app;
+      if (app && this.signedIn()) this.app.set(app);
+    } catch (e) {
+      this.sessionLost(e);
+    }
   }
 
   /** Runs an action with busy/error state. Resolves true on success. */
   private async run(fn: () => Promise<unknown>): Promise<boolean> {
     this.busy.set(true);
     this.error.set(null);
+    this.fieldErrors.set({});
     try {
       await fn();
       return true;
     } catch (e) {
       this.sessionLost(e);
       this.error.set(e instanceof ApiError ? shownMessage(e) : e instanceof Error ? e.message : 'Beklenmeyen bir hata oluştu.');
+      if (e instanceof ApiError && e.fields) this.fieldErrors.set(e.fields);
       if (!(e instanceof ApiError)) console.error(e);
       return false;
     } finally {
@@ -493,9 +598,11 @@ export class ApplicationStore {
 /**
  * What the founder reads for a refusal. A `validation_failed` answer from the API carries a
  * general title ("Gönderdiğiniz bilgiler eksik veya hatalıdır.") and the useful sentence under its
- * field (a wrong code: `errors.code`), so the field's sentence is shown when there is one.
+ * field (a wrong code: `errors.code`), so the field's sentence is shown when there is exactly one.
+ * With several (the review's "Eksik bilgileri tamamlayınız." and one line per missing field) the
+ * title is shown here and the screen shows each line at its field (`fieldErrors`).
  */
 function shownMessage(e: ApiError): string {
-  const first = Object.values(e.fields ?? {}).flat()[0];
-  return first ?? e.message;
+  const messages = Object.values(e.fields ?? {}).flat();
+  return messages.length === 1 ? messages[0] : e.message;
 }
