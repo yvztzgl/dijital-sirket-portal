@@ -36,7 +36,9 @@ anything a later reader needs in a temporary directory or only in chat.
   build picks one (docs/api-client.md). Screens talk only to `ApplicationStore`
   (`src/app/core/application.store.ts`) and never import an implementation; pure checks they need
   live in `src/app/core/rules.ts`. Demo tools (seed, reset, speed, `/screens`, the screen pill and
-  demo panel) exist only in mock mode, through `Api.demo`.
+  demo panel) exist only in mock mode, through `Api.demo`. Separately, the `http-demo` build adds
+  demo buttons and on-screen codes on top of the real API when it runs with `Demo:Enabled`
+  (`DemoServerApi`, `DemoBar`, `DemoCodeHint`; docs/api-client.md, "Demo mode against the API").
 - Templates under `src/app/screens/**.html` and `src/app/shared/*.html` were generated from
   design files and then wired by hand. Re-running the import with `--force` overwrites that
   wiring; see `tools/design-import/README.md`.

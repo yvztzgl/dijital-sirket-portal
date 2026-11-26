@@ -31,6 +31,9 @@ screens ─► ApplicationStore ─► Api (abstract class, used as the injectio
 | `src/environments/environment.ts` | Default (mock) mode: names `MockApi`, no extra providers. |
 | `src/environments/environment.http.ts` | HTTP mode: names `HttpApi`, provides `HttpClient` with the interceptor. |
 | `proxy.conf.json` | Dev server: `/api` → `http://localhost:5149`. |
+| `src/environments/demo-flag.ts` / `demo-flag.on.ts` | `isDemo`: off, and on in the `http-demo` build (see "Demo mode against the API"). |
+| `src/app/core/demo-server-api.ts` | `DemoServerApi`: the API's `/api/demo/*` routes and `available`; not part of `Api`. |
+| `src/app/shell/demo-bar.ts`, `demo-code-hint.ts` | The demo strip on the waiting screens and the on-screen code / link line. |
 
 Screens never import an implementation. `mock-api.ts` still re-exports `ApiError`, `ReviewPatch`
 and the rules so older imports and `mock-api.spec.ts` keep working; new code imports from
@@ -73,7 +76,7 @@ http bundle because the demo panel is imported by the screen pill, but nothing c
 | Serve | `npx ng serve` | `npx ng serve --configuration http` (the API must run on `http://localhost:5149`; see below) |
 | Build | `npx ng build` | `npx ng build --configuration production,http` (`--configuration http` alone also builds, without output hashing and budgets) |
 | Test | `npx ng test --watch=false` | same; `http-api.spec.ts` tests `HttpApi` with `HttpTestingController` |
-| `.claude/launch.json` | `portal` | `portal-http` |
+| `.claude/launch.json` | `portal` | `portal-http` (`portal-http-demo` for demo mode) |
 
 Development is same-origin: the browser only ever talks to `localhost:4200`, and the dev server
 forwards `/api/*` to the API. That is why no `withCredentials` and no CORS setup are needed. How
@@ -91,7 +94,85 @@ production serves the portal and the API is still open (open decision 6 in the p
 4. e-Devlet: the dialog takes any T.C. kimlik no with valid check digits, e.g. `10000000146`.
 
 The portal never shows, prefills or hints at a code in this mode: codes go only by e-mail (the
-Inbox toasts belong to the mock, and nothing in HTTP mode sends to the Inbox).
+Inbox toasts belong to the mock, and nothing in HTTP mode sends to the Inbox). The one exception is
+the `http-demo` build against an API started with `Demo:Enabled` (next section).
+
+## Demo mode against the API (since 2026-11-26)
+
+Plan: `../dijital-sirket-kurulusu/docs/plans/demo-mode.md`. Owner's choices: **buttons only** (nothing
+moves on its own), **local machines only**, the mock and its demo panel stay as they are. Demo mode
+adds controls on top of the real API so a walkthrough does not stall where a founder waits for staff,
+the Worker or an outside service, and shows the codes that otherwise sit in the API's `dev/outbox/`.
+
+### How to run
+
+1. In `../dijital-sirket-api`: `dev/up.sh`, then start the Api and the Worker with `Demo:Enabled=true`
+   (the API's demo launch profile / `appsettings.Development.json`; see that repository's
+   `docs/steps/20-demo-mode.md`). The API refuses to start with it outside Development/Testing.
+2. Here: `npx ng serve --configuration http-demo --port 4200` (`.claude/launch.json`: `portal-http-demo`).
+   Build check: `npx ng build --configuration http-demo`.
+
+### When the controls show
+
+`isDemo` is a separate file from `environment.ts` (`src/environments/demo-flag.ts`, `false`), replaced
+by `demo-flag.on.ts` (`true`) only in the `http-demo` configuration, which also swaps in
+`environment.http.ts`. `DemoServerApi.available()` is true only when **all three** hold: the flag is on,
+the portal is in HTTP mode (`Api.demo === null`), and `GET /api/demo` answered `{"enabled": true}`
+(404, when the API runs without demo, or any error means no). The question is asked once, the first
+time something injects `DemoServerApi` (a demo strip, a code line, the e-Devlet dialog). The mock build
+never asks: there is no flag, and it has demo tools.
+
+`DemoServerApi` uses the app's `HttpClient` (loaded with a dynamic import, since the mock build provides
+none), so its writes carry `X-DSP-Request` (`markApiWrites`), and errors are `ApiError`s (`toApiError`):
+a 409 `demo_wrong_stage` shows the API's own sentence.
+
+### The buttons (`DemoBar`, `src/app/shell/demo-bar.ts`)
+
+A dashed strip labelled "Demo" on the waiting screens. It picks its buttons from the current stage and
+renders nothing at other stages. While a request is in flight the buttons are disabled; an error shows
+under them for 6 s. After every click (success or refusal) the store's `checkServerNow()` reads the
+application and starts the **existing** status poll's pace over (every 2 s again), so the stage the
+Worker sets a moment later arrives by itself. No new polling loop.
+
+| Screen (stage) | Buttons | Request |
+| --- | --- | --- |
+| D-1b (`evaluating`) | Tamamlandı · Soru var · Başarısız · Reddedildi | `POST /api/demo/evaluation {outcome: done\|questions\|failed\|rejected}` |
+| D-1g (`evaluationQuestions`) | Tamamlandı | `POST /api/demo/evaluation {outcome: "done"}` |
+| D-1f (`titleChecking`) | Rezerve et · Reddet | `POST /api/demo/title {result: reserved\|rejected}` |
+| D-2c (`manual`, HTTP branch) | Onayla · Reddet | `POST /api/demo/review {decision: approve\|reject}` |
+| D-5a (`setup`) | Sıradaki kurumu tamamla | `POST /api/demo/setup/next` → `{completed, remaining}`, shown as "… tamamlandı · kalan N" |
+
+D-5a: 409 `demo_nothing_open` (the Worker has not opened a task yet) is shown as "Kurum görevleri henüz
+açılmadı, birkaç saniye sonra tekrar deneyin."
+
+### The codes (`DemoCodeHint`, `src/app/shell/demo-code-hint.ts`)
+
+A line "Demo: kod 123456" with "Doldur" (fills the code boxes; the founder still presses the button),
+read from `GET /api/demo/codes?email=` (the newest development e-mail to that address; no sign-in), with
+"Yenile" because the e-mail can be written a moment after the send was answered.
+
+| Where | Address | Read again when |
+| --- | --- | --- |
+| D-0c e-mail verify | the address waiting for its code (`pendingEmail`) | "Kodu tekrar gönder" |
+| D-0d password reset | the address typed, after "Bağlantı gönder"; shows "Bağlantıyı aç", which opens the link's path in this portal (any port) | "Tekrar gönder" |
+| Step-up dialog | the signed-in account's e-mail, once the code was sent | "Kodu yeniden gönder" |
+| D-3b 3-D Secure | none: the fixed `threeDsCode` from `GET /api/demo` | — |
+
+D-0e (the set-new-password screen) needs no hint: it is opened by the link itself. The e-Devlet dialog's
+"Demo için geçerli bir numara: 10000000146" now shows only in mock mode or when demo is available; its
+"Simülasyon" badge stays in both modes.
+
+### Not covered
+
+- The slow steps' outcomes (rows 8, 9, 12 of the plan: identity pass/fail, screening hit, shorter call),
+  documents (D-5b, the side panel) and Terminal AI: later, by the owner's choice.
+- "Expire now" for the certificate (D-4c).
+- A walk against an API with demo enabled: the API routes were built in parallel and were **not running
+  when this was written**. Checked: unit tests (`demo-server-api.spec.ts`: off in mock mode, off without
+  the flag, off on 404, on when enabled, the write header and `demo_wrong_stage`; `demo-bar.spec.ts`:
+  hidden when not available, the title check's buttons when available), `ng build --configuration
+  http-demo`, and the http-demo build served on port 4310 with no API: `GET /api/demo` is asked once
+  when the e-Devlet dialog opens, fails, and the demo T.C. hint stays hidden.
 
 ## The deck step: outside evaluation (since 2026-11-25, piece 9)
 
@@ -657,7 +738,8 @@ Both are rate limited with sign-in (20 a minute per address → 429, shown as to
   server silently ignores an earlier one. `no_email` and 429 are shown as worded.
 - Two actions refused at once share one dialog and one code. A 401 at any point signs out and closes it.
 - While the dialog is open the store is `busy` (the page's button keeps its spinner).
-- No code is ever shown, prefilled or hinted in HTTP mode.
+- No code is ever shown, prefilled or hinted in HTTP mode, except in the `http-demo` build against a
+  demo API ("Demo mode against the API").
 - **The mock does not demand a second factor** (which actions need one is still the owner's decision,
   and the mock is what the product is presented with). `MockApi.sendStepUpCode` / `verifyStepUpCode`
   exist only so the dialog can be shown from `/screens` ("Pencereler" → "İkinci doğrulama",

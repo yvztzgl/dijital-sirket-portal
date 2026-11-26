@@ -2,6 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     { "name": "portal", "runtimeExecutable": "npx", "runtimeArgs": ["ng", "serve", "--port", "4200"], "port": 4200 },
-    { "name": "portal-http", "runtimeExecutable": "npx", "runtimeArgs": ["ng", "serve", "--configuration", "http", "--port", "4200"], "port": 4200 }
+    { "name": "portal-http", "runtimeExecutable": "npx", "runtimeArgs": ["ng", "serve", "--configuration", "http", "--port", "4200"], "port": 4200 },
+    { "name": "portal-http-demo", "runtimeExecutable": "npx", "runtimeArgs": ["ng", "serve", "--configuration", "http-demo", "--port", "4200"], "port": 4200 }
   ]
 }
