@@ -14,6 +14,16 @@
   <form class="wz-card wz-profile wz-deckform" (submit)="$event.preventDefault(); submitDeck()" novalidate>
     <section aria-labelledby="dk-files">
       <h2 id="dk-files" class="wz-card-h">Dosyalar</h2>
+      <div class="why deck-help">
+        <app-icon name="info" size="16px" [stroke]="2" />
+        <div>
+          <p>Sunumunuzu hazırlamadan önce beklenen formatı inceleyiniz; örnek sunum size yol gösterebilir.</p>
+          <div class="deck-help-links">
+            <button type="button" class="wz-link" (click)="formatOpen.set(true)" aria-haspopup="dialog"><app-icon name="file" size="15px" [stroke]="2" />Sunum formatını inceleyiniz</button>
+            <a class="wz-link" href="/assets/samples/lumora-analytics-pitch.pdf" download="ornek-sunum-lumora-analytics.pdf"><app-icon name="download" size="15px" [stroke]="2" />Örnek sunumu indir (PDF, 16 sayfa)</a>
+          </div>
+        </div>
+      </div>
       <div class="grid">
         <div class="wz-field">
           <span id="dk-deck">Sunum</span>
@@ -53,21 +63,19 @@
         </div>
         <div class="wz-field">
           <span>Faaliyet alanı</span>
-          <app-search-select label="Faaliyet alanı" [options]="activityOptions()" [value]="a.activityId === null ? '' : '' + a.activityId" (valueChange)="setChoice('activityId', $event)" placeholder="Aramak için yazınız" />
+          <app-search-select label="Faaliyet alanı" [options]="activityOptions()" [value]="a.activityId === null ? '' : '' + a.activityId" (valueChange)="setChoice('activityId', $event)" [placeholder]="activityPlaceholder()" />
           @if (deckFieldError('activityId'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
         </div>
       </div>
-      @for (c of multiChoices(); track c.key) {
-        <fieldset class="wz-multi">
-          <legend>{{ c.title }} <small>birden fazla seçebilirsiniz</small></legend>
-          <div class="opts">
-            @for (o of c.options; track o.id) {
-              <label class="wz-check"><input type="checkbox" [checked]="a[c.key].includes(o.id)" (change)="toggleMulti(c.key, o.id, $any($event.target).checked)"><span>{{ o.label }}</span></label>
-            }
+      <div class="grid grid-3">
+        @for (c of multiChoices(); track c.key) {
+          <div class="wz-field">
+            <span>{{ c.title }} <small class="wz-multi-hint">birden fazla</small></span>
+            <app-multi-select [label]="c.title" [options]="c.options" [value]="multiValue(c.key)" (valueChange)="setMulti(c.key, $event)" placeholder="Seçiniz" />
+            @if (deckFieldError(c.key); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
           </div>
-          @if (deckFieldError(c.key); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
-        </fieldset>
-      }
+        }
+      </div>
     </section>
 
     <!-- Both ticks are the founder's own act for this upload. -->
@@ -80,11 +88,6 @@
       <button type="submit" class="wz-btn" [disabled]="store.busy() || !l">{{ store.busy() ? 'Gönderiliyor…' : 'Gönder ve değerlendirmeyi başlat' }}</button>
     </div>
   </form>
-
-  <div class="wz-actions">
-    <button type="button" class="wz-link" (click)="formatOpen.set(true)" aria-haspopup="dialog"><app-icon name="file" size="15px" [stroke]="2" />Sunum formatını inceleyiniz</button>
-    <a class="wz-link" href="/assets/samples/lumora-analytics-pitch.pdf" download="ornek-sunum-lumora-analytics.pdf"><app-icon name="download" size="15px" [stroke]="2" />Örnek sunumu indir (PDF, 16 sayfa)</a>
-  </div>
 
   <p class="wz-foot"><app-icon name="lock" size="13px" [stroke]="2" />Dosyalarınız şifreli olarak aktarılır, yalnızca bu başvuru kapsamında işlenir ve KVKK uyarınca saklanır.</p>
 </app-step-page>

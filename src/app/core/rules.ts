@@ -21,6 +21,9 @@ export type EvaluationField = 'deck' | 'cv' | 'summary' | 'activityGroupId' | 'a
 
 const isPdf = (file: { name: string }) => /\.pdf$/i.test(file.name);
 
+/** The API's refusal of an activity outside the chosen group (`errors.activityId`, 2026-11-26). */
+export const ACTIVITY_NOT_IN_GROUP = 'Seçilen faaliyet alanı, seçilen faaliyet grubuna ait değildir.';
+
 /**
  * The deck upload's checks (D-1a), keyed by the API's field names, one message each; empty when
  * nothing is wrong. The screen runs them before sending and the mock refuses with them, so both
@@ -51,6 +54,11 @@ export function evaluationErrors(
 
   if (input.activityGroupId === null || !known(choices?.activityGroups, input.activityGroupId)) errors.activityGroupId = 'Faaliyet grubunu seçiniz.';
   if (input.activityId === null || !known(choices?.activities, input.activityId)) errors.activityId = 'Faaliyet alanını seçiniz.';
+  // The pair must fit when the dictionary links activities to groups (the API's same refusal).
+  else if (!errors.activityGroupId) {
+    const groupId = choices?.activities.find((o) => o.id === input.activityId)?.groupId;
+    if (groupId !== undefined && groupId !== input.activityGroupId) errors.activityId = ACTIVITY_NOT_IN_GROUP;
+  }
   const many = (ids: number[], list: { id: number }[] | undefined) => ids.length > 0 && ids.every((id) => known(list, id));
   if (!many(input.businessModelIds, choices?.businessModels)) errors.businessModelIds = 'En az bir iş modeli seçiniz.';
   if (!many(input.revenueModelIds, choices?.revenueModels)) errors.revenueModelIds = 'En az bir gelir modeli seçiniz.';
@@ -107,6 +115,20 @@ export const FUNDING_OPTIONS: FundingSource[] = ['own-abroad', 'own-turkey', 'in
 /** "Acme Bulut Bilişim A.Ş." → "Acme Bulut Bilişim": the type suffix is added by the API (and shown by the screens), never typed. */
 export function withoutSuffix(title: string): string {
   return title.trim().replace(/\s+(A\.Ş\.|AŞ|Anonim Şirketi)$/i, '').trim();
+}
+
+/**
+ * The title proposed on the company form (D-1c) from the profile's brand, the same rule as the API's
+ * default `trade_name` (decision of 2026-11-26): the brand trimmed; kept as it is when it already ends
+ * with "Anonim Şirketi" or "A.Ş." (any case), otherwise brand + " Anonim Şirketi". No proposal (null)
+ * when it would fail the title check: the part before the suffix must be 3–160 characters, as for a
+ * title chosen on D-1d.
+ */
+export function proposedTitle(brand: string): string | null {
+  const b = brand.trim().replace(/\s+/g, ' ');
+  const full = /(^|\s)(Anonim Şirketi|A\.Ş\.)$/i.test(b) ? b : `${b} Anonim Şirketi`;
+  const root = withoutSuffix(full);
+  return root.length >= 3 && root.length <= 160 && root !== full ? full : null;
 }
 
 /**

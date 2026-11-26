@@ -438,7 +438,7 @@ function toMarks(view: ApplicationWire): Record<string, FieldMark> {
   const marks: Record<string, FieldMark> = {};
   for (const [key, field] of Object.entries(view.review) as [ReviewKey, ReviewFieldWire][]) {
     const name = MARK_NAMES[key];
-    // An empty value has no mark to show (the title and the NACE codes arrive empty after the evaluation).
+    // An empty value has no mark to show (the title and the NACE codes may arrive empty, e.g. with no default).
     if (!name || !field.value.trim()) continue;
     const mark: FieldMark = field.mark === 'profile' ? 'profile' : 'edited';
     if (marks[name] !== 'edited') marks[name] = mark;

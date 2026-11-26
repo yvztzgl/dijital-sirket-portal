@@ -217,7 +217,7 @@ describe('api-mapper on the evaluation answers (captured)', () => {
     expect(() => toApplication({ ...CAPTURED.evaluationFailed, evaluation: { ...CAPTURED.evaluationFailed.evaluation!, status: 'lost' as never } }, account)).toThrow('Unknown evaluation status');
   });
 
-  it('the company form: defaults from the profile and the account marked profile; the empty title and codes carry no mark', () => {
+  it('the company form: defaults from the profile and the account marked profile; an empty title and codes carry no mark', () => {
     const app = toApplication(CAPTURED.reviewDefaults, account);
     expect(app.stage).toBe('review');
     expect(app.company).toMatchObject({ brand: 'Lumora', root: '', activity: '', nace: [] });
@@ -225,6 +225,11 @@ describe('api-mapper on the evaluation answers (captured)', () => {
     expect(app.contact).toEqual({ email: 'kurucu@example.test', phone: '+49 151 2345 6700', address: '', postalCode: '', country: 'Almanya' });
     expect(app.funding).toBe('own-abroad');
     expect(app.marks).toEqual({ name: 'profile', email: 'profile', phone: 'profile', address: 'profile', funding: 'profile' });
+    // Since 2026-11-26 the API proposes the title and the codes from the profile, marked `profile` like the other defaults.
+    const proposed = toApplication({ ...CAPTURED.reviewDefaults, review: { ...CAPTURED.reviewDefaults.review,
+      trade_name: { label: 'Şirket unvanı', value: 'Lumora Anonim Şirketi', mark: 'profile' },
+      nace_codes: { label: 'NACE kodları', value: '62.01, 62.02, 63.11', mark: 'profile' } } }, account);
+    expect([proposed.company.root, proposed.company.nace, proposed.marks['title'], proposed.marks['nace']]).toEqual(['Lumora', ['62.01', '62.02', '63.11'], 'profile', 'profile']);
   });
 
   it('the company form after the founder typed: entered and edited are the founder\'s own', () => {

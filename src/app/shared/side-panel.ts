@@ -178,6 +178,8 @@ const WHO: Record<Actor, [string, string, string, string]> = {
       flex: 1; min-width: 0; height: 44px; padding: 2px 0 0; border: 0; outline: 0; resize: none; background: transparent;
       color: var(--fg-1F2A44); font: 400 14.5px/1.45 'IBM Plex Sans', sans-serif;
     }
+    /* The box shows focus (a halo, as its edge is a gradient); the textarea inside draws none. */
+    .composer:focus-within { box-shadow: var(--focus-halo); }
     .composer textarea:focus-visible { outline: 0; }
     .send { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 50%; background: var(--bg-061262); color: var(--fg-FFFFFF); cursor: pointer; }
     .send[disabled] { opacity: .5; cursor: default; }

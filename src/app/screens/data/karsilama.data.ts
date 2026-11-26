@@ -35,9 +35,9 @@ type ProfileDraft = Omit<Profile, 'at' | 'sector' | 'funding'> & { sector: Secto
 
 /** What D-1a says above the form when the last evaluation did not end well (the API is back at `verified`). */
 const EVALUATION_ENDED: Record<'failed' | 'rejected' | 'cancelled', { title: string; text: string }> = {
-  failed: { title: 'Önceki değerlendirme tamamlanamadı.', text: 'Değerlendirme hizmeti başvurunuzu sonuçlandıramadı. Lütfen sunumunuzu ve özgeçmişinizi yeniden yükleyiniz.' },
-  rejected: { title: 'Sunumunuz değerlendirmeye alınamadı.', text: 'Lütfen sunumun 3 ile 40 sayfa arasında bir PDF dosyası olduğunu kontrol ederek yeniden yükleyiniz.' },
-  cancelled: { title: 'Önceki değerlendirme iptal edildi.', text: 'Devam etmek için sunumunuzu ve özgeçmişinizi yeniden yükleyiniz.' },
+  failed: { title: 'Önceki değerlendirme tamamlanamadı', text: 'Değerlendirme hizmeti başvurunuzu sonuçlandıramadı. Lütfen sunumunuzu ve özgeçmişinizi yeniden yükleyiniz.' },
+  rejected: { title: 'Sunumunuz değerlendirmeye alınamadı', text: 'Lütfen sunumun 3 ile 40 sayfa arasında bir PDF dosyası olduğunu kontrol ederek yeniden yükleyiniz.' },
+  cancelled: { title: 'Önceki değerlendirme iptal edildi', text: 'Devam etmek için sunumunuzu ve özgeçmişinizi yeniden yükleyiniz.' },
 };
 
 interface EditField {
@@ -143,7 +143,26 @@ export class KarsilamaData {
 
   protected readonly limits = computed(() => this.store.evaluationReference()?.limits ?? null);
   protected readonly groupOptions = computed(() => (this.store.evaluationReference()?.activityGroups ?? []).map((o) => ({ value: String(o.id), label: o.label })));
-  protected readonly activityOptions = computed(() => (this.store.evaluationReference()?.activities ?? []).map((o) => ({ value: String(o.id), label: o.label })));
+  /**
+   * Each activity's group, when the reference links them (`groupId`, our derived mapping, not from
+   * STB); empty from an API built before it, and then group and activity stay independent.
+   */
+  private readonly groupOfActivity = computed(() => {
+    const pairs = (this.store.evaluationReference()?.activities ?? []).flatMap((o) => (o.groupId === undefined ? [] : [[o.id, o.groupId] as const]));
+    return new Map<number, number>(pairs);
+  });
+  /** A chosen group narrows the activities to its own; without a group (or without the link) all of them. */
+  protected readonly activityOptions = computed(() => {
+    const group = this.answers().activityGroupId;
+    const linked = this.groupOfActivity().size > 0;
+    return (this.store.evaluationReference()?.activities ?? [])
+      .filter((o) => group === null || !linked || o.groupId === group)
+      .map((o) => ({ value: String(o.id), label: o.label }));
+  });
+  /** A group's list is short (2 to 28), so it reads as a plain choice; the full list asks for a search. */
+  protected readonly activityPlaceholder = computed(() =>
+    this.answers().activityGroupId !== null && this.groupOfActivity().size > 0 ? 'Seçiniz' : 'Aramak için yazınız',
+  );
   /** The three multiple choices, in the form's order, with the API's field names. */
   protected readonly multiChoices = computed(() => {
     const ref = this.store.evaluationReference();
@@ -151,7 +170,7 @@ export class KarsilamaData {
       { key: 'businessModelIds' as const, title: 'İş modeli', options: ref?.businessModels ?? [] },
       { key: 'revenueModelIds' as const, title: 'Gelir modeli', options: ref?.revenueModels ?? [] },
       { key: 'productTypeIds' as const, title: 'Ürün türü', options: ref?.productTypes ?? [] },
-    ];
+    ].map((c) => ({ ...c, options: c.options.map((o) => ({ value: String(o.id), label: o.label })) }));
   });
 
   protected readonly deckFile = signal<File | null>(null);
@@ -195,13 +214,41 @@ export class KarsilamaData {
     this.clearFieldError('summary');
   }
 
+  /**
+   * Group and activity are parent and child when the reference links them: an activity brings its
+   * group with it, and a group that does not hold the chosen activity clears it (with its errors).
+   */
   protected setChoice(key: 'activityGroupId' | 'activityId', value: string) {
-    this.answers.update((a) => ({ ...a, [key]: value ? Number(value) : null }));
-    this.clearFieldError(key);
+    const id = value ? Number(value) : null;
+    const groupOf = this.groupOfActivity();
+    const a = this.answers();
+    if (key === 'activityId') {
+      const group = id === null ? undefined : groupOf.get(id);
+      this.answers.set({ ...a, activityId: id, activityGroupId: group ?? a.activityGroupId });
+      if (group !== undefined && group !== a.activityGroupId) this.clearChoiceError('activityGroupId');
+    } else {
+      const keep = a.activityId === null || id === null || !groupOf.has(a.activityId) || groupOf.get(a.activityId) === id;
+      this.answers.set({ ...a, activityGroupId: id, activityId: keep ? a.activityId : null });
+      if (!keep) this.clearChoiceError('activityId');
+    }
+    this.clearChoiceError(key);
   }
 
-  protected toggleMulti(key: 'businessModelIds' | 'revenueModelIds' | 'productTypeIds', id: number, on: boolean) {
-    this.answers.update((a) => ({ ...a, [key]: on ? [...a[key].filter((x) => x !== id), id] : a[key].filter((x) => x !== id) }));
+  /** The screen's own message and the API's refusal at one of the two choices. */
+  private clearChoiceError(key: 'activityGroupId' | 'activityId') {
+    this.clearFieldError(key);
+    if (!this.store.fieldErrors()[key]) return;
+    const { [key]: _, ...rest } = this.store.fieldErrors();
+    this.store.fieldErrors.set(rest);
+  }
+
+  protected multiValue(key: 'businessModelIds' | 'revenueModelIds' | 'productTypeIds'): string[] {
+    return this.answers()[key].map(String);
+  }
+
+  /** The multi-select hands back string values; the API takes the numeric ids. */
+  protected setMulti(key: 'businessModelIds' | 'revenueModelIds' | 'productTypeIds', values: string[]) {
+    this.answers.update((a) => ({ ...a, [key]: values.map(Number) }));
     this.clearFieldError(key);
   }
 
@@ -236,11 +283,8 @@ export class KarsilamaData {
 
   // ------------------------------------------------------- D-1b the evaluation runs (waiting)
 
-  /** "2. deneme": shown only when the service is trying again. */
-  protected readonly evaluationAttempt = computed(() => {
-    const e = this.store.app()?.evaluation;
-    return e && e.attempt > 1 ? `${e.attempt}. deneme (en fazla ${e.maxAttempts})` : null;
-  });
+  // The service's retry count (`evaluation.attempt` / `maxAttempts`) is not shown to the founder
+  // (owner's decision of 2026-11-26): only when the evaluation started.
   protected readonly evaluationSince = computed(() => {
     const at = this.store.app()?.evaluation?.startedAt;
     return at ? dateTime(at) : null;

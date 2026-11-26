@@ -130,13 +130,22 @@ export interface EvaluationOption {
 }
 
 /**
+ * One activity of the evaluation's dictionary, with the group it belongs to. `groupId` is our own
+ * derived mapping (2026-11-26), not from STB and still to be confirmed; an API built before it sends
+ * no `groupId`, and D-1a then offers the activities as one flat list, unlinked to the group.
+ */
+export interface EvaluationActivity extends EvaluationOption {
+  groupId?: number;
+}
+
+/**
  * What D-1a may offer and the limits it checks (`GET /api/reference/evaluation`): the outside
- * evaluation service's dictionaries and the upload limits. Which activity belongs to which group
- * is not known, so the activities are one flat list.
+ * evaluation service's dictionaries and the upload limits. The activities carry their group
+ * (`groupId`) when the API sends it.
  */
 export interface EvaluationReference {
   activityGroups: EvaluationOption[];
-  activities: EvaluationOption[];
+  activities: EvaluationActivity[];
   businessModels: EvaluationOption[];
   revenueModels: EvaluationOption[];
   productTypes: EvaluationOption[];
@@ -146,7 +155,7 @@ export interface EvaluationReference {
 /**
  * Where the outside evaluation stands (the API's `evaluation`). Only the status and times reach the
  * founder: no findings and no question content. `attempt` counts the service's tries of this
- * evaluation (shown only above 1).
+ * evaluation; kept for support, never shown to the founder (owner, 2026-11-26).
  */
 export interface Evaluation {
   status: 'queued' | 'running' | 'questions' | 'done' | 'failed' | 'rejected' | 'cancelled';

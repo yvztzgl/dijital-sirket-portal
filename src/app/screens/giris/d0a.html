@@ -27,11 +27,11 @@
           <div style="display:flex;flex-direction:column;gap:4px"><h3 style="margin:0;font:600 30px/38px 'IBM Plex Sans',sans-serif;letter-spacing:-.01em;color:var(--fg-061262)">Giriş yapın</h3><span style="font:400 14px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-5B6478)">Kayıt olduğunuz e-posta adresini kullanın.</span></div>
           <div style="display:flex;flex-direction:column;gap:8px">
             <label for="li-email" style="font:500 13.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-1F2A44)">E-posta</label>
-            <input id="li-email" type="email" [value]="email" (input)="onEmail($event)" (keydown.enter)="login()" autocomplete="email" placeholder="ornek@sirket.com" style="height:46px;box-sizing:border-box;border:1px solid var(--bd-061262);box-shadow:0 0 0 3px rgba(6,18,98,.18);border-radius:9px;padding:0 14px;font:500 15.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262);outline:0">
+            <input id="li-email" type="email" [value]="email" (input)="onEmail($event)" (keydown.enter)="login()" autocomplete="email" placeholder="ornek@sirket.com" style="height:46px;box-sizing:border-box;border:1px solid var(--bd-D6DEEE);border-radius:9px;padding:0 14px;font:500 15.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262);outline:0">
           </div>
           <div style="display:flex;flex-direction:column;gap:8px">
             <label for="li-pw" style="font:500 13.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-1F2A44)">Şifre</label>
-            <div style="display:flex;height:46px;box-sizing:border-box;border:1px solid var(--bd-D6DEEE);border-radius:9px;overflow:hidden">
+            <div class="ui-field" style="display:flex;height:46px;box-sizing:border-box;border:1px solid var(--bd-D6DEEE);border-radius:9px;overflow:hidden">
               <input id="li-pw" [type]="pwType" [value]="form().password" (input)="setField('password', $event)" (keydown.enter)="login()" autocomplete="current-password" style="flex:1;min-width:0;border:0;outline:0;padding:0 14px;font:500 15.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262);background:transparent">
               <button type="button" (click)="togglePw()" [attr.aria-pressed]="showPw" [attr.aria-label]="showPw ? 'Şifreyi gizle' : 'Şifreyi göster'" [title]="showPw ? 'Şifreyi gizle' : 'Şifreyi göster'" class="pw-eye" style="flex:none;width:36px;height:36px;margin-right:4px;align-self:center;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:var(--fg-5B6478);cursor:pointer">@if (showPw) {<app-icon name="eye-off" size="18px" [stroke]="1.8" />} @else {<app-icon name="eye" size="18px" [stroke]="1.8" />}</button>
             </div>

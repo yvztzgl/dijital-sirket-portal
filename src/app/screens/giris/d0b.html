@@ -49,7 +49,7 @@
               <div style="display:flex;flex-direction:column;gap:8px"><label style="font:500 13.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-1F2A44)">E-posta</label><input type="email" [value]="form().email" (input)="setField('email', $event)" autocomplete="email" placeholder="ornek@sirket.com" style="height:46px;box-sizing:border-box;border:1px solid var(--bd-D6DEEE);border-radius:9px;padding:0 14px;font:500 15.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262);outline:0"></div>
               <div style="display:flex;flex-direction:column;gap:8px">
                 <label style="font:500 13.5px/18px 'IBM Plex Sans',sans-serif;color:var(--fg-1F2A44)">Şifre</label>
-                <div style="display:flex;height:46px;box-sizing:border-box;border:1px solid var(--bd-061262);box-shadow:0 0 0 3px rgba(6,18,98,.18);border-radius:9px;overflow:hidden">
+                <div class="ui-field" style="display:flex;height:46px;box-sizing:border-box;border:1px solid var(--bd-D6DEEE);border-radius:9px;overflow:hidden">
                   <input [type]="pwType" [value]="form().password" (input)="setField('password', $event)" autocomplete="new-password" placeholder="En az 10 karakter" style="flex:1;min-width:0;border:0;outline:0;padding:0 14px;font:500 15.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-061262);background:transparent">
                   <button type="button" (click)="togglePw()" [attr.aria-pressed]="showPw" [attr.aria-label]="showPw ? 'Şifreyi gizle' : 'Şifreyi göster'" [title]="showPw ? 'Şifreyi gizle' : 'Şifreyi göster'" class="pw-eye" style="flex:none;width:36px;height:36px;margin-right:4px;align-self:center;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:var(--fg-5B6478);cursor:pointer">@if (showPw) {<app-icon name="eye-off" size="18px" [stroke]="1.8" />} @else {<app-icon name="eye" size="18px" [stroke]="1.8" />}</button>
                 </div>
@@ -64,9 +64,9 @@
               <span style="font:400 13.5px/20px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660);text-wrap:pretty">Ad, T.C. kimlik numarası ve yerleşim adresiniz e-Devlet Kapısı'ndan alınır; ayrıca şifre oluşturmanız gerekmez. Kimlik doğrulama adımı da bu sayede kısalır.</span>
             </div>
           }
-          <div style="display:flex;flex-direction:column;gap:10px;padding-top:4px;border-top:1px solid var(--bd-EEF1F6)">
+          <div style="display:flex;flex-direction:column;gap:8px">
             @for (c of consents; track $index) {
-              <label style="display:flex;align-items:flex-start;gap:10px;padding-top:6px;font:400 13px/19px 'IBM Plex Sans',sans-serif;color:var(--fg-3B4660);cursor:pointer"><input type="checkbox" [checked]="c.on" (change)="c.toggle()" style="width:16px;height:16px;margin:2px 0 0;flex:none;accent-color:var(--bg-061262)"><span><a href="#" (click)="$event.preventDefault()">{{ c.link }}</a>{{ c.rest }}</span></label>
+              <label class="wz-check" style="max-width:none;font-size:13px;line-height:19px"><input type="checkbox" [checked]="c.on" (change)="c.toggle()"><span><a href="#" (click)="$event.preventDefault()">{{ c.link }}</a>{{ c.rest }}</span></label>
             }
           </div>
           <app-form-error [message]="formError()" />

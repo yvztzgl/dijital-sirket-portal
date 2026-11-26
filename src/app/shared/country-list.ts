@@ -72,6 +72,8 @@ import { Icon } from './icon';
     :host(.up) .panel { display: flex; flex-direction: column-reverse; animation-name: in-up; }
     :host(.up) .search { border-bottom: 0; border-top: 1px solid var(--bd-EEF1F6); }
     .search { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; border-bottom: 1px solid var(--bd-EEF1F6); color: var(--fg-8A93A6); }
+    /* The search row shows focus with its edge line; the input inside draws none. */
+    .search:focus-within { border-color: var(--bd-061262); }
     .search input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; font: 400 14px/18px 'IBM Plex Sans', sans-serif; color: var(--fg-061262); }
     .list { list-style: none; margin: 0; padding: 4px; overflow: auto; }
     li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; font: 400 14px/18px 'IBM Plex Sans', sans-serif; color: var(--fg-1F2A44); }

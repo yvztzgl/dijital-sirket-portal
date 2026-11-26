@@ -22,6 +22,7 @@ screens ─► ApplicationStore ─► Api (abstract class, used as the injectio
 | `src/app/core/api-mapper.ts` | `toAccount(me)`, `toApplication(view, account)`, `toStage`: wire → portal model. Pure functions. |
 | `src/app/core/testing/api-fixtures.ts` | Literal API answers the specs use: a few built by hand, and `CAPTURED` (below). |
 | `src/app/core/evaluation-reference.json` | The outside evaluation service's dictionary saved on 2026-11-25 (17 activity groups, 216 activities, 4 business models, 8 revenue models, 4 product types) and the upload limits, in the shape of `GET /api/reference/evaluation`. The mock's answer and the specs' fixture; not in the http bundle. |
+| `src/app/core/evaluation-activity-groups.json` | Which activity belongs to which group: a verbatim copy of the API's `stb-activity-groups-derived-2026-11-26.json`. **Derived by us from the labels and the id order, not from STB, to be confirmed** (its `note`; the uncertain cases are in the API repo's `docs/steps/19-activity-groups.md`). The mock adds it as `groupId` to each activity of its reference answer; not in the http bundle. |
 | `src/app/core/testing/captured/*.json` | `GET /api/application` as the running API answered it at each stage of steps 1 to 5 (the deck-reader stages `scanning`, `review-open`, `review-decided` were removed with the reader on 2026-11-25; the later files still carry its `crossCheck` and deck fields, which the mapper ignores), plus the status read, the reference data, the phone routes, the closed application's 404 and the refusals of steps 3 and 4 (2026-11-25). Made-up founders, e-mail addresses and the phone token replaced; the card is only ever a development token; no T.C. kimlik no. |
 | `tools/api-capture/capture.sh` | Re-captures those files against a running stack (`capture.sh [step1\|step2\|step3\|step45\|all]`; needs `../dijital-sirket-api/dev/staff.sh` for the title, review and set-up steps and `dev/last-code.sh` for the second factor). |
 | `src/app/shell/step-up-dialog.ts` | `StepUpDialog`: the second-factor dialog, rendered once by the app shell; its state and logic are in `ApplicationStore` (below). |
@@ -113,12 +114,36 @@ portal made before the API existed, all confirmed by the API as built:
   banner; the screen does not send without both ticks anyway);
 - `evaluationQuestions` is polled like `manual` (slowest pace), in case the server moves on by itself;
 - after the evaluation `trade_name` and `nace_codes` may arrive as absent or as an empty value with any
-  mark: an empty value gets no mark on screen;
+  mark: an empty value gets no mark on screen (since 2026-11-26 they normally arrive filled, see
+  "Proposed title and codes" below);
 - the document type of the CV in `documents` is taken to be `cv` ("Özgeçmiş").
 
 Also as built: an oversize file is refused alone (`errors.deck` or `errors.cv`); an upload while an
 evaluation is queued, running, has questions or is done answers 409 `wrong_stage` (the store re-reads);
-`review` is `{}` until the evaluation is done, and then has no `trade_name` / `nace_codes` keys.
+`review` is `{}` until the evaluation is done, and then has no `trade_name` / `nace_codes` keys
+(as captured on 2026-11-25; superseded by the next section).
+
+### Proposed title and codes (owner's decision of 2026-11-26)
+
+At stage `review` the API sends `review.trade_name` and `review.nace_codes` as defaults with
+`mark: "profile"`, in the same `{label, value, mark}` shape as the other review fields; after the
+founder changes one its mark is `edited`. The portal needed **no change in HTTP mode** for this: the
+mapper turns any non-empty field marked `profile` into `marks.title` / `marks.nace` = `profile` and
+D-1c shows it filled with "Ön bilgilerinizden", like Kurucu or E-posta (`edited` / `entered` show
+"Kontrol edildi").
+
+- Proposed title: the profile's brand trimmed; kept as it is when it already ends with "Anonim Şirketi"
+  or "A.Ş." (any case), otherwise brand + " Anonim Şirketi"; no default when that would fail the title
+  check. The portal's copy of the rule is `rules.proposedTitle`; its "title check" is the D-1d rule
+  (3–160 characters before the suffix), since the API's own check was not visible when this was
+  written. The suffix is stripped for display (`withoutSuffix`), so the row reads "Lumora Anonim
+  Şirketi" either way.
+- Proposed codes: the NACE codes of the profile's sector (`SECTORS[sector].nace`, the codes the NACE
+  editor lists as "Faaliyet alanınıza uygun"); none for "Diğer".
+- `MockApi.completeEvaluation` gives the same two defaults with the same marks; submitting without
+  touching them sends the proposed title to the title check. Mock applications saved at `review`
+  before this change keep their empty title and codes.
+- D-1c's lead asks the founder to check the proposed title and codes and correct them if needed.
 
 ### Joined check (2026-11-25, HTTP mode on port 4330 against the API worktree on 5150)
 
@@ -140,13 +165,18 @@ evaluation is queued, running, has questions or is done answers 409 `wrong_stage
 ### Requests
 
 ```
-Reference   GET  /api/reference/evaluation → {activityGroups, activities, businessModels, revenueModels,
-                 productTypes: [{id,label}], limits:{deckMaxMb,cvMaxMb,deckMinPages,deckMaxPages,summaryMin,summaryMax}}
-                 once per session (cached in HttpApi, dropped on sign-out)
+Reference   GET  /api/reference/evaluation → {activityGroups, businessModels, revenueModels,
+                 productTypes: [{id,label}], activities: [{id,label,groupId?}],
+                 limits:{deckMaxMb,cvMaxMb,deckMinPages,deckMaxPages,summaryMin,summaryMax}}
+                 once per session (cached in HttpApi, dropped on sign-out). groupId (2026-11-26) is the
+                 activity's group, a derived mapping not from STB, to be confirmed; an API built before
+                 it sends none, and D-1a then keeps group and activity independent (no filtering)
 Upload      POST /api/application/deck  multipart: file (deck, PDF), cv (PDF), summary, activityGroupId,
                  activityId, businessModelIds*, revenueModelIds*, productTypeIds*, noticeAcknowledged, aiConsent   202
                  400 validation_failed with errors.<deck|cv|summary|activityGroupId|activityId|businessModelIds|
-                 revenueModelIds|productTypeIds>, shown at the fields on D-1a
+                 revenueModelIds|productTypeIds>, shown at the fields on D-1a; an activity outside the
+                 chosen group: errors.activityId = ["Seçilen faaliyet alanı, seçilen faaliyet grubuna ait
+                 değildir."] (rules.ACTIVITY_NOT_IN_GROUP; the screen and the mock check it too)
 Polling     GET  /api/application/status (then GET /api/application only when it changed)
 ```
 
@@ -173,7 +203,8 @@ Polling     GET  /api/application/status (then GET /api/application only when it
   `rejected`. A notice above the form after `failed`, `rejected` (with "3 ile 40 sayfa arasında bir PDF")
   or `cancelled`. "Ön bilgileri düzenle" while no deck was ever uploaded.
 - **D-1b** (`/deck/evaluating`): a status page like D-1f. Says the evaluation takes a few minutes, that
-  the page may be closed, and updates itself; the attempt ("2. deneme (en fazla 3)") only above 1. No
+  the page may be closed, and updates itself; when the evaluation started. The retry count
+  (`attempt` / `maxAttempts`) is mapped but never shown to the founder (owner, 2026-11-26). No
   progress bar: the duration is not known.
 - **D-1g** (`/deck/more-information`): a stop state. The evaluation needs more information and the
   founder will be contacted; no form (the question format is not known, and no question content reaches
@@ -182,7 +213,8 @@ Polling     GET  /api/application/status (then GET /api/application only when it
   "Terminal AI" title suggestions or "Başka dosya yükle" (a new deck no longer fills the form). Values
   marked `profile` carry a quiet "Ön bilgilerinizden"; the founder's own still say "Kontrol edildi".
   The NACE editor offers the profile's activity area's codes ("Faaliyet alanınıza uygun"). Title and
-  codes start empty; the mock refuses a submit without a title ("Şirket unvanını yazınız.").
+  codes are proposed from the profile since 2026-11-26 (see "Proposed title and codes"); the mock
+  still refuses a submit without a title ("Şirket unvanını yazınız.") or without a code.
 - **D-1f** and **D-1e**: wording no longer speaks of reading or comparing the deck.
 
 ### The mock

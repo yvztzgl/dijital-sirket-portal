@@ -2,7 +2,8 @@ import { inject, Injectable } from '@angular/core';
 import type { Api, DemoTools, ReviewPatch, SimulatedWork } from './api';
 import { ApiError } from './api-error';
 import { DemoSettings, EvaluationOutcome } from './demo-settings';
-import EVALUATION_REFERENCE from './evaluation-reference.json';
+import ACTIVITY_GROUPS from './evaluation-activity-groups.json';
+import EVALUATION_DICTIONARY from './evaluation-reference.json';
 import { titleCase, tl } from './format';
 import { Inbox } from './inbox';
 import {
@@ -30,6 +31,7 @@ import {
   DECK_CONSENT_ERROR,
   evaluationErrors,
   FUNDING_OPTIONS,
+  proposedTitle,
   sameStem,
   titleAlternatives,
   validateCard,
@@ -98,6 +100,16 @@ export const MERSIS_REGISTRY = [
 export const DEMO_ACCOUNT = { email: 'john.doe@acme.com', password: 'Acme-2026!', firstName: 'John', lastName: 'Doe' };
 
 const clone = <T>(v: T): T => structuredClone(v);
+
+/**
+ * The mock's answer to `GET /api/reference/evaluation`: the saved dictionary with each activity's
+ * `groupId` from `evaluation-activity-groups.json`, a copy of the API's derived mapping
+ * (2026-11-26). That mapping is DERIVED BY US, NOT FROM STB, and still to be confirmed (its `note`).
+ */
+const EVALUATION_REFERENCE: EvaluationReference = (() => {
+  const groupOf = new Map(ACTIVITY_GROUPS.groups.flatMap((g) => g.activityIds.map((id) => [id, g.groupId] as const)));
+  return { ...EVALUATION_DICTIONARY, activities: EVALUATION_DICTIONARY.activities.map((a) => ({ ...a, groupId: groupOf.get(a.id) })) };
+})();
 const nowIso = () => new Date().toISOString();
 
 /** How long the QR code of the identity step's phone link stays valid. */
@@ -165,7 +177,7 @@ export class MockApi implements Api {
     };
   }
 
-  /** The saved dictionary of the outside evaluation service (2026-11-25), in the API's shape. */
+  /** The saved dictionary of the outside evaluation service (2026-11-25) with the derived groups, in the API's shape. */
   async evaluationReference(): Promise<EvaluationReference> {
     return clone(EVALUATION_REFERENCE);
   }
@@ -361,7 +373,7 @@ export class MockApi implements Api {
   async uploadDeck(files: { deck: File; cv: File }, answers: EvaluationAnswers, consents: DeckConsents) {
     await this.wait(500);
     if (!consents.noticeAcknowledged || !consents.aiConsent) throw new ApiError(DECK_CONSENT_ERROR);
-    const ref = EVALUATION_REFERENCE as EvaluationReference;
+    const ref = EVALUATION_REFERENCE;
     const errors = evaluationErrors({ ...answers, deck: files.deck, cv: files.cv }, ref.limits, ref);
     if (Object.keys(errors).length) {
       throw new ApiError('Gönderdiğiniz bilgiler eksik veya hatalıdır.', {
@@ -418,11 +430,18 @@ export class MockApi implements Api {
       }
       e.status = 'done';
       const p = app.profile!;
-      app.company = { ...app.company, brand: p.brand, root: '', activity: '', nace: [], suggestedNace: SECTORS[p.sector].nace };
+      // Title and codes are proposed from the profile like the API's defaults: the brand as an
+      // anonim şirket title (none when it would not pass the title check), the sector's NACE codes.
+      const title = proposedTitle(p.brand);
+      const [root = '', ...activity] = title ? withoutSuffixWords(title).split(' ') : [];
+      const nace = [...SECTORS[p.sector].nace];
+      app.company = { ...app.company, brand: p.brand, root, activity: activity.join(' '), nace, suggestedNace: SECTORS[p.sector].nace };
       app.founder = { ...app.founder, firstName: acc.firstName, lastName: acc.lastName, nationality: p.nationality };
       app.contact = { email: acc.email, phone: p.phone, address: '', postalCode: '', country: p.country };
       app.funding = p.funding;
       app.marks = { name: 'profile', email: 'profile', phone: 'profile', address: 'profile', funding: 'profile' };
+      if (title) app.marks['title'] = 'profile';
+      if (nace.length) app.marks['nace'] = 'profile';
       app.stage = 'review';
       log(app, 'Değerlendirme tamamlandı', 's');
     });
@@ -1101,7 +1120,7 @@ async function fastForward(api: MockApi, email: string, want: Stage) {
   if (want === 'evaluating') return;
   await api.completeEvaluation(want === 'evaluationQuestions' ? 'questions' : 'done');
   if (want === 'evaluationQuestions' || want === 'review') return;
-  // The founder fills in what the evaluation leaves empty. "Acme Bulut Bilişim" clashes in MERSİS.
+  // The founder corrects the proposed title and codes and adds the address. "Acme Bulut Bilişim" clashes in MERSİS.
   const conflict = want === 'titleChecking' || want === 'titleConflict';
   await api.updateReview(
     {
@@ -1177,7 +1196,7 @@ const ANSWERS: [RegExp, string][] = [
   [/sermaye kaynağı/i, 'Sermaye kaynağı, şirkete konacak paranın nereden geldiğini gösterir: kendi hesabınız, bir yatırımcı veya üçüncü bir taraf. Üçüncü taraf transferleri uyum ekibince incelenir.'],
   [/değerlendirme ne kadar/i, 'Değerlendirme genellikle birkaç dakika sürer. Bu sırada sayfayı kapatabilirsiniz; yeniden giriş yaptığınızda başvurunuz kaldığı yerden devam eder.'],
   [/değerlendir/i, 'Sunumunuz, özgeçmişiniz ve sunum ekranındaki yanıtlarınız dış bir değerlendirme hizmetine gönderilir. Değerlendirme tamamlandığında şirket formunu doldurursunuz; ek bilgi gerekirse sizinle iletişime geçilir.'],
-  [/nereden geliyor|formdaki/i, 'Şirket formundaki bazı değerler ön bilgilerinizden ve hesabınızdan alınır ve “Ön bilgilerinizden” olarak işaretlenir; hepsini düzeltebilirsiniz. Şirket unvanını ve faaliyet kodlarını siz yazarsınız.'],
+  [/nereden geliyor|formdaki/i, 'Şirket formundaki bazı değerler ön bilgilerinizden ve hesabınızdan alınır ve “Ön bilgilerinizden” olarak işaretlenir; hepsini düzeltebilirsiniz. Şirket unvanı marka adınızdan, faaliyet kodları faaliyet alanınızdan önerilir; kontrol edip gerekirse düzeltiniz.'],
   [/[öÖ]n bilgi/, 'Ön bilgileriniz şirket formunda varsayılan değer olarak kullanılır; formu doldururken düzeltebilirsiniz.'],
   [/format|pdf|pptx|dosya/i, 'Sunum ve özgeçmiş PDF biçiminde olmalıdır. Sunum 3 ile 40 sayfa arasında ve en fazla 25 MB, özgeçmiş en fazla 5 MB olabilir.'],
   [/gizli|kvkk|saklan|veri/i, 'Sunumunuz ve özgeçmişiniz yalnızca başvurunuz kapsamında işlenir. Değerlendirme için dış bir değerlendirme hizmetine gönderilir; bu aktarım için sunum ekranında onayınız alınır.'],

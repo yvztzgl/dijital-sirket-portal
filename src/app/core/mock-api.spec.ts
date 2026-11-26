@@ -343,14 +343,16 @@ describe('MockApi flow', () => {
     app = await api.completeEvaluation();
     expect(app.stage).toBe('review');
     expect(app.evaluation).toMatchObject({ status: 'done' });
-    expect(app.company).toMatchObject({ brand: 'Novalab', root: '', activity: '', nace: [], suggestedNace: ['62.01', '62.02', '63.11'] });
+    // Title and codes proposed from the profile (brand + "Anonim Şirketi", the sector's codes), marked like the API's defaults.
+    expect(app.company).toMatchObject({ brand: 'Novalab', root: 'Novalab', activity: '', nace: ['62.01', '62.02', '63.11'], suggestedNace: ['62.01', '62.02', '63.11'] });
     expect(app.founder).toMatchObject({ firstName: 'Ayşe', lastName: 'Kaya', nationality: PROFILE.nationality });
     expect(app.contact).toEqual({ email, phone: PROFILE.phone, address: '', postalCode: '', country: PROFILE.country });
-    expect(app.marks).toEqual({ name: 'profile', email: 'profile', phone: 'profile', address: 'profile', funding: 'profile' });
-    // The title and the codes are the founder's to write.
-    await expect(api.submitReview()).rejects.toThrow('Şirket unvanını yazınız.');
+    expect(app.marks).toEqual({ title: 'profile', nace: 'profile', name: 'profile', email: 'profile', phone: 'profile', address: 'profile', funding: 'profile' });
     app = await api.updateReview({ company: { root: 'Novalab', activity: 'Yazılım' }, contact: { phone: '+44 7700 900999' } }, ['title', 'phone']);
-    expect(app.marks).toMatchObject({ title: 'edited', phone: 'edited', email: 'profile' });
+    expect(app.marks).toMatchObject({ title: 'edited', phone: 'edited', email: 'profile', nace: 'profile' });
+    await api.updateReview({ company: { root: '', activity: '' } }, ['title']);
+    await expect(api.submitReview()).rejects.toThrow('Şirket unvanını yazınız.');
+    await api.updateReview({ company: { root: 'Novalab', activity: 'Yazılım', nace: [] } }, ['title', 'nace']);
     await expect(api.submitReview()).rejects.toThrow('NACE');
     await api.updateReview({ company: { nace: ['62.01'] } }, ['nace']);
     expect((await api.submitReview()).stage).toBe('titleChecking');
@@ -410,6 +412,8 @@ describe('MockApi flow', () => {
     const limits = EVALUATION_REFERENCE.limits;
     const ok = { ...DEMO_ANSWERS, deck: { name: 'a.PDF', size: 25 * 1024 * 1024 }, cv: { name: 'cv.pdf', size: 5 * 1024 * 1024 } };
     expect(evaluationErrors(ok, limits, EVALUATION_REFERENCE)).toEqual({});
+    const linked = { ...EVALUATION_REFERENCE, activities: EVALUATION_REFERENCE.activities.map((a) => ({ ...a, groupId: a.id <= 27 ? 1 : 2 })) };
+    expect(evaluationErrors({ ...ok, activityId: 40 }, limits, linked)).toEqual({ activityId: 'Seçilen faaliyet alanı, seçilen faaliyet grubuna ait değildir.' });
     expect(evaluationErrors({ ...ok, deck: { name: 'a.pdf', size: 25 * 1024 * 1024 + 1 } }, limits).deck).toBe('Sunum dosyası 25 MB’tan büyük olamaz.');
     expect(evaluationErrors({ ...ok, deck: null, cv: { name: 'cv.docx', size: 1 } }, limits)).toEqual({ deck: 'Sunum dosyanızı yükleyiniz.', cv: 'Özgeçmiş PDF biçiminde olmalıdır.' });
     expect(evaluationErrors({ ...ok, summary: 'x'.repeat(49) }, limits).summary).toBe('Özet en az 50 karakter olmalıdır.');
@@ -422,7 +426,9 @@ describe('MockApi flow', () => {
     expect((await api.seed('evaluationQuestions')).app!.stage).toBe('evaluationQuestions');
     const review = (await api.seed('review')).app!;
     expect(review.marks['phone']).toBe('profile');
-    expect(review.company.root).toBe('');
+    expect(review.company.root).toBe('Acme');
+    // Submitted untouched, the proposed title ("Acme Cloud" + Anonim Şirketi) goes to the title check.
+    expect((await api.submitReview()).titleCheck).toMatchObject({ status: 'checking', candidate: 'Acme Cloud' });
     expect((await api.seed('eligibility')).app!.company).toMatchObject({ root: 'Acme', activity: 'Bulut Yazılım' });
   });
 

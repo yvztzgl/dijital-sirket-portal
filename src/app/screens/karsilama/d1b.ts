@@ -6,7 +6,7 @@ import { KarsilamaData } from '../data/karsilama.data';
 /**
  * D-1b — Sunum değerlendiriliyor (stage `evaluating`). Nothing is asked: the outside evaluation
  * service takes minutes. A status page, not a progress bar (its duration is not known): what was
- * received, that the evaluation runs (the attempt only when above 1), and that the founder may close
+ * received, that the evaluation runs (since when; never the retry count), and that the founder may close
  * the page. In HTTP mode the store polls the status read; in the mock a short timer ends it.
  */
 @Component({

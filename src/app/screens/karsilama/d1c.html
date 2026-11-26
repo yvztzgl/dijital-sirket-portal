@@ -6,7 +6,7 @@
       <span class="wz-chip"><app-icon name="check" size="13px" [stroke]="2.6" />Sunumunuz değerlendirildi</span>
     }
     <h1 class="wz-h1">Şirket bilgilerinizi tamamlayınız</h1>
-    <p class="wz-lead">Ön bilgilerinizden ve hesabınızdan alınan değerler doldurulmuştur. Şirket unvanını ve faaliyet kodlarını yazınız; diğer bilgileri kontrol edip gerekirse düzeltiniz.</p>
+    <p class="wz-lead">Ön bilgilerinizden ve hesabınızdan alınan değerler doldurulmuştur. Önerilen şirket unvanını, faaliyet kodlarını ve diğer bilgileri kontrol edip gerekirse düzeltiniz.</p>
   </div>
 
   <section class="wz-card wz-review" aria-label="Şirket bilgileri">
@@ -26,79 +26,83 @@
 
     <dl class="rows">
       @for (r of rows(); track r.key) {
-        <div class="row" [class.on]="r.edit && r.edit === editor()">
+        <div class="row" [class.on]="r.key === editorRow()">
           <span class="t"><dt>{{ r.label }}@if (r.edited) {<em>Kontrol edildi</em>} @else if (r.fromProfile) {<em class="from">Ön bilgilerinizden</em>}</dt><dd>{{ r.value }}</dd>@if (rowErrors()[r.key]; as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}</span>
-          @if (r.edit) {<button type="button" (click)="openEditor(r.edit)" [attr.aria-expanded]="r.edit === editor()" [attr.aria-label]="r.label + ' bilgisini düzelt'"><app-icon name="pencil" size="15px" [stroke]="2" /></button>}
+          @if (r.edit) {<button #pen type="button" (click)="pencil(r.key, pen)" [attr.aria-expanded]="r.key === editorRow()" [attr.aria-label]="r.label + ' bilgisini düzelt'"><app-icon name="pencil" size="15px" [stroke]="2" /></button>}
         </div>
-      }
-    </dl>
+        <!-- The editor this row's pencil opened, right under the row and across the card. -->
+        @if (r.key === editorRow()) {
+          <div class="slot" #slot>
+            @if (editor() === 'title') {
+              <div class="ed">
+                <!-- Saved on change only: Enter fires change too, and a second handler sent the same PATCH twice (409 against the API). -->
+                <label class="wz-field" for="rv-title">Şirket unvanı</label>
+                <div class="title">
+                  <input id="rv-title" class="wz-input" [value]="store.title()" (change)="setTitle($any($event.target).value)" autocomplete="off">
+                  <span class="suffix">Anonim Şirketi</span>
+                </div>
+                <small>@if (brand().name) {Ön bilgilerinizdeki marka adı: “{{ brand().name }}”. }Tür eki kendiliğinden eklenir; “A.Ş.” yazmayınız.</small>
+                <div class="end"><button type="button" class="wz-btn wz-btn--ghost wz-btn--sm" (click)="close()">Kapat</button></div>
+              </div>
+            }
 
-    @if (editor() === 'title') {
-      <div class="ed">
-        <!-- Saved on change only: Enter fires change too, and a second handler sent the same PATCH twice (409 against the API). -->
-        <label class="wz-field" for="rv-title">Şirket unvanı</label>
-        <div class="title">
-          <input id="rv-title" class="wz-input" [value]="store.title()" (change)="setTitle($any($event.target).value)" autocomplete="off">
-          <span class="suffix">Anonim Şirketi</span>
-        </div>
-        <small>@if (brand().name) {Ön bilgilerinizdeki marka adı: “{{ brand().name }}”. }Tür eki kendiliğinden eklenir; “A.Ş.” yazmayınız.</small>
-        <div class="end"><button type="button" class="wz-btn wz-btn--ghost wz-btn--sm" (click)="openEditor(null)">Kapat</button></div>
-      </div>
-    }
+            @if (editor() === 'nace') {
+              <div class="ed">
+                <label class="wz-field" for="rv-nace">Faaliyet kodları (NACE)</label>
+                @if (naceChips().length) {
+                  <div class="codes">
+                    @for (c of naceChips(); track c.code) {<span><b>{{ c.code }}</b>{{ c.name }}<button type="button" (click)="removeNace(c.code)" [attr.aria-label]="c.code + ' kodunu kaldır'"><app-icon name="x" size="13px" [stroke]="2.4" /></button></span>}
+                  </div>
+                }
+                <div class="search">
+                  <app-icon name="search" size="15px" [stroke]="2" />
+                  <input id="rv-nace" class="wz-input" [value]="naceQuery()" (input)="naceQuery.set($any($event.target).value)" placeholder="Kod veya faaliyet arayınız" autocomplete="off">
+                </div>
+                @if (naceOptions().length) {
+                  <ul class="opts">
+                    @for (o of naceOptions(); track o.code) {
+                      <li><b>{{ o.code }}</b><span>{{ o.name }}@if (o.suggested) {<em>Faaliyet alanınıza uygun</em>}</span><button type="button" class="wz-btn wz-btn--ghost wz-btn--sm" (click)="addNace(o.code)">Ekle</button></li>
+                    }
+                  </ul>
+                }
+                <p class="purpose"><b>Şirket konusu:</b> {{ purpose() }}</p>
+                <div class="end"><button type="button" class="wz-btn wz-btn--ghost wz-btn--sm" (click)="close()">Kapat</button></div>
+              </div>
+            }
 
-    @if (editor() === 'nace') {
-      <div class="ed">
-        <label class="wz-field" for="rv-nace">Faaliyet kodları (NACE)</label>
-        @if (naceChips().length) {
-          <div class="codes">
-            @for (c of naceChips(); track c.code) {<span><b>{{ c.code }}</b>{{ c.name }}<button type="button" (click)="removeNace(c.code)" [attr.aria-label]="c.code + ' kodunu kaldır'"><app-icon name="x" size="13px" [stroke]="2.4" /></button></span>}
+            @if (editorCard(); as c) {
+              <form class="ed grid" (submit)="$event.preventDefault(); save()">
+                @for (f of c.fields; track f.key) {
+                  @if (f.kind) {
+                    <div class="wz-field" [class.wide]="f.wide">
+                      <span>{{ f.label }}</span>
+                      @if (f.kind === 'country') {
+                        <app-country-select [label]="f.label" [value]="draft()[f.key] ?? ''" (valueChange)="setDraftValue(f.key, $event)" />
+                      } @else if (f.kind === 'select') {
+                        <app-select [label]="f.label" [options]="f.options ?? []" [value]="draft()[f.key] ?? ''" (valueChange)="setDraftValue(f.key, $event)" />
+                      } @else {
+                        <app-phone-input [label]="f.label" [value]="draft()[f.key] ?? ''" [defaultCountry]="draft()['country'] ?? ''" (valueChange)="setDraftValue(f.key, $event)" />
+                      }
+                      @if (inputErrors()[f.key]; as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
+                    </div>
+                  } @else {
+                    <label class="wz-field" [class.wide]="f.wide">{{ f.label }}
+                      <input class="wz-input" [value]="draft()[f.key] ?? ''" (input)="setDraft(f.key, $event)">
+                      @if (inputErrors()[f.key]; as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
+                    </label>
+                  }
+                }
+                @if (c.id === 'funding' && draft()['funding'] === 'third-party') {<p class="wide warn-note">Üçüncü taraf transferleri uyum ekibince elle incelenir (en geç 2 iş günü).</p>}
+                <div class="wide end">
+                  <button type="button" class="wz-btn wz-btn--ghost wz-btn--sm" (click)="close()">Vazgeç</button>
+                  <button type="submit" class="wz-btn wz-btn--sm" [disabled]="store.busy()">Kaydet</button>
+                </div>
+              </form>
+            }
           </div>
         }
-        <div class="search">
-          <app-icon name="search" size="15px" [stroke]="2" />
-          <input id="rv-nace" class="wz-input" [value]="naceQuery()" (input)="naceQuery.set($any($event.target).value)" placeholder="Kod veya faaliyet arayınız" autocomplete="off">
-        </div>
-        @if (naceOptions().length) {
-          <ul class="opts">
-            @for (o of naceOptions(); track o.code) {
-              <li><b>{{ o.code }}</b><span>{{ o.name }}@if (o.suggested) {<em>Faaliyet alanınıza uygun</em>}</span><button type="button" class="wz-btn wz-btn--ghost wz-btn--sm" (click)="addNace(o.code)">Ekle</button></li>
-            }
-          </ul>
-        }
-        <p class="purpose"><b>Şirket konusu:</b> {{ purpose() }}</p>
-        <div class="end"><button type="button" class="wz-btn wz-btn--ghost wz-btn--sm" (click)="openEditor(null)">Kapat</button></div>
-      </div>
-    }
-
-    @if (editorCard(); as c) {
-      <form class="ed grid" (submit)="$event.preventDefault(); saveEditor()">
-        @for (f of c.fields; track f.key) {
-          @if (f.kind) {
-            <div class="wz-field" [class.wide]="f.wide">
-              <span>{{ f.label }}</span>
-              @if (f.kind === 'country') {
-                <app-country-select [label]="f.label" [value]="draft()[f.key] ?? ''" (valueChange)="setDraftValue(f.key, $event)" />
-              } @else if (f.kind === 'select') {
-                <app-select [label]="f.label" [options]="f.options ?? []" [value]="draft()[f.key] ?? ''" (valueChange)="setDraftValue(f.key, $event)" />
-              } @else {
-                <app-phone-input [label]="f.label" [value]="draft()[f.key] ?? ''" [defaultCountry]="draft()['country'] ?? ''" (valueChange)="setDraftValue(f.key, $event)" />
-              }
-              @if (inputErrors()[f.key]; as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
-            </div>
-          } @else {
-            <label class="wz-field" [class.wide]="f.wide">{{ f.label }}
-              <input class="wz-input" [value]="draft()[f.key] ?? ''" (input)="setDraft(f.key, $event)">
-              @if (inputErrors()[f.key]; as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
-            </label>
-          }
-        }
-        @if (c.id === 'funding' && draft()['funding'] === 'third-party') {<p class="wide warn-note">Üçüncü taraf transferleri uyum ekibince elle incelenir (en geç 2 iş günü).</p>}
-        <div class="wide end">
-          <button type="button" class="wz-btn wz-btn--ghost wz-btn--sm" (click)="openEditor(null)">Vazgeç</button>
-          <button type="submit" class="wz-btn wz-btn--sm" [disabled]="store.busy()">Kaydet</button>
-        </div>
-      </form>
-    }
+      }
+    </dl>
 
   </section>
 

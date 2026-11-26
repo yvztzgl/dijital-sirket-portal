@@ -58,7 +58,8 @@ export interface EvaluationWire {
 /** `GET /api/reference/evaluation`: the outside service's dictionaries and the upload limits. */
 export interface EvaluationReferenceWire {
   activityGroups: { id: number; label: string }[];
-  activities: { id: number; label: string }[];
+  /** `groupId`: the activity's group (derived mapping, not from STB, to be confirmed); missing from an API built before 2026-11-26. */
+  activities: { id: number; label: string; groupId?: number }[];
   businessModels: { id: number; label: string }[];
   revenueModels: { id: number; label: string }[];
   productTypes: { id: number; label: string }[];

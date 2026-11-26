@@ -20,6 +20,14 @@ $mono: 'IBM Plex Mono', ui-monospace, monospace;
 
 /* The global focus ring is a box-shadow; these screens use an outline. */
 .wz-page :focus-visible { box-shadow: none; outline: 2px solid var(--bd-061262); outline-offset: 2px; }
+/*
+ * Except on text fields: each draws its own focus on the box the founder sees (.wz-input its border;
+ * the search select, the phone field, the code boxes, the assistant's question box their box). Before
+ * 2026-11-26 only .wz-input was excepted, so the rule above won over the components' own
+ * `input { outline: 0 }` and drew a second, dark rectangle inside their boxes. `:where()` keeps this at
+ * the rule's own weight, so a component's own focus style (e.g. the code boxes' halo) still applies.
+ */
+.wz-page :where(input:not([type=checkbox], [type=radio], [type=range], [type=file], [type=color], [type=button], [type=submit], [type=reset], [type=image]), textarea, select):focus-visible { outline: 0; box-shadow: none; }
 
 /* ----------------------------------------------------------------------------- heading */
 .wz-head { display: flex; flex-direction: column; align-items: center; gap: 10px; }
@@ -61,7 +69,6 @@ $mono: 'IBM Plex Mono', ui-monospace, monospace;
   background: var(--bg-FFFFFF); color: var(--fg-1F2A44); font: 400 14.5px/1 $sans; outline: 0;
 }
 .wz-input:focus { border-color: var(--bd-061262); }
-.wz-page .wz-input:focus-visible { outline: 0; }
 
 /* ----------------------------------------------------------------- camera / video areas */
 .wz-cam { position: relative; width: 100%; height: 292px; box-sizing: border-box; display: grid; place-items: center; border-radius: 20px; background: var(--bg-0B1430); overflow: hidden; color: #fff; }
@@ -274,8 +281,28 @@ html.vt-founded::view-transition-group(founded-logo) { animation-duration: .75s;
 .wz-rules li app-icon { flex: none; margin-top: 2px; }
 .wz-rules .do app-icon { color: var(--fg-15803D); }
 .wz-rules .dont app-icon { color: var(--fg-B42318); }
-.wz-check { display: flex; align-items: flex-start; gap: 10px; max-width: 600px; font: 400 13.5px/20px $sans; color: var(--fg-3B4660); text-align: left; cursor: pointer; }
-.wz-check input { flex: none; width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--bg-061262); cursor: pointer; }
+/* Consent rows, used for every permission the founder gives: a card the whole of which is clickable,
+   with a custom tick box. The card turns navy-edged once ticked so the given consents read at a glance. */
+.wz-check {
+  display: flex; align-items: flex-start; gap: 12px; max-width: 600px; box-sizing: border-box; padding: 12px 14px;
+  border: 1px solid var(--bd-D6DEEE); border-radius: 12px; background: var(--bg-FFFFFF);
+  font: 400 13.5px/20px $sans; color: var(--fg-3B4660); text-align: left; text-wrap: pretty; cursor: pointer;
+  transition: border-color .15s, background-color .15s;
+}
+.wz-check:hover { border-color: var(--bd-C7D5F7); }
+.wz-check:has(input:checked) { border-color: var(--bd-061262); background: var(--bg-F7F9FE); color: var(--fg-1F2A44); }
+.wz-check input {
+  flex: none; appearance: none; -webkit-appearance: none; width: 20px; height: 20px; margin: 0; box-sizing: border-box;
+  border: 1.5px solid var(--bd-C9D2E3); border-radius: 6px; background: var(--bg-FFFFFF) center / 14px no-repeat; cursor: pointer;
+  transition: background-color .15s, border-color .15s, transform .1s;
+}
+.wz-check:hover input:not(:checked) { border-color: var(--bd-5B6478); }
+.wz-check input:active { transform: scale(.9); }
+.wz-check input:checked {
+  border-color: var(--bg-061262); background-color: var(--bg-061262);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5.5 12.5l4.2 4.2L18.5 7.8'/%3E%3C/svg%3E");
+}
+.wz-check input:focus-visible { outline: 2px solid var(--bd-061262); outline-offset: 2px; }
 .wz-check a { color: var(--fg-061262); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 560px) {
   .wz-rules .cols { grid-template-columns: 1fr; }
@@ -405,6 +432,12 @@ html.theme-dark .wz-confirm.ok { --tone: #16A34A; --dot: rgba(134, 239, 172, .2)
 .wz-profile .who b { font-weight: 600; color: var(--fg-061262); }
 .wz-profile .who small { margin-left: auto; font-size: 12px; }
 .wz-profile .end { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px 20px; }
+.wz-profile .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.wz-multi-hint { font-weight: 400; color: var(--fg-8A93A6); }
+.wz-profile .deck-help { align-items: flex-start; }
+.wz-profile .deck-help p { margin: 0; }
+.wz-profile .deck-help-links { display: flex; flex-wrap: wrap; gap: 0 20px; margin-top: 2px; }
+.wz-profile .deck-help .wz-link { min-height: 32px; font-size: 13.5px; }
 @media (max-width: 560px) { .wz-profile { padding: 18px; } .wz-profile .grid { grid-template-columns: 1fr; } }
 
 /* ------------------------------------------------------- D-1a deck, CV and the five answers */
@@ -417,16 +450,13 @@ html.theme-dark .wz-confirm.ok { --tone: #16A34A; --dot: rgba(134, 239, 172, .2)
 .wz-textarea { height: auto; min-height: 120px; padding: 10px 12px; resize: vertical; font: 400 14.5px/21px $sans; }
 .wz-count { font: 400 12px/16px $sans; color: var(--fg-5B6478); font-variant-numeric: tabular-nums; }
 .wz-count.over { color: var(--fg-B42318); }
-.wz-multi { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 8px; }
-.wz-multi legend { padding: 0; margin-bottom: 2px; font: 500 12.5px/17px $sans; color: var(--fg-3B4660); }
-.wz-multi legend small { font-weight: 400; color: var(--fg-8A93A6); }
-.wz-multi .opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 16px; }
 
 .wz-hold { margin: -8px 0 0; font: 500 12.5px/18px $sans; color: var(--fg-B45309); }
 
 /* ------------------------------------------- D-1a: the two ticks the deck upload needs */
-.wz-consents { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 10px; }
-.wz-consents legend { padding: 0; margin-bottom: 2px; font: 600 13.5px/19px $sans; color: var(--fg-1F2A44); }
+.wz-consents { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 8px; }
+.wz-consents legend { padding: 0; margin-bottom: 8px; font: 600 13.5px/19px $sans; color: var(--fg-1F2A44); }
+.wz-consents .wz-check { max-width: none; }
 .wz-drop.off { opacity: .55; cursor: not-allowed; }
 .wz-drop.off:hover { border-color: var(--bd-D6DEEE); }
 
@@ -442,10 +472,12 @@ html.theme-dark .wz-confirm.ok { --tone: #16A34A; --dot: rgba(134, 239, 172, .2)
 .wz-review .logo .ov { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(6, 18, 98, .62); color: #fff; opacity: 0; transition: opacity .15s ease; }
 .wz-review .logo:hover .ov, .wz-review .logo:focus-visible .ov { opacity: 1; }
 span.logo { cursor: default; }
-/* Every value as one row; two columns of them. */
-.wz-review .rows { margin: 0; padding: 6px 22px 8px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 26px; }
+/* Every value as one row; two columns of them. The open editor (.slot) follows its row in the
+   markup and spans the card; "dense" lets the row after it still fill the place beside the clicked
+   row, so on two columns the editor sits under that line and on one column right under the row. */
+.wz-review .rows { margin: 0; padding: 6px 22px 8px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row dense; gap: 0 26px; }
 .wz-review .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 52px; padding: 6px 0; border-bottom: 1px solid var(--bd-EEF1F6); }
-.wz-review .row:nth-last-child(-n + 2) { border-bottom: 0; }
+.wz-review .row:nth-last-child(-n + 2 of .row) { border-bottom: 0; }
 .wz-review .row .t { display: flex; flex-direction: column; min-width: 0; }
 .wz-review dt { display: flex; align-items: baseline; gap: 8px; font: 400 12px/16px $sans; color: var(--fg-5B6478); }
 .wz-review dt em { font-style: normal; font-size: 11.5px; color: var(--fg-0C217E); }
@@ -453,8 +485,10 @@ span.logo { cursor: default; }
 .wz-review dd { margin: 0; font: 600 14.5px/20px $sans; color: var(--fg-061262); overflow-wrap: anywhere; }
 .wz-review .row button { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border: 0; border-radius: 10px; background: transparent; color: var(--fg-5B6478); cursor: pointer; }
 .wz-review .row button:hover, .wz-review .row.on button { background: var(--bg-EFF4FF); color: var(--fg-061262); }
-/* The editor a pencil opens, under the rows. */
-.wz-review .ed { display: flex; flex-direction: column; gap: 10px; margin: 0 22px 16px; padding: 16px 18px; border-radius: 14px; background: var(--bg-F7F9FE); }
+/* The editor a pencil opens, under that pencil's row. */
+.wz-review .slot { grid-column: 1 / -1; padding: 10px 0 12px; border-bottom: 1px solid var(--bd-EEF1F6); scroll-margin: 16px; }
+.wz-review .slot:last-child { border-bottom: 0; }
+.wz-review .ed { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 16px 18px; border-radius: 14px; background: var(--bg-F7F9FE); }
 .wz-review .ed.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
 .wz-review .ed .wide { grid-column: 1 / -1; }
 .wz-review .ed > small { font: 400 12.5px/17px $sans; color: var(--fg-5B6478); }
@@ -480,7 +514,7 @@ span.logo { cursor: default; }
 .wz-review .purpose b { font-weight: 600; color: var(--fg-061262); }
 .wz-review .warn-note { margin: 0; font: 400 12.5px/18px $sans; color: var(--fg-B45309); }
 .wz-review .fl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; }
-@media (max-width: 560px) { .wz-review .rows, .wz-review .ed.grid, .wz-review .fl { grid-template-columns: 1fr; } .wz-review .row:nth-last-child(2) { border-bottom: 1px solid var(--bd-EEF1F6); } }
+@media (max-width: 560px) { .wz-review .rows, .wz-review .ed.grid, .wz-review .fl { grid-template-columns: 1fr; } .wz-review .row:nth-last-child(2 of .row) { border-bottom: 1px solid var(--bd-EEF1F6); } }
 
 /* ------------------------------------------------------------------ D-1d title rejected */
 .wz-title { display: flex; flex-direction: column; overflow: hidden; }
@@ -716,8 +750,10 @@ span.logo { cursor: default; }
 
 /* ---------------------------------------- D-1a a notice above the upload (deck not read) */
 .wz-notice { margin: 0; display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; background: var(--bg-FFFBEB); font: 400 13.5px/19px $sans; color: var(--fg-78350F); }
-.wz-notice app-icon { flex: none; margin-top: 1px; }
-.wz-notice b { font-weight: 600; }
+.wz-notice app-icon { flex: none; margin-top: 2px; }
+/* Title on its own line, the explanation under it, both left-aligned even inside centred headers. */
+.wz-notice > span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; text-align: left; text-wrap: pretty; }
+.wz-notice b { font: 600 14px/20px $sans; }
 
 /* ------------------------------------------------------ D-1f the title being checked */
 .wz-checks .wait { flex: none; display: grid; place-items: center; width: 26px; height: 26px; box-sizing: border-box; border: 2px solid var(--bd-C7D5F7); border-radius: 50%; background: var(--bg-EFF4FF); color: var(--fg-0C217E); }

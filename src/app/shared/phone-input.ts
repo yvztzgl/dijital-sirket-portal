@@ -56,9 +56,10 @@ const KEEP_ZERO = new Set(['IT', 'SM', 'VA', 'CI', 'CG', 'GA', 'TG']);
       border-radius: 10px; background: var(--bg-FFFFFF); transition: border-color .15s;
     }
     .field:hover { border-color: var(--bd-5B6478); }
-    .field.focus { border-color: var(--bd-061262); }
+    /* The box shows focus (also while the country code button has it); the input inside draws none. */
+    .field.focus, .field:focus-within { border-color: var(--bd-061262); }
     .field.bad { border-color: var(--bd-FBD5D1); }
-    .field.bad.focus { border-color: var(--fg-B42318); }
+    .field.bad.focus, .field.bad:focus-within { border-color: var(--fg-B42318); }
     .code {
       flex: none; height: 100%; display: flex; align-items: center; gap: 7px; padding: 0 10px 0 12px; border: 0;
       border-right: 1px solid var(--bd-EEF1F6); border-radius: 10px 0 0 10px; background: transparent; cursor: pointer;

@@ -48,18 +48,18 @@ import { Icon } from './icon';
     .who-id { font: 500 11px/14px 'IBM Plex Mono', monospace; color: var(--fg-5B6478); }
     .email { font: 400 12px/16px 'IBM Plex Sans', sans-serif; color: var(--fg-5B6478); overflow: hidden; text-overflow: ellipsis; max-width: 190px; }
     .menu {
-      position: absolute; right: 0; top: calc(100% + 8px); z-index: 960; width: 280px; padding: 6px;
+      position: absolute; right: 0; top: calc(100% + 8px); z-index: 960; width: 320px; max-width: calc(100vw - 32px); padding: 6px;
       background: var(--bg-FFFFFF); border: 1px solid var(--bd-E5E7EB); border-radius: 12px; box-shadow: 0 16px 40px -16px rgba(6,18,98, .35);
       animation: menuIn .14s cubic-bezier(.2, .8, .2, 1) both;
     }
     .menu-head { display: flex; align-items: center; gap: 10px; padding: 8px 10px 12px; margin-bottom: 4px; border-bottom: 1px solid var(--bd-EEF1F6); }
     .item {
-      width: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent;
+      width: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; white-space: nowrap;
       font: 500 13.5px/18px 'IBM Plex Sans', sans-serif; color: var(--fg-061262); text-decoration: none; cursor: pointer; text-align: left;
     }
     .item:hover { background: var(--bg-F7F9FE); text-decoration: none; color: var(--fg-061262); }
     .item app-icon { color: var(--fg-5B6478); }
-    .step { margin-left: auto; font: 500 11.5px/16px 'IBM Plex Sans', sans-serif; color: var(--fg-5B6478); }
+    .step { flex: none; margin-left: auto; font: 500 11.5px/16px 'IBM Plex Sans', sans-serif; color: var(--fg-5B6478); }
     .mono-txt { font-family: 'IBM Plex Mono', monospace; }
     .sep { height: 1px; margin: 4px 0; background: var(--bg-EEF1F6); }
     .danger, .danger app-icon { color: var(--fg-B42318); }

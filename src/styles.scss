@@ -39,10 +39,29 @@ input::placeholder {
   color: var(--fg-8A93A6);
 }
 
+/*
+ * Focus: exactly one indicator per control, visible to keyboard users in both themes (WCAG 2.4.7).
+ * - Buttons, links, checkboxes and the like: the halo below on `:focus-visible` (the wizard screens
+ *   use an outline instead, wizard.scss).
+ * - Text fields (text inputs, textareas, selects) draw their own focus on the box the founder sees:
+ *   on themselves (`.wz-input`: the border turns navy), or, when the native control sits inside a
+ *   styled box (search select, phone with country code, password with "Şifreyi göster", the
+ *   assistant's question box), on that box with `:focus-within`. The control inside then draws
+ *   nothing; a second ring would cut through the box (the fault reported on 2026-11-26).
+ * `--focus-halo` is the halo colour per theme: the light one is the design's, the dark one is
+ * the light blue of `.ui-btn` so it shows on dark surfaces.
+ */
+:root { --focus-halo: 0 0 0 3px rgba(6, 18, 98, .18); }
+html.theme-dark { --focus-halo: 0 0 0 3px rgba(157, 182, 255, .55); }
+
 :focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(6,18,98, 0.18);
+  box-shadow: var(--focus-halo);
 }
+
+/* A field made of a box around a native control (the password fields on the sign-in screens): the box shows focus. */
+.ui-field:focus-within { box-shadow: var(--focus-halo); }
+.ui-field :where(input, textarea, select):focus-visible { box-shadow: none; }
 
 @keyframes scan { 0% { top: 2px; } 100% { top: calc(100% - 4px); } }
 @keyframes spin { to { transform: rotate(360deg); } }
