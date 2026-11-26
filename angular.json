@@ -66,6 +66,18 @@
                   "with": "src/environments/environment.http.ts"
                 }
               ]
+            },
+            "http-demo": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.http.ts"
+                },
+                {
+                  "replace": "src/environments/demo-flag.ts",
+                  "with": "src/environments/demo-flag.on.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -81,6 +93,10 @@
             },
             "http": {
               "buildTarget": "dijital-sirket-portal:build:development,http",
+              "proxyConfig": "proxy.conf.json"
+            },
+            "http-demo": {
+              "buildTarget": "dijital-sirket-portal:build:development,http-demo",
               "proxyConfig": "proxy.conf.json"
             }
           },
