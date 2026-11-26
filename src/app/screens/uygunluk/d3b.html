@@ -23,6 +23,7 @@
           <span class="lab">Bankanızın gönderdiği 6 haneli doğrulama kodunu giriniz</span>
         }
         <div class="otp"><app-otp-input variant="bank" [(value)]="otp" (complete)="confirm($event)" /></div>
+        @if (!demoMode) {<app-demo-code-hint [fixed]="demoServer.threeDsCode()" (fill)="otp.set($event)" />}
         <div class="left">
           @if (demoMode) {<span>Kalan süre <b>{{ otpLeftLabel() }}</b></span>} @else {<span>{{ otpResent() ? 'Yeni kod istendi.' : '' }}</span>}
           <button type="button" (click)="resendOtp()">Kodu tekrar gönder</button>

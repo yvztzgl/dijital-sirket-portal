@@ -28,7 +28,8 @@ export class GirisData {
   protected readonly edevlet = signal<null | 'login' | 'register'>(null);
   protected readonly otp = signal('');
   protected readonly resetSent = signal(false);
-  private readonly resendAt = signal(Date.now() + 60_000);
+  /** When the last code or link was sent (+60 s); also tells the demo hint to read again. */
+  protected readonly resendAt = signal(Date.now() + 60_000);
   /**
    * A message the previous screen left for this one: "password changed" on the login screen, the
    * server's "not confirmed yet, a new code was sent" on the verify screen.

@@ -1,5 +1,7 @@
-import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
+import { Api } from '../core/api';
 import { ApplicationStore } from '../core/application.store';
+import { DemoServerApi } from '../core/demo-server-api';
 import { validTckn } from '../core/rules';
 import { FormError } from './form-error';
 
@@ -31,7 +33,7 @@ import { FormError } from './form-error';
           <span class="from-title">e-Devlet’ten alınacak bilgiler</span>
           <span>Ad, soyad, T.C. kimlik no, yerleşim adresi ve kayıtlı e-posta adresiniz.</span>
         </div>
-        <span class="hint">Demo için geçerli bir numara: <button type="button" class="link" (click)="tckn.set('10000000146')">10000000146</button></span>
+        @if (showHint()) {<span class="hint">Demo için geçerli bir numara: <button type="button" class="link" (click)="tckn.set('10000000146')">10000000146</button></span>}
         <app-form-error [message]="error()" />
         <div class="actions">
           <button type="button" class="ghost" (click)="closed.emit()">Vazgeç</button>
@@ -72,6 +74,10 @@ export class EdevletDialog {
 
   protected readonly store = inject(ApplicationStore);
   protected readonly tckn = signal('');
+  /** The demo T.C. kimlik no: in mock mode, or in the http-demo build against a demo API. */
+  private readonly mock = !!inject(Api).demo;
+  private readonly demoServer = inject(DemoServerApi);
+  protected readonly showHint = computed(() => this.mock || this.demoServer.available());
   /** Kept local so the page behind the dialog doesn't show the same message again. */
   protected readonly error = signal<string | null>(null);
 

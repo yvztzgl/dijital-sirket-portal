@@ -6,6 +6,7 @@ import { clock } from '../core/format';
 import { FormError } from '../shared/form-error';
 import { Icon } from '../shared/icon';
 import { OtpInput } from '../shared/otp-input';
+import { DemoCodeHint } from './demo-code-hint';
 
 /**
  * The second-factor ("step-up") dialog, rendered once by the app shell. It opens when the API
@@ -13,7 +14,8 @@ import { OtpInput } from '../shared/otp-input';
  * digits e-mailed to the founder, and closes by itself once they are accepted; the store then
  * repeats the action. Closing it (Vazgeç, Esc, a click outside) ends the action.
  *
- * No code is shown, prefilled or hinted here. In mock mode the dialog opens only from `/screens`,
+ * No code is shown, prefilled or hinted here, except by the demo hint (`DemoCodeHint`), which exists
+ * only in the http-demo build against an API started with `Demo:Enabled`. In mock mode the dialog opens only from `/screens`,
  * and the mock's code arrives as an Inbox e-mail like its other codes.
  *
  * The look of `ConfirmDialog` (band of dots, medallion), no shadows; built as a fixed overlay like
@@ -21,7 +23,7 @@ import { OtpInput } from '../shared/otp-input';
  */
 @Component({
   selector: 'app-step-up-dialog',
-  imports: [FormError, Icon, OtpInput],
+  imports: [DemoCodeHint, FormError, Icon, OtpInput],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (store.stepUp(); as s) {
@@ -33,6 +35,7 @@ import { OtpInput } from '../shared/otp-input';
           <h2 id="su-title">E-posta adresinize gönderilen kodu giriniz</h2>
           <p id="su-msg">{{ s.sentAt === null && s.working ? 'Bu işlem için ek doğrulama gerekir. Kodunuz gönderiliyor…' : 'Bu işlem için ek doğrulama gerekir. E-posta adresinize 6 haneli bir kod gönderdik.' }}</p>
           <div class="otp"><app-otp-input #otp [(value)]="code" (complete)="verify($event)" /></div>
+          @if (s.sentAt !== null) {<app-demo-code-hint class="demo" [email]="store.account()?.email" [refresh]="s.sentAt" (fill)="code.set($event)" />}
           @if (s.error) {<div class="err"><app-form-error [message]="s.error" /></div>}
           <div class="resend">
             @if (cooldown() > 0) {
@@ -78,6 +81,7 @@ import { OtpInput } from '../shared/otp-input';
     h2 { margin: 14px 0 0; font: 600 19px/26px 'IBM Plex Sans', sans-serif; color: var(--fg-061262); text-wrap: balance; }
     p { margin: 8px 0 0; font: 400 14px/21px 'IBM Plex Sans', sans-serif; color: var(--fg-3B4660); text-wrap: pretty; }
     .otp { align-self: stretch; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin-top: 18px; }
+    .demo { align-self: stretch; margin-top: 12px; }
     .err { align-self: stretch; margin-top: 12px; text-align: left; }
     .resend { margin-top: 12px; min-height: 20px; font: 400 13px/20px 'IBM Plex Sans', sans-serif; color: var(--fg-5B6478); }
     .link { border: 0; background: none; padding: 0; font: 600 13px/20px 'IBM Plex Sans', sans-serif; color: var(--fg-061262); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
