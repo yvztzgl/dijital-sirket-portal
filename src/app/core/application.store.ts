@@ -305,6 +305,11 @@ export class ApplicationStore {
    */
   private followServer(work: ServerWork) {
     const poller = new StatusPoller(() => this.poll(work));
+    this.restartPoll = () => {
+      if (!poller.active) return;
+      poller.stop();
+      poller.start();
+    };
     effect(() => {
       const waiting = this.signedIn() && waitsForServer(this.app());
       untracked(() => (waiting ? poller.start() : poller.stop()));
@@ -767,6 +772,20 @@ export class ApplicationStore {
         throw e;
       }
     });
+  }
+
+  /** HTTP mode: starts the status poll's pace over (set by `followServer`). */
+  private restartPoll: (() => void) | null = null;
+
+  /**
+   * HTTP mode, demo controls (`DemoBar`): something was just changed on the server outside the
+   * founder's own actions. Reads the application now and starts the existing poll's pace over (every
+   * 2 s again), so a result the Worker applies a moment later arrives quickly. No new polling.
+   */
+  async checkServerNow() {
+    if (!this.serverWork) return;
+    this.restartPoll?.();
+    await this.refresh();
   }
 
   /** Reads the application again (after a `wrong_stage` refusal). */

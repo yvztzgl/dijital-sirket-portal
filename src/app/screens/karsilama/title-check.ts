@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { Icon } from '../../shared/icon';
+import { DemoBar } from '../../shell/demo-bar';
 import { StepPage } from '../../shared/step-page';
 import { KarsilamaData } from '../data/karsilama.data';
 
@@ -11,7 +12,7 @@ import { KarsilamaData } from '../data/karsilama.data';
  */
 @Component({
   selector: 'app-screen-title-check',
-  imports: [Icon, StepPage],
+  imports: [DemoBar, Icon, StepPage],
   templateUrl: './title-check.html',
   host: { style: 'display:block' },
   changeDetection: ChangeDetectionStrategy.OnPush,
