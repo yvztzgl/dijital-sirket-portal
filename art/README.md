@@ -199,8 +199,8 @@ AI Reviewer reads. Generator: `art/sample-deck/build.js`.
 ## Building scene (D-5a "Şirketiniz kuruluyor")
 
 Not a dotted engraving made with `dots.py`: one ordinary picture that the screen shows twice
-(`.wz-rise` in `src/wizard.scss`, `rise` and `BUILDING` in
-`src/app/screens/data/eimza.data.ts`).
+(`.wz-rise` in `src/wizard.scss`, `mockRise`, `serverRise` and `BUILDING` in
+`src/app/features/setup/setup-progress.view.ts`).
 
 | File | What |
 | --- | --- |

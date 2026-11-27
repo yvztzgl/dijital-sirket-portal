@@ -196,8 +196,30 @@ that day). This is the pattern for the other three base classes:
 5. Imports inside a feature are relative; a page's spec uses its own feature's routes.
 
 Result for auth: 267 tests pass (224 + 43), lint unchanged (0 errors, 40 warnings), three builds
-complete, the sign-in screens tried in the browser. Still to do in phase 2: e-signature and set-up
-(`SignatureData`), eligibility and payment (`EligibilityData`), company and landing (`CompanyData`).
+complete, the sign-in screens tried in the browser. Still to do in phase 2: eligibility and payment (`EligibilityData`), company and landing
+(`CompanyData`).
+
+**Phase 2, e-signature and set-up, was done the same day** on `refactor/phase-2-e-signature`
+(auth is commit `5c061f6`). `SignatureData` is deleted; the six pages are 52 to 104 lines each.
+D-5a's calculations are named pure functions in `features/setup/setup-progress.view.ts`; D-4a,
+D-4b and D-4d share `features/e-signature/e-signature.rules.ts`. Set-up no longer imports
+e-signature (lint: 38 warnings). 61 page tests were written first, and they include **HTTP mode**:
+the real store over a stand-in `Api` whose answers are the captured API views
+(`core/api/testing/captured`), so the `serverDecides` branches are exercised. Use the same
+approach for the remaining two classes. 342 tests pass.
+
+Nine members of the old class that no template or code read were dropped (`faq`, `checks`,
+`devicesReady`, `passportSeen`, `callSteps`, `ringDash`, `callSummary`, `segs`, `doneLine`).
+
+Found while reading the e-signature and set-up code, **not fixed**:
+
+- D-4b has its own six captions; `callView`'s captions and `CALL_STEPS` in
+  `core/reference/timeline.ts` are now read by nothing.
+- Mock, D-4c: a resident without a `tckn` gets "T.C. undefined●●●●●undefined" on the certificate.
+- Mock, D-4c: the passport country code is the first three letters of the Turkish country name
+  ("ALM"), not an ISO code, for every country but the UK.
+- D-4b's camera and microphone buttons change nothing, and the lobby's choice is not carried
+  into the call.
 
 Found while reading the auth code, **not fixed** (behaviour kept as it was):
 

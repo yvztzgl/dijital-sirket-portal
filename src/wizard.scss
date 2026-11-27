@@ -148,7 +148,7 @@ $mono: 'IBM Plex Mono', ui-monospace, monospace;
 .wz-rise .count b { font: 600 46px/1 $sans; letter-spacing: -.02em; color: #061262; }
 .wz-rise .count small { flex-basis: 100%; margin-top: 6px; font: 400 12.5px/17px $sans; color: #5B6478; }
 @keyframes wz-target { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-/* The finishing moment, while the screen lingers on the complete building (about 3.6 s, FINISHED_HOLD), in this order:
+/* The finishing moment, while the screen lingers on the complete building (about 3.6 s, FINISHED_HOLD in setup-progress.view.ts), in this order:
    0.0 s  the plan and the level line fade away
    0.1 s  a band of light runs up the six floors, one after the other
    0.7 s  the company's name drops onto the roof, over the picture's blank sign, and settles

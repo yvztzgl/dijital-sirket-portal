@@ -94,7 +94,7 @@ const STEPS = [
 /**
  * Heights in building.webp, % from the top: the ground line, then the slab above each of the six
  * floors (the last is the top, so the roof comes with the sixth). The same numbers as D-5a's
- * `BUILDING.levels` in e-signature.data.ts; measure again if the picture is replaced.
+ * `BUILDING.levels` in features/setup/setup-progress.view.ts; measure again if the picture is replaced.
  */
 const BUILDING_LEVELS = [97.9, 79.9, 66.4, 52.6, 38.2, 23.2, 0];
 /** What the screen pieces show. Sample values match the app's demo account. */
