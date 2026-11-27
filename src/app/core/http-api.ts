@@ -5,7 +5,7 @@ import type { Api, ApplicationStatus, ReviewPatch, ServerWork, Session } from '.
 import { ApiError } from './api-error';
 import { callStartedAt, toAccount, toApplication, toReviewFields, toStage } from './api-mapper';
 import { ApplicationWire, EdevletStartWire, MeWire, PhoneLinkWire, PhoneStatusWire, StageWire } from './api-types';
-import { Account, Application, DeckConsents, EvaluationAnswers, EvaluationReference, PhoneLinkStatus, Profile, WizardReference } from './models';
+import { Account, Application, DeckConsents, EvaluationAnswers, EvaluationQuestions, EvaluationReference, PhoneLinkStatus, Profile, QuestionAnswer, WizardReference } from './models';
 
 /**
  * The real platform API over HTTP, used by the `http` build (see docs/api-client.md).
@@ -275,6 +275,19 @@ export class HttpApi implements Api {
     form.append('noticeAcknowledged', String(consents.noticeAcknowledged === true));
     form.append('aiConsent', String(consents.aiConsent === true));
     await this.request('POST', '/api/application/deck', form);
+    return this.fresh();
+  }
+
+  /** `GET /api/application/evaluation/questions`; 404 `no_questions` when the evaluation does not wait on questions. */
+  evaluationQuestions(): Promise<EvaluationQuestions> {
+    return this.request<EvaluationQuestions>('GET', '/api/application/evaluation/questions');
+  }
+
+  /** 202, then the evaluation goes on (`evaluating`). The explanations are sent trimmed, null when empty. */
+  async answerEvaluation(answers: QuestionAnswer[]): Promise<Application> {
+    await this.request('POST', '/api/application/evaluation/answers', {
+      answers: answers.map((a) => ({ targetFactId: a.targetFactId, optionId: a.optionId, explanation: a.explanation?.trim() || null })),
+    });
     return this.fresh();
   }
 

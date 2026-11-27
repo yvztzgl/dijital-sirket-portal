@@ -12,7 +12,7 @@ export type Stage =
   | 'profile' // step 1, first screen: the founder states the basics before the deck is read (D-1e)
   | 'verified' // profile saved, ready to upload the deck, the CV and the answers (the profile can still be changed); also after an evaluation that ended failed, rejected or cancelled
   | 'evaluating' // the outside evaluation service (STB) evaluates the deck, the CV and the answers; takes minutes
-  | 'evaluationQuestions' // the evaluation needs more information; the platform contacts the founder (no form yet)
+  | 'evaluationQuestions' // the evaluation needs more information: the founder answers its questions (D-1g)
   | 'review' // the founder fills the company form, with defaults from the profile and the account
   | 'titleChecking' // the trade name is being checked for reservation; done by staff, so it can take hours
   | 'titleConflict' // MERSİS could not reserve the title
@@ -169,6 +169,43 @@ export interface Evaluation {
 
 /** `formDeckConflict`: the answers on the form do not describe the deck (the service's form check). */
 export type EvaluationReason = 'formDeckConflict';
+
+/**
+ * The evaluation service's follow-up questions (D-1g, `GET /api/application/evaluation/questions`,
+ * API step 22). Each card is one question with its choices; a choice may ask for an explanation.
+ * `answerable` is false when the API has questions in a shape it does not know yet: D-1g then says
+ * the platform will contact the founder, as before.
+ */
+export interface EvaluationQuestions {
+  answerable: boolean;
+  receivedAt: string;
+  cards: QuestionCard[];
+}
+
+export interface QuestionCard {
+  id: string;
+  prompt: string;
+  options: QuestionOption[];
+}
+
+export interface QuestionOption {
+  id: string;
+  label: string;
+  description: string | null;
+  explanationRequired: boolean;
+  /** What the explanation should say; shown above the text box. */
+  explanationPrompt: string | null;
+}
+
+/** The API's limit for one explanation (its StbQuestions.MaxExplanation). */
+export const ANSWER_MAX = 2000;
+
+/** The founder's answer to one card (`POST /api/application/evaluation/answers`). */
+export interface QuestionAnswer {
+  targetFactId: string;
+  optionId: string;
+  explanation: string | null;
+}
 
 /**
  * Per value on the company form: `profile` (a default taken from the profile or the account, not

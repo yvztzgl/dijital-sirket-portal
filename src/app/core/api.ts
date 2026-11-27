@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { environment } from '../../environments/environment';
-import { Account, Application, DeckConsents, EvaluationAnswers, EvaluationReference, FounderType, FundingSource, PhoneLinkStatus, Profile, Stage, WizardReference } from './models';
+import { Account, Application, DeckConsents, EvaluationAnswers, EvaluationQuestions, EvaluationReference, FounderType, FundingSource, PhoneLinkStatus, Profile, QuestionAnswer, Stage, WizardReference } from './models';
 
 /**
  * What the portal needs from the platform backend. The store and Terminal AI inject `Api` and
@@ -90,6 +90,17 @@ export abstract class Api {
    * (`rules.evaluationErrors`). The HTTP client sends the files themselves.
    */
   abstract uploadDeck(files: { deck: File; cv: File }, answers: EvaluationAnswers, consents: DeckConsents): Promise<Application>;
+  /**
+   * D-1g: the evaluation's follow-up questions, while it waits on them (stage `evaluationQuestions`).
+   * Refused with 404 `no_questions` at any other moment.
+   */
+  abstract evaluationQuestions(): Promise<EvaluationQuestions>;
+  /**
+   * D-1g: one answer per card; then the evaluation goes on (`evaluating`). Refused with
+   * `validation_failed` naming `answers.<card id>` (no choice, or no explanation where the choice
+   * asks for one) or `answers` (the answers do not fit the questions).
+   */
+  abstract answerEvaluation(answers: QuestionAnswer[]): Promise<Application>;
   /**
    * D-1c: changes to the reviewed values. `edited` names the review rows the founder touched (the
    * mock marks them; the API decides the marks itself and ignores it).

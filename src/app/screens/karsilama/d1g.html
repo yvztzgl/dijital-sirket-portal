@@ -1,31 +1,75 @@
 <app-step-page [step]="1" [part]="2" [parts]="3" sub="Değerlendirme" ctx="evaluate" label="D-1g Ek bilgi" [width]="760">
+  @let q = questions();
   <div class="wz-head">
     <span class="wz-chip wz-chip--warn"><app-icon name="info" size="13px" [stroke]="2.2" />Ek bilgi gerekiyor</span>
     <h1 class="wz-h1">Değerlendirme için ek bilgi gerekiyor</h1>
-    <p class="wz-lead">Değerlendirme hizmeti başvurunuzla ilgili ek bilgiye ihtiyaç duydu. Sizinle iletişime geçeceğiz; bu ekranda yapmanız gereken bir şey yoktur.</p>
+    @if (q?.answerable) {
+      <p class="wz-lead">Değerlendirme hizmeti, sunumunuzla ilgili {{ q!.cards.length === 1 ? 'bir soruya' : q!.cards.length + ' soruya' }} yanıt bekliyor. Yanıtlarınız değerlendirme hizmetine gönderilir ve değerlendirme kaldığı yerden devam eder.</p>
+    } @else if (q) {
+      <p class="wz-lead">Değerlendirme hizmeti başvurunuzla ilgili ek bilgiye ihtiyaç duydu. Sizinle iletişime geçeceğiz; bu ekranda yapmanız gereken bir şey yoktur.</p>
+    } @else {
+      <p class="wz-lead" role="status">Sorular yükleniyor…</p>
+    }
   </div>
 
-  <!-- A stop state: the questions' format is not known yet, so there is no form. -->
-  <section class="wz-card wz-checks" role="status" aria-live="polite">
-    <ul>
-      <li>
-        <span class="ok" aria-hidden="true"><app-icon name="check" size="13px" [stroke]="3" /></span>
-        <span class="t"><b>Sunum ve özgeçmiş alındı</b><small>{{ uploadedFiles() }}</small></span>
-      </li>
-      <li>
-        <span class="wait" aria-hidden="true"><app-icon name="clock" size="13px" [stroke]="2.4" /></span>
-        <span class="t"><b class="pending">Ek bilgi bekleniyor</b><small>Sizinle iletişime geçilecektir.</small></span>
-      </li>
-      <li>
-        <span class="next" aria-hidden="true"></span>
-        <span class="t"><b>Şirket bilgileri</b><small>Değerlendirme tamamlandığında şirket bilgilerinizi doldurursunuz.</small></span>
-      </li>
-    </ul>
-    <p class="note">
-      <b>Bu sayfada beklemeniz gerekmez.</b>
-      <span>Sayfayı kapatabilirsiniz; yeniden giriş yaptığınızda başvurunuz kaldığı yerden devam eder.</span>
-    </p>
-  </section>
+  @if (q?.answerable) {
+    <form class="wz-card wz-profile wz-questions" (submit)="$event.preventDefault(); submitAnswers()" novalidate>
+      @for (card of q!.cards; track card.id; let i = $index) {
+        @let d = answerDraft(card);
+        <section [attr.aria-labelledby]="'q-' + card.id">
+          <h2 [id]="'q-' + card.id" class="wz-card-h">
+            @if (q!.cards.length > 1) {<span class="num">{{ i + 1 }}.</span>}{{ card.prompt }}
+          </h2>
+          <div class="wz-choice" role="radiogroup" [attr.aria-labelledby]="'q-' + card.id" [attr.aria-describedby]="cardError(card) ? 'qe-' + card.id : null">
+            @for (o of card.options; track o.id) {
+              <div role="radio" tabindex="0" [class.on]="d.optionId === o.id" [attr.aria-checked]="d.optionId === o.id"
+                   (click)="choose(card, o.id)" (keydown.enter)="choose(card, o.id)" (keydown.space)="$event.preventDefault(); choose(card, o.id)">
+                <span class="dot" aria-hidden="true"></span>
+                <span class="t"><b>{{ o.label }}</b>@if (o.description) {<small>{{ o.description }}</small>}</span>
+              </div>
+            }
+          </div>
+          @if (explained(card); as o) {
+            <label class="wz-field wide explain">Açıklamanız
+              @if (o.explanationPrompt) {<span class="hint">{{ o.explanationPrompt }}</span>}
+              <textarea class="wz-input wz-textarea" rows="6" [value]="d.explanation" (input)="explain(card, $any($event.target).value)"
+                        [attr.maxlength]="answerMax" placeholder="Kendi sözlerinizle, somut olarak yazınız."></textarea>
+              <small class="count" [class.over]="d.explanation.trim().length > answerMax">{{ d.explanation.trim().length }} / {{ answerMax }}</small>
+            </label>
+          }
+          @if (cardError(card); as m) {<small class="wz-fielderr" [id]="'qe-' + card.id" role="alert">{{ m }}</small>}
+        </section>
+      }
+      @if (fieldError('answers'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
+      <p class="wz-foot"><app-icon name="info" size="13px" [stroke]="2" />Yanıtlarınız şifrelenerek saklanır ve yalnızca değerlendirme hizmetine gönderilir.</p>
+      <app-form-error />
+      <div class="wz-actions">
+        <button type="submit" class="wz-btn" [disabled]="store.busy()">{{ store.busy() ? 'Gönderiliyor…' : 'Yanıtları gönder' }}</button>
+      </div>
+    </form>
+  } @else if (q) {
+    <!-- A stop state: the questions cannot be shown here (an unknown shape, or the read failed). -->
+    <section class="wz-card wz-checks" role="status" aria-live="polite">
+      <ul>
+        <li>
+          <span class="ok" aria-hidden="true"><app-icon name="check" size="13px" [stroke]="3" /></span>
+          <span class="t"><b>Sunum ve özgeçmiş alındı</b><small>{{ uploadedFiles() }}</small></span>
+        </li>
+        <li>
+          <span class="wait" aria-hidden="true"><app-icon name="clock" size="13px" [stroke]="2.4" /></span>
+          <span class="t"><b class="pending">Ek bilgi bekleniyor</b><small>Sizinle iletişime geçilecektir.</small></span>
+        </li>
+        <li>
+          <span class="next" aria-hidden="true"></span>
+          <span class="t"><b>Şirket bilgileri</b><small>Değerlendirme tamamlandığında şirket bilgilerinizi doldurursunuz.</small></span>
+        </li>
+      </ul>
+      <p class="note">
+        <b>Bu sayfada beklemeniz gerekmez.</b>
+        <span>Sayfayı kapatabilirsiniz; yeniden giriş yaptığınızda başvurunuz kaldığı yerden devam eder.</span>
+      </p>
+    </section>
+  }
 
   <app-demo-bar />
 </app-step-page>

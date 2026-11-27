@@ -5,7 +5,7 @@ import { ApiError } from './api-error';
 import { Clock } from './clock';
 import { pdfBytes, zipBytes } from './files';
 import { dateTime, initials } from './format';
-import { Account, Application, DeckConsents, DocItem, EvaluationAnswers, EvaluationReference, FounderType, LogEntry, PhoneLinkStatus, Profile, Stage, stepOf, WizardReference } from './models';
+import { Account, Application, DeckConsents, DocItem, EvaluationAnswers, EvaluationReference, FounderType, LogEntry, PhoneLinkStatus, Profile, QuestionAnswer, Stage, stepOf, WizardReference } from './models';
 import { StatusPoller } from './status-poller';
 import {
   callView,
@@ -468,6 +468,10 @@ export class ApplicationStore {
   /** D-1a: the deck, the CV and the five answers, with the founder's two ticks for this upload. */
   uploadDeck = (files: { deck: File; cv: File }, answers: EvaluationAnswers, consents: DeckConsents) =>
     this.update(() => this.api.uploadDeck(files, answers, consents));
+  /** D-1g: the evaluation's follow-up questions; a read, so it is not a busy action. */
+  evaluationQuestions = () => this.api.evaluationQuestions();
+  /** D-1g: one answer per question; the evaluation goes on (`evaluating`). */
+  answerEvaluation = (answers: QuestionAnswer[]) => this.update(() => this.api.answerEvaluation(answers));
   updateReview = (patch: ReviewPatch, edited: string[]) => this.update(() => this.api.updateReview(patch, edited));
   submitReview = () => this.update(() => this.api.submitReview());
   chooseTitle = (title: string) => this.update(() => this.api.chooseTitle(title));

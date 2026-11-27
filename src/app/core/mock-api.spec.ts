@@ -391,6 +391,37 @@ describe('MockApi flow', () => {
     expect((await api.completeEvaluation()).stage).toBe('review');
   });
 
+  it('shows the follow-up questions, checks the answers as the API does and then goes on with the evaluation', async () => {
+    await verifiedFounder('ayse@novalab.io');
+    await expect(api.evaluationQuestions()).rejects.toMatchObject({ code: 'no_questions', status: 404 });
+    TestBed.inject(DemoSettings).set({ evaluationOutcome: 'questions' });
+    await api.uploadDeck(FILES(), DEMO_ANSWERS, CONSENTS);
+    await api.completeEvaluation();
+
+    const q = await api.evaluationQuestions();
+    expect(q.answerable).toBe(true);
+    const [card] = q.cards;
+    expect(card.id).toBe('B1');
+    expect(card.options.map((o) => o.explanationRequired)).toEqual([true, false, false]);
+
+    const own = card.options[0].id;
+    await expect(api.answerEvaluation([])).rejects.toMatchObject({ code: 'validation_failed', fields: { 'answers.B1': ['Bu soruyu yanıtlayınız.'] } });
+    await expect(api.answerEvaluation([{ targetFactId: 'B1', optionId: own, explanation: '  ' }])).rejects.toMatchObject({
+      fields: { 'answers.B1': ['Bu seçenek için açıklama yazınız.'] },
+    });
+    await expect(api.answerEvaluation([{ targetFactId: 'B1', optionId: 'MAYBE', explanation: null }])).rejects.toMatchObject({
+      fields: { 'answers.B1': ['Seçeneklerden birini seçiniz.'] },
+    });
+
+    let app = await api.answerEvaluation([{ targetFactId: 'B1', optionId: own, explanation: 'Planlama algoritmasını kendimiz yazdık.' }]);
+    expect(app.stage).toBe('evaluating');
+    expect(app.evaluation).toMatchObject({ status: 'running', finishedAt: null });
+    expect(app.logs.map((l) => l.text)).toContain('Ek sorular yanıtlandı; değerlendirme sürüyor');
+    await expect(api.evaluationQuestions()).rejects.toMatchObject({ code: 'no_questions' });
+    app = await api.completeEvaluation();
+    expect(app.stage).toBe('review');
+  });
+
   it('takes the upload only with both ticks and the form\'s rules, naming the fields as the API does', async () => {
     const email = 'ayse@novalab.io';
     await verifiedFounder(email);

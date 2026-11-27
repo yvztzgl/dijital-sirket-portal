@@ -438,6 +438,34 @@ describe('HttpApi step 1', () => {
     expect((await pending).titleCheck).toEqual({ status: 'checking', candidate: 'Lumora Analitik Yazılım' });
   });
 
+  it('reads the follow-up questions and sends the answers, trimmed, null where there is no explanation', async () => {
+    await signedInAt(CAPTURED.evaluationQuestions);
+    // The shape of the API's EvaluationQuestionsView (step 22); not a captured answer.
+    const view = {
+      answerable: true,
+      receivedAt: '2026-11-27T08:27:39Z',
+      cards: [{ id: 'B1', prompt: 'Soru?', options: [{ id: 'A', label: 'A', description: null, explanationRequired: true, explanationPrompt: 'Açıklayın.' }] }],
+    };
+    const reading = api.evaluationQuestions();
+    (await next('GET', '/api/application/evaluation/questions')).flush(view);
+    expect(await reading).toEqual(view);
+
+    const pending = api.answerEvaluation([
+      { targetFactId: 'B1', optionId: 'A', explanation: '  kendimiz yazdık  ' },
+      { targetFactId: 'B2', optionId: 'UNABLE_TO_VERIFY', explanation: '   ' },
+    ]);
+    const post = await next('POST', '/api/application/evaluation/answers');
+    expect(post.request.body).toEqual({
+      answers: [
+        { targetFactId: 'B1', optionId: 'A', explanation: 'kendimiz yazdık' },
+        { targetFactId: 'B2', optionId: 'UNABLE_TO_VERIFY', explanation: null },
+      ],
+    });
+    post.flush(...empty(202));
+    await read(CAPTURED.evaluating);
+    expect((await pending).stage).toBe('evaluating');
+  });
+
   it('remembers the status read just before the full read, for the poller to compare', async () => {
     expect(api.work.kind).toBe('server');
     await signedInAt(CAPTURED.titleChecking);

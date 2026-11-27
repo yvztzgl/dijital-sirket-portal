@@ -8,10 +8,12 @@ import { titleCase, tl } from './format';
 import { Inbox } from './inbox';
 import {
   Account,
+  ANSWER_MAX,
   Application,
   CAPITAL,
   DeckConsents,
   EvaluationAnswers,
+  EvaluationQuestions,
   EvaluationReference,
   FEE_TOTAL,
   FUNDING_LABELS,
@@ -20,6 +22,7 @@ import {
   LogEntry,
   Profile,
   PhoneLinkStatus,
+  QuestionAnswer,
   Sector,
   SECTORS,
   Stage,
@@ -449,6 +452,35 @@ export class MockApi implements Api {
     if (db.outcomes) delete db.outcomes[email];
     this.save(db);
     return app;
+  }
+
+  /** D-1g: the questions, in the evaluation service's format (as the API passes them on); 404 at any other stage. */
+  async evaluationQuestions(): Promise<EvaluationQuestions> {
+    await this.wait(300);
+    const app = this.db().apps[normEmail(this.who())];
+    if (app?.stage !== 'evaluationQuestions') throw new ApiError('Yanıtlanacak soru yok.', { code: 'no_questions', status: 404 });
+    return { answerable: true, receivedAt: app.evaluation?.startedAt ?? nowIso(), cards: structuredClone(MOCK_QUESTIONS) };
+  }
+
+  /** D-1g: the same checks as the API (`answers.<card id>`); then the evaluation goes on and is done after `DURATION.evaluation`. */
+  async answerEvaluation(answers: QuestionAnswer[]) {
+    await this.wait(600);
+    const fields: Record<string, string[]> = {};
+    if (answers.some((a) => !MOCK_QUESTIONS.some((c) => c.id === a.targetFactId))) fields['answers'] = ['Yanıtlar sorularla eşleşmiyor; sayfayı yenileyip tekrar deneyiniz.'];
+    for (const card of MOCK_QUESTIONS) {
+      const answer = answers.find((a) => a.targetFactId === card.id);
+      const option = card.options.find((o) => o.id === answer?.optionId);
+      const explanation = answer?.explanation?.trim() ?? '';
+      if (!option) fields[`answers.${card.id}`] = [answer ? 'Seçeneklerden birini seçiniz.' : 'Bu soruyu yanıtlayınız.'];
+      else if (explanation.length > ANSWER_MAX) fields[`answers.${card.id}`] = [`Açıklama en fazla ${ANSWER_MAX} karakter olabilir.`];
+      else if (option.explanationRequired && !explanation) fields[`answers.${card.id}`] = ['Bu seçenek için açıklama yazınız.'];
+    }
+    if (Object.keys(fields).length) throw new ApiError('Eksik veya hatalı yanıtları düzeltiniz.', { code: 'validation_failed', status: 400, fields });
+    return this.mutate(['evaluationQuestions'], (app) => {
+      app.evaluation = { ...app.evaluation!, status: 'running', finishedAt: null };
+      app.stage = 'evaluating';
+      log(app, 'Ek sorular yanıtlandı; değerlendirme sürüyor', 'u');
+    });
   }
 
   async updateReview(patch: ReviewPatch, edited: string[]) {
@@ -977,6 +1009,31 @@ export class MockApi implements Api {
 }
 
 // ------------------------------------------------------------------------------- helpers
+
+/** The mock's question: the one card the evaluation service sent on 2026-11-26, its long prompt shortened. */
+const MOCK_QUESTIONS: EvaluationQuestions['cards'] = [
+  {
+    id: 'B1',
+    prompt: 'Müşteriye sunulan nihai teknik çözüm dışarıdan ne ölçüde hazır geliyor?',
+    options: [
+      {
+        id: 'NOT_SUBSTANTIALLY_EXTERNALLY_SUPPLIED_AS_OFFERED',
+        label: 'Nihai teknik çözüm hazır gelmiyor',
+        description: 'Dışarıdan parçalar veya altyapı alınsa da nihai çalışma biçimi şirkete özgü maddi teknik çalışmayla oluşturulur.',
+        explanationRequired: true,
+        explanationPrompt: 'Ürününüzün tanımlayıcı teknik davranışını oluşturmak için sizin veya ekibinizin yaptığı teknik çalışmayı açıklayınız: hangi algoritma, mimari karar veya işlev, hazır bileşenlerin ötesinde size özgü olarak geliştirildi?',
+      },
+      {
+        id: 'SUBSTANTIALLY_EXTERNALLY_SUPPLIED_AS_OFFERED',
+        label: 'Nihai teknik çözüm hazır veya anahtar teslim geliyor',
+        description: 'Çalışan teknik çözümün tamamı veya büyük bölümü dışarıdan hazır sağlanır.',
+        explanationRequired: false,
+        explanationPrompt: null,
+      },
+      { id: 'UNABLE_TO_VERIFY', label: 'Bilmiyorum veya doğrulayamıyorum', description: null, explanationRequired: false, explanationPrompt: null },
+    ],
+  },
+];
 
 function newApplication(acc: MockAccount): Application {
   const app: Application = {

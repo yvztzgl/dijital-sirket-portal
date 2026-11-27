@@ -267,7 +267,7 @@ Polling     GET  /api/application/status (then GET /api/application only when it
 | --- | --- | --- | --- |
 | `verified`, `evaluation` null | D-1a `/deck` | no | the upload |
 | `evaluating` (`queued` / `running`) | D-1b `/deck/evaluating` | yes | the service: `review`, `evaluationQuestions`, or `verified` |
-| `evaluationQuestions` (`questions`) | D-1g `/deck/more-information` (new) | yes (slow) | people (unknown) |
+| `evaluationQuestions` (`questions`) | D-1g `/deck/more-information` (new) | yes (slow) | the founder: answers the questions on D-1g (API step 22), then `evaluating` |
 | `verified` + `failed` / `rejected` / `cancelled` | D-1a with a notice above the form (for `rejected`, worded by `evaluation.reason`) | no | a new upload, a new evaluation |
 | `review` (`done`) | D-1c `/deck/review` (company form) | no | submit |
 
@@ -343,6 +343,8 @@ Review edit       PATCH /api/application/review {fields:{<key>: value}}         
                   is sent when nothing differs (the API refuses an empty change)
 Submit            POST /api/application/review/submit                                                202
 New title (D-1d)  POST /api/application/title {title}  (without "A.Ş."; the server adds it)          202
+Questions (D-1g)  GET  /api/application/evaluation/questions  {answerable, receivedAt, cards[]}       200 / 404 no_questions
+Answers (D-1g)    POST /api/application/evaluation/answers {answers:[{targetFactId, optionId, explanation}]}  202 (then evaluating)
 Reference         GET  /api/reference/wizard   once per session (cached in HttpApi, dropped on sign-out)
 Polling           GET  /api/application/status  → {stage, changedAt}
 ```
@@ -862,7 +864,7 @@ minutes, and are repeated once after it (walked for the call start and for the r
 | `profile` | `profile` | D-1e `/details` | no | the founder saves the profile |
 | `verified` | `verified` | D-1a `/deck` | no | deck, CV and answers upload |
 | `evaluating` | `evaluating` | D-1b `/deck/evaluating` | yes | the outside evaluation (minutes) |
-| `evaluationQuestions` | `evaluationQuestions` | D-1g `/deck/more-information` | yes (slow) | people (unknown) |
+| `evaluationQuestions` | `evaluationQuestions` | D-1g `/deck/more-information` | yes (slow) | the founder (D-1g form, API step 22) |
 | `review` | `review` | D-1c `/deck/review` | no | submit |
 | `titleChecking` | `titleChecking` | D-1f `/deck/name-check` | yes | staff |
 | `titleConflict` | `titleConflict` | D-1d `/deck/name-rejected` | no | a new title |
