@@ -1,12 +1,12 @@
 <app-step-page [step]="1" [part]="3" [parts]="3" sub="Kontrol" ctx="title" label="D-1f Unvan kontrolü" [width]="760">
   <div class="wz-head">
-    <span class="wz-chip wz-chip--info"><app-icon name="clock" size="13px" [stroke]="2.2" />Kontrol ediliyor</span>
+    <span class="wz-chip wz-chip--info wz-tick"><app-icon name="clock" size="13px" [stroke]="2.2" />Kontrol ediliyor</span>
     <h1 class="wz-h1">Şirket unvanınız kontrol ediliyor</h1>
     <p class="wz-lead">Bilgileriniz alındı. Unvanınızın rezerve edilip edilemeyeceği ilgili personel tarafından kontrol edilmektedir; bu kontrol birkaç saat sürebilir.</p>
   </div>
 
   <!-- A status page, not a progress bar: the answer comes from people, and this page updates itself when it does. -->
-  <section class="wz-card wz-checks" role="status" aria-live="polite">
+  <section class="wz-card wz-checks wz-checks--live" role="status" aria-live="polite">
     <ul>
       <li>
         <span class="ok" aria-hidden="true"><app-icon name="check" size="13px" [stroke]="3" /></span>

@@ -20,8 +20,21 @@
       <ul class="alts">
         @for (a of alternatives(); track a.full) {
           <li>
-            <button type="button" (click)="chooseTitle(a.full)" [disabled]="store.busy()">
-              <span class="n"><span><b>{{ a.full }}</b> Anonim Şirketi</span>@if (a.first) {<em>Terminal AI önerisi</em>}</span>
+            <button type="button" (click)="chooseTitle(a.full)" [disabled]="store.busy()" [class.ai]="a.first">
+              @if (a.first) {
+                <app-bot class="bot" size="44px" [mood]="aiLoading() ? 'thinking' : 'idle'" />
+                <span class="n">
+                  <em><app-icon name="sparkles" size="12px" [stroke]="2.2" />Terminal AI önerisi</em>
+                  <span class="sr">{{ a.full }} Anonim Şirketi</span>
+                  @if (aiLoading()) {
+                    <span class="skel" aria-hidden="true"></span>
+                  } @else {
+                    <span class="name" aria-hidden="true"><b>{{ a.full }}</b> Anonim Şirketi</span>
+                  }
+                </span>
+              } @else {
+                <span class="n"><span><b>{{ a.full }}</b> Anonim Şirketi</span></span>
+              }
               <span class="go">Seç</span>
             </button>
           </li>
