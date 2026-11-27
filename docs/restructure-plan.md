@@ -258,9 +258,10 @@ Found while reading the company and landing code, **not fixed**:
 Found while reading the eligibility and payment code, **not fixed**. The first three concern
 consent and should be decided before a real launch:
 
-- **D-2a, consent can carry over:** after a failed identity check in HTTP mode the page is the
-  same instance, so the "Açık Rıza" box stays ticked and a second start sends `consent: true`
-  without a new tick. (From reading the code; no test exercises it.)
+- ~~D-2a, consent can carry over to a second attempt.~~ **Fixed 2026-11-27** on branch
+  `fix/identity-consent-per-attempt`: the tick is cleared as soon as a check runs, so after a
+  failed check it has to be given again (`identity-check.ts`; a test reproduced the carry-over
+  first). The API still only receives `consent: true`; it cannot tell a fresh tick from an old one.
 - **D-2a and D-2a-m: the "Açık Rıza Metni" link opens nothing** (`href="#"`), so the founder
   consents to a text they cannot read. The same holds for the other consent links.
 - **"Bu bilgisayarla devam et" only forgets the phone link in the browser;** on the server the

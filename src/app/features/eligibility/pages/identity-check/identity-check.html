@@ -47,7 +47,7 @@
     </div>
 
     @if (identityFailed()) {
-      <!-- HTTP mode: the API's eligibility.identityError. Starting again is the same consent and button; a second failure goes to manual review. -->
+      <!-- HTTP mode: the API's eligibility.identityError. Starting again uses the same tick and button, and the tick has to be given again; a second failure goes to manual review. -->
       <p class="wz-notice" role="alert"><app-icon name="alert" size="16px" [stroke]="2.2" /><span><b>Kimliğiniz doğrulanamadı</b> Lütfen aşağıdaki bilgileri okuyarak doğrulamayı yeniden başlatınız. Pasaportunuzun okunaklı olduğundan ve ortamın aydınlık olduğundan emin olunuz.</span></p>
     }
 

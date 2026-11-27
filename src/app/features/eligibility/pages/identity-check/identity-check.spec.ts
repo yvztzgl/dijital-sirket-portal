@@ -331,6 +331,26 @@ describe('IdentityCheckPage (D-2a), HTTP mode', () => {
     expect(page.root().querySelector('.wz-notice')).toBeNull();
   });
 
+  it('a failed check asks for the consent again: the tick is not carried over to the next attempt', async () => {
+    const running = map(CAPTURED.identityRunning);
+    const startEligibility = vi.fn(async () => running);
+    const completeIdentity = vi.fn(async () => map(IDENTITY_FAILED));
+    setUp(map(CAPTURED.titleReserved), startOf(running) + 1_000, { startEligibility, completeIdentity });
+    const page = await open();
+    page.tick();
+    await page.click('Doğrulamayı başlat');
+    expect(startEligibility).toHaveBeenCalledWith(true);
+    // The check ends, the server is told and answers that the identity was not verified.
+    (TestBed.inject(Clock).now as unknown as { set(v: number): void }).set(startOf(running) + DURATION.identity + 1_000);
+    await vi.waitFor(() => {
+      page.harness.detectChanges();
+      expect(page.q('.wz-notice b')).toBe('Kimliğiniz doğrulanamadı');
+    });
+    expect(page.root().querySelector<HTMLInputElement>('.wz-check input')!.checked).toBe(false);
+    expect(page.button('Doğrulamayı başlat')!.disabled).toBe(true);
+    expect(startEligibility).toHaveBeenCalledTimes(1);
+  });
+
   it('the QR view: the API\'s link in the code, no demo link; leaving it forgets the link', async () => {
     const base = map(CAPTURED.titleReserved);
     const expiresAt = '2026-11-25T14:40:00.000Z';

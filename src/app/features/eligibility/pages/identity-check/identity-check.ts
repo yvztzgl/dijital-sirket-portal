@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { Api } from '@core/api/api';
 import { followFlow } from '@core/flow/follow';
 import { Assistant } from '@core/services/assistant';
@@ -32,6 +32,11 @@ export class IdentityCheckPage {
   constructor() {
     this.store.clearError();
     followFlow();
+    // A consent is for one check. Once a check is running (started here or on the phone) the tick
+    // is cleared, so that after a failed check the founder has to give it again for the next one.
+    effect(() => {
+      if (this.store.identity()) this.consent.set(false);
+    });
   }
 
   /**
@@ -57,7 +62,7 @@ export class IdentityCheckPage {
     };
   });
 
-  /** The consent tick. The button stays off until it is set; the API checks it too. */
+  /** The consent tick, for one check only (see the constructor). The button stays off until it is set; the API checks it too. */
   protected readonly consent = signal(false);
 
   /**
