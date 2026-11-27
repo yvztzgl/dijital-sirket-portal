@@ -12,13 +12,6 @@ export const routes: Routes = [
     canMatch: [() => !!inject(Api).demo],
     loadComponent: () => import('./shell/screen-index').then((m) => m.ScreenIndex),
   },
-  // The landing as it was before the 2026-11-16 rebuild (navy İstanbul hero; `?hero=globe` for the globe).
-  // Kept only for comparison: delete this route and karsilama/d00.* once the new landing is settled.
-  {
-    path: 'welcome-v1',
-    title: 'Karşılama (önceki) · Terminal Şirket',
-    loadComponent: () => import('./screens/karsilama/d00').then((m) => m.ScreenD00),
-  },
   // Old Turkish URLs (bookmarks, shared links) keep working.
   { path: 'giris', redirectTo: 'login' },
   { path: 'kayit', redirectTo: 'register' },

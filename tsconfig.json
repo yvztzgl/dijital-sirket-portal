@@ -14,7 +14,17 @@
     "importHelpers": true,
     "target": "ES2022",
     "module": "preserve",
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    // Short import paths. `@core` exists today; the others are the folders of docs/restructure-plan.md
+    // and start resolving when phase 1 creates them.
+    "paths": {
+      "@core/*": ["./src/app/core/*"],
+      "@ui/*": ["./src/app/ui/*"],
+      "@layout/*": ["./src/app/layout/*"],
+      "@features/*": ["./src/app/features/*"],
+      "@demo/*": ["./src/app/demo/*"],
+      "@env/*": ["./src/environments/*"]
+    }
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

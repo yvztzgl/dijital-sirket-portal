@@ -89,7 +89,7 @@ export const screenRoutes: Routes = [
     title: 'Karşılama · Terminal Şirket',
     data: { screen: 'd00' },
     canActivate: [flowGuard],
-    // The landing rebuilt from an empty page on 2026-11-16; the earlier one is at /welcome-v1 (app.routes.ts).
+    // The landing rebuilt from an empty page on 2026-11-16. The earlier one (karsilama/d00.*) was deleted on 2026-11-27.
     loadComponent: () => import('./karsilama/landing').then((m) => m.ScreenLanding),
   },
   {
