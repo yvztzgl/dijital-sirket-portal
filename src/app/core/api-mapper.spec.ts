@@ -39,7 +39,7 @@ describe('api-mapper', () => {
   it('maps the company form: profile, deck and CV, the evaluation, the founder\'s current values and their marks', () => {
     const app = toApplication(REVIEW_APPLICATION, account);
     expect(app.stage).toBe('review');
-    expect(app.profile).toEqual({ brand: 'Lumora', sector: 'software', funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya', at: '2026-11-25T09:45:00+00:00' });
+    expect(app.profile).toEqual({ brand: 'Lumora', naceCodes: ['62.01', '62.02', '63.11'], funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya', at: '2026-11-25T09:45:00+00:00' });
     expect(app.deck).toEqual({ fileName: 'Lumora Sunum.pdf', sizeKb: 57 });
     expect(app.cv).toEqual({ fileName: 'Ozgecmis.pdf', sizeKb: 120 });
     expect(app.evaluation).toEqual({ status: 'done', attempt: 1, maxAttempts: 3, startedAt: '2026-11-25T09:46:00+00:00', finishedAt: '2026-11-25T09:50:00+00:00', reason: null });
@@ -114,7 +114,7 @@ describe('api-mapper on captured API answers', () => {
   it('verified: the profile as stated', () => {
     const app = map('verified');
     expect(app.stage).toBe('verified');
-    expect(app.profile).toMatchObject({ brand: 'Lumora', sector: 'software', funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
+    expect(app.profile).toMatchObject({ brand: 'Lumora', naceCodes: ['62.01', '62.02', '63.11'], funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
     expect(app.deck).toBeUndefined();
   });
 

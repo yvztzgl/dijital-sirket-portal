@@ -11,7 +11,7 @@ import { KarsilamaData } from '../data/karsilama.data';
  * D-1c — Şirket formu. After the outside evaluation the founder fills the company's details
  * themselves: the brand from the profile on top, then every value as a flat row with a pencil.
  * Values taken from the profile or the account carry a quiet "Ön bilgilerinizden"; so do the title
- * (proposed from the brand) and the NACE codes (the sector's), when the profile gives them.
+ * (proposed from the brand) and the NACE codes (the profile's), when the profile gives them.
  *
  * The editor a pencil opens is drawn right after that pencil's row, across the whole card (see
  * `.wz-review .rows` in src/wizard.scss for how the grid keeps the row beside it in place). Focus

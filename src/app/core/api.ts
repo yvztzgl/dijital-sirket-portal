@@ -87,10 +87,9 @@ export abstract class Api {
   /**
    * D-1a: the deck, the CV and the five answers; the outside evaluation starts (`evaluating`).
    * Refused without a profile, without both consents, and with `validation_failed` naming the fields
-   * (`rules.evaluationErrors`). The HTTP client sends the files themselves. `naceCodes` ("Faaliyet
-   * konusu", optional) is ours, not the evaluation's: never sent to STB, the company form's default.
+   * (`rules.evaluationErrors`). The HTTP client sends the files themselves.
    */
-  abstract uploadDeck(files: { deck: File; cv: File }, answers: EvaluationAnswers, consents: DeckConsents, naceCodes?: string[]): Promise<Application>;
+  abstract uploadDeck(files: { deck: File; cv: File }, answers: EvaluationAnswers, consents: DeckConsents): Promise<Application>;
   /**
    * D-1g: the evaluation's follow-up questions, while it waits on them (stage `evaluationQuestions`).
    * Refused with 404 `no_questions` at any other moment.

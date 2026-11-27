@@ -66,11 +66,6 @@
           <app-search-select label="Faaliyet alanı" [options]="activityOptions()" [value]="a.activityId === null ? '' : '' + a.activityId" (valueChange)="setChoice('activityId', $event)" [placeholder]="activityPlaceholder()" />
           @if (deckFieldError('activityId'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
         </div>
-        <div class="wz-field wide">
-          <span>Faaliyet konusu <small class="wz-multi-hint">birden fazla</small></span>
-          <app-multi-select label="Faaliyet konusu" [options]="uploadNaceOptions()" [value]="naceCodes()" (valueChange)="setNace($event)" placeholder="Seçiniz" />
-          @if (fieldError('naceCodes'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
-        </div>
       </div>
       <div class="grid grid-3">
         @for (c of multiChoices(); track c.key) {

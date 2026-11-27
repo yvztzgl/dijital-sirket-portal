@@ -34,8 +34,7 @@ function reference(linked: boolean): EvaluationReference {
 function fakeStore(ref: EvaluationReference) {
   return {
     app: signal({ id: 'DS-26-00000001', stage: 'verified', marks: {} }), busy: signal(false), error: signal(null), fieldErrors: signal({ activityId: ['Seçilen faaliyet alanı, seçilen faaliyet grubuna ait değildir.'] }),
-    reference: signal({ sectors: [], funding: [], naceCodes: [{ code: '62.01', title: 'Bilgisayar programlama faaliyetleri' }, { code: '63.11', title: 'Veri işleme, barındırma ve ilgili faaliyetler' }] }),
-    uploadNaceCodes: signal<string[]>([]), evaluationReference: signal(ref), stage: signal('verified'), founderType: signal('foreign'), title: signal(''), fullTitle: signal(''), signedIn: signal(true),
+    reference: signal({ sectors: [], funding: [], naceCodes: [{ code: '62.01', title: 'Bilgisayar programlama faaliyetleri' }, { code: '63.11', title: 'Veri işleme, barındırma ve ilgili faaliyetler' }] }), evaluationReference: signal(ref), stage: signal('verified'), founderType: signal('foreign'), title: signal(''), fullTitle: signal(''), signedIn: signal(true),
     clearError: () => undefined, loadReference: async () => undefined, loadEvaluationReference: async () => undefined,
   };
 }
@@ -45,8 +44,6 @@ interface D1aView {
   answers(): EvaluationAnswers;
   activityOptions(): { value: string; label: string }[];
   setChoice(key: 'activityGroupId' | 'activityId', value: string): void;
-  uploadNaceOptions(): { value: string; label: string }[];
-  setNace(codes: string[]): void;
 }
 
 async function screen(linked: boolean, evaluation?: Evaluation) {
@@ -86,19 +83,6 @@ describe('D-1a activity group and activity', () => {
     expect(ids(d)).toEqual(['3', '11', '40']);
     d.setChoice('activityId', '3');
     expect(d.answers()).toMatchObject({ activityGroupId: 2, activityId: 3 });
-  });
-});
-
-describe('D-1a NACE activity (Faaliyet konusu)', () => {
-  it('offers the NACE names without their codes and keeps the choice in the store until the upload', async () => {
-    const { d, store, el } = await screen(true);
-    expect(d.uploadNaceOptions().map((o) => o.label)).toEqual(['Bilgisayar programlama faaliyetleri', 'Veri işleme, barındırma ve ilgili faaliyetler']);
-    expect(el.textContent).not.toContain('62.01');
-
-    d.setNace(['62.01', '63.11']);
-    expect(store.uploadNaceCodes()).toEqual(['62.01', '63.11']);
-    // Not one of STB's answers: it travels beside them (`uploadDeck`'s last argument), not inside.
-    expect(Object.keys(d.answers())).not.toContain('naceCodes');
   });
 });
 

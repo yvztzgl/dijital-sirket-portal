@@ -7,7 +7,7 @@ import { followFlow } from '../../core/follow';
 import { tl0 } from '../../core/format';
 import { dateTime } from '../../core/format';
 import { DECK_CONSENT_ERROR, EvaluationField, evaluationErrors } from '../../core/rules';
-import { CAPITAL, EvaluationAnswers, EvaluationReason, FUNDING_LABELS, FundingSource, Profile, Sector } from '../../core/models';
+import { CAPITAL, EvaluationAnswers, EvaluationReason, FUNDING_LABELS, FundingSource, Profile } from '../../core/models';
 import { companyPurpose, naceName as localNaceName } from '../../core/nace';
 
 type CardId = 'founder' | 'contact' | 'funding';
@@ -22,16 +22,7 @@ const FUNDING_HINTS: Record<string, string> = {
 };
 
 /** One line under each activity area in the D-1e picker. */
-const SECTOR_HINTS: Partial<Record<string, string>> = {
-  software: 'Yazılım, veri işleme ve bulut hizmetleri',
-  ecommerce: 'İnternet üzerinden ürün veya hizmet satışı',
-  consulting: 'İşletme ve yönetim danışmanlığı',
-  design: 'Tasarım, reklam ve iletişim',
-  education: 'Eğitim ve kurs hizmetleri',
-  other: 'Yukarıdakilerin dışında bir alan',
-};
-
-type ProfileDraft = Omit<Profile, 'at' | 'sector' | 'funding'> & { sector: Sector | ''; funding: FundingSource | '' };
+type ProfileDraft = Omit<Profile, 'at' | 'funding'> & { funding: FundingSource | '' };
 
 /** What D-1a says above the form when the last evaluation did not end well (the API is back at `verified`). */
 const EVALUATION_ENDED: Record<'failed' | 'rejected' | 'cancelled', { title: string; text: string }> = {
@@ -97,9 +88,8 @@ export class KarsilamaData {
 
   // --------------------------------------------------------------------------- D-1e profile
 
-  protected readonly sectorOptions = computed(() =>
-    (this.store.reference()?.sectors ?? []).map((v) => ({ value: v.key, label: v.label, hint: SECTOR_HINTS[v.key] })),
-  );
+  /** D-1e's "Faaliyet alanı": the NACE list of `Api.reference`, by name only; the codes stay out of sight (API step 24). */
+  protected readonly profileNaceOptions = computed(() => (this.store.reference()?.naceCodes ?? []).map((n) => ({ value: n.code, label: n.title })));
   /** The capital sources the API accepts, on D-1e and in D-1c's funding editor. */
   protected readonly fundingOptions = computed(() =>
     (this.store.reference()?.funding ?? []).map((v) => ({ value: v.key, label: v.label, hint: FUNDING_HINTS[v.key] })),
@@ -119,30 +109,34 @@ export class KarsilamaData {
     (() => {
       const p = this.store.app()?.profile;
       return p
-        ? { brand: p.brand, sector: p.sector, funding: p.funding, nationality: p.nationality, phone: p.phone, country: p.country }
-        : { brand: '', sector: '', funding: '', nationality: '', phone: '', country: '' };
+        ? { brand: p.brand, naceCodes: [...p.naceCodes], funding: p.funding, nationality: p.nationality, phone: p.phone, country: p.country }
+        : { brand: '', naceCodes: [], funding: '', nationality: '', phone: '', country: '' };
     })(),
   );
   protected readonly profileReady = computed(() => {
     const p = this.profileDraft();
     const digits = p.phone.replace(/\D/g, '').length;
-    return p.brand.trim().length >= 2 && !!p.sector && !!p.funding && !!p.nationality && !!p.country && digits >= 8 && digits <= 15;
+    return p.brand.trim().length >= 2 && p.naceCodes.length > 0 && !!p.funding && !!p.nationality && !!p.country && digits >= 8 && digits <= 15;
   });
 
-  protected setProfile(key: keyof ProfileDraft, value: string) {
+  protected setProfile(key: Exclude<keyof ProfileDraft, 'naceCodes'>, value: string) {
     this.profileDraft.update((p) => ({ ...p, [key]: value }));
+  }
+
+  protected setProfileNace(codes: string[]) {
+    this.profileDraft.update((p) => ({ ...p, naceCodes: codes }));
   }
 
   /** Saving moves the stage to `verified`, which this screen also shows, so the move to D-1a is made here. */
   protected async submitProfile() {
     const p = this.profileDraft();
-    if (!p.sector || !p.funding) return;
-    if (await this.store.submitProfile({ ...p, sector: p.sector as Sector, funding: p.funding as FundingSource })) void this.router.navigateByUrl('/deck');
+    if (!p.naceCodes.length || !p.funding) return;
+    if (await this.store.submitProfile({ ...p, funding: p.funding as FundingSource })) void this.router.navigateByUrl('/deck');
   }
 
   /** Demo: values for the downloadable sample deck (Lumora Analytics). */
   protected useSampleProfile() {
-    this.profileDraft.set({ brand: 'Lumora Analytics', sector: 'software', funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
+    this.profileDraft.set({ brand: 'Lumora Analytics', naceCodes: ['62.01', '63.11'], funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
   }
 
   // ------------------------------------------------------- D-1a deck, CV and the five answers
@@ -167,12 +161,6 @@ export class KarsilamaData {
   protected readonly fixedGroupLabel = computed(
     () => this.store.evaluationReference()?.activityGroups.find((o) => o.id === FIXED_ACTIVITY_GROUP_ID)?.label ?? 'Yazılım ve BT',
   );
-  /** NACE choices on D-1a: the names only, the codes stay out of sight (the API's list, `Api.reference`). */
-  protected readonly uploadNaceOptions = computed(() => (this.store.reference()?.naceCodes ?? []).map((n) => ({ value: n.code, label: n.title })));
-  protected readonly naceCodes = this.store.uploadNaceCodes;
-  protected setNace(codes: string[]) {
-    this.store.uploadNaceCodes.set(codes);
-  }
   protected readonly groupOptions = computed(() => (this.store.evaluationReference()?.activityGroups ?? []).map((o) => ({ value: String(o.id), label: o.label })));
   /**
    * Each activity's group, when the reference links them (`groupId`, our derived mapping, not from
@@ -309,7 +297,7 @@ export class KarsilamaData {
     this.formErrors.set(errors);
     this.consentError.set(this.consentsGiven() ? null : DECK_CONSENT_ERROR);
     if (Object.keys(errors).length || !this.consentsGiven()) return;
-    await this.store.uploadDeck({ deck: this.deckFile()!, cv: this.cvFile()! }, this.answers(), { noticeAcknowledged: this.noticeAcknowledged(), aiConsent: this.aiConsent() }, this.naceCodes());
+    await this.store.uploadDeck({ deck: this.deckFile()!, cv: this.cvFile()! }, this.answers(), { noticeAcknowledged: this.noticeAcknowledged(), aiConsent: this.aiConsent() });
   }
 
   // ------------------------------------------------------- D-1b the evaluation runs (waiting)

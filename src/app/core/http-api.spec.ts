@@ -351,9 +351,9 @@ describe('HttpApi step 1', () => {
 
   it('saves the profile with exactly its six fields and reads the application again', async () => {
     await signedInAt(CAPTURED.profile);
-    const pending = api.submitProfile({ brand: 'Lumora', sector: 'software', funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
+    const pending = api.submitProfile({ brand: 'Lumora', naceCodes: ['62.01', '63.11'], funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
     const put = await next('PUT', '/api/application/profile');
-    expect(put.request.body).toEqual({ brand: 'Lumora', sector: 'software', funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
+    expect(put.request.body).toEqual({ brand: 'Lumora', naceCodes: ['62.01', '63.11'], funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
     put.flush(...empty(204));
     await read(CAPTURED.verified);
     expect((await pending).stage).toBe('verified');
@@ -364,7 +364,7 @@ describe('HttpApi step 1', () => {
     const deck = new File(['%PDF-1.4'], 'Lumora Sunum.pdf', { type: 'application/pdf' });
     const cv = new File(['%PDF-1.4'], 'Ozgecmis.pdf', { type: 'application/pdf' });
     const answers = { summary: 'Özet', activityGroupId: 1, activityId: 3, businessModelIds: [1, 2], revenueModelIds: [7], productTypeIds: [2, 3] };
-    const pending = api.uploadDeck({ deck, cv }, answers, { noticeAcknowledged: true, aiConsent: false }, ['63.11', '62.01']);
+    const pending = api.uploadDeck({ deck, cv }, answers, { noticeAcknowledged: true, aiConsent: false });
     const post = await next('POST', '/api/application/deck');
     const body = post.request.body as FormData;
     expect(body).toBeInstanceOf(FormData);
@@ -376,7 +376,7 @@ describe('HttpApi step 1', () => {
     expect(body.getAll('businessModelIds')).toEqual(['1', '2']);
     expect(body.getAll('revenueModelIds')).toEqual(['7']);
     expect(body.getAll('productTypeIds')).toEqual(['2', '3']);
-    expect(body.getAll('naceCodes')).toEqual(['63.11', '62.01']);
+    expect(body.has('naceCodes')).toBe(false);
     expect(body.get('noticeAcknowledged')).toBe('true');
     expect(body.get('aiConsent')).toBe('false');
     expect(post.request.headers.has('Content-Type')).toBe(false);

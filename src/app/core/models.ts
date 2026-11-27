@@ -77,7 +77,10 @@ export const FUNDING_LABELS: Record<FundingSource, string> = {
   'third-party': 'Üçüncü taraf transferi',
 };
 
-/** Activity area the founder states on D-1e, with the NACE codes it stands for (the API's table; offered as suggestions on the company form). */
+/**
+ * The activity areas D-1e offered before API step 24, with the NACE codes each stands for. Kept only
+ * to read a profile saved before step 24 (it has a sector and no codes); D-1e now asks for NACE codes.
+ */
 export type Sector = 'software' | 'ecommerce' | 'consulting' | 'design' | 'education' | 'other';
 
 export const SECTORS: Record<Sector, { label: string; nace: string[] }> = {
@@ -92,7 +95,8 @@ export const SECTORS: Record<Sector, { label: string; nace: string[] }> = {
 /** What the founder states before uploading the deck (D-1e). Same shape as the API's `profile`. */
 export interface Profile {
   brand: string;
-  sector: Sector;
+  /** "Faaliyet alanı": NACE codes, shown by name (API step 24; was a sector key). */
+  naceCodes: string[];
   funding: FundingSource;
   nationality: string;
   phone: string;

@@ -105,7 +105,7 @@ export const NEW_APPLICATION: ApplicationWire = {
 export const REVIEW_APPLICATION: ApplicationWire = {
   ...NEW_APPLICATION,
   stage: 'review',
-  profile: { brand: 'Lumora', sector: 'software', funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya', at: '2026-11-25T09:45:00+00:00' },
+  profile: { brand: 'Lumora', sector: null, naceCodes: ['62.01', '62.02', '63.11'], funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya', at: '2026-11-25T09:45:00+00:00' },
   deck: { fileName: 'Lumora Sunum.pdf', sizeKb: 57 },
   cv: { fileName: 'Ozgecmis.pdf', sizeKb: 120 },
   evaluation: { status: 'done', attempt: 1, maxAttempts: 3, startedAt: '2026-11-25T09:46:00+00:00', finishedAt: '2026-11-25T09:50:00+00:00' },

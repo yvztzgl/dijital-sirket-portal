@@ -96,8 +96,8 @@ export function toApplication(view: ApplicationWire, account: Account, options: 
       root,
       activity: activity.join(' '),
       nace: splitNace(review('nace_codes')),
-      // The codes of the activity area stated on the profile (the portal's table, the same as the API's).
-      suggestedNace: profile ? SECTORS[profile.sector].nace : [],
+      // The NACE codes stated on the profile (D-1e's "Faaliyet alanı").
+      suggestedNace: profile?.naceCodes ?? [],
       // The legal minimum for an anonim şirket, the same constant the mock uses; the API does not send a capital yet.
       capital: CAPITAL,
     },
@@ -342,7 +342,8 @@ const DOC_NAMES: Record<string, { group: string; name: string }> = {
 function toProfile(p: NonNullable<ApplicationWire['profile']>): Profile {
   return {
     brand: p.brand,
-    sector: p.sector in SECTORS ? (p.sector as Sector) : 'other',
+    // A profile saved before API step 24 has a sector instead: its codes, by the same table as the API's.
+    naceCodes: p.naceCodes?.length ? p.naceCodes : (SECTORS[p.sector as Sector]?.nace ?? []),
     funding: asFunding(p.funding) ?? 'own-abroad',
     nationality: p.nationality,
     phone: p.phone,

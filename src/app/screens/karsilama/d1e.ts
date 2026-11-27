@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { CountrySelect } from '../../shared/country-select';
 import { FormError } from '../../shared/form-error';
 import { Icon } from '../../shared/icon';
+import { MultiSelect } from '../../shared/multi-select';
 import { PhoneInput } from '../../shared/phone-input';
 import { Select } from '../../shared/select';
 import { StepPage } from '../../shared/step-page';
@@ -16,7 +17,7 @@ import { KarsilamaData } from '../data/karsilama.data';
  */
 @Component({
   selector: 'app-screen-d1e',
-  imports: [CountrySelect, FormError, Icon, PhoneInput, RouterLink, Select, StepPage],
+  imports: [CountrySelect, FormError, Icon, MultiSelect, PhoneInput, RouterLink, Select, StepPage],
   templateUrl: './d1e.html',
   host: { style: 'display:block' },
   changeDetection: ChangeDetectionStrategy.OnPush,

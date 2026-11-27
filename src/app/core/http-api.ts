@@ -249,8 +249,8 @@ export class HttpApi implements Api {
 
   /** 204; at the upload step only: before the first upload, or after an evaluation that ended without a result (409 `wrong_stage` otherwise). 400 with `errors.<field>`. */
   async submitProfile(input: Omit<Profile, 'at'>): Promise<Application> {
-    const { brand, sector, funding, nationality, phone, country } = input;
-    await this.request('PUT', '/api/application/profile', { brand, sector, funding, nationality, phone, country });
+    const { brand, naceCodes, funding, nationality, phone, country } = input;
+    await this.request('PUT', '/api/application/profile', { brand, naceCodes, funding, nationality, phone, country });
     return this.fresh();
   }
 
@@ -260,10 +260,9 @@ export class HttpApi implements Api {
    * single choices as text, each multiple choice as one repeated field per id, and the two ticks
    * exactly as the founder gave them. The browser sets the multipart Content-Type with its
    * boundary; setting it here would break the body. 400 `validation_failed` with `errors.<field>`
-   * (deck, cv, summary, activityGroupId, activityId, businessModelIds, revenueModelIds, productTypeIds,
-   * and since API step 23 naceCodes, which the API keeps and does not send to STB).
+   * (deck, cv, summary, activityGroupId, activityId, businessModelIds, revenueModelIds, productTypeIds).
    */
-  async uploadDeck(files: { deck: File; cv: File }, answers: EvaluationAnswers, consents: DeckConsents, naceCodes: string[] = []): Promise<Application> {
+  async uploadDeck(files: { deck: File; cv: File }, answers: EvaluationAnswers, consents: DeckConsents): Promise<Application> {
     const form = new FormData();
     form.append('file', files.deck, files.deck.name);
     form.append('cv', files.cv, files.cv.name);
@@ -273,7 +272,6 @@ export class HttpApi implements Api {
     for (const id of answers.businessModelIds) form.append('businessModelIds', String(id));
     for (const id of answers.revenueModelIds) form.append('revenueModelIds', String(id));
     for (const id of answers.productTypeIds) form.append('productTypeIds', String(id));
-    for (const code of naceCodes) form.append('naceCodes', code);
     form.append('noticeAcknowledged', String(consents.noticeAcknowledged === true));
     form.append('aiConsent', String(consents.aiConsent === true));
     await this.request('POST', '/api/application/deck', form);

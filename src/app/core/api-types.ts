@@ -32,7 +32,10 @@ export type ReviewKey =
 
 export interface ProfileWire {
   brand: string;
-  sector: string;
+  /** Only on a profile saved before API step 24; null afterwards. */
+  sector: string | null;
+  /** API step 24; absent from captures made before it. */
+  naceCodes?: string[];
   funding: string;
   nationality: string;
   phone: string;

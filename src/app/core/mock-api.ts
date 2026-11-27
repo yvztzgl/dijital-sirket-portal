@@ -79,8 +79,6 @@ interface Db {
    * application, because the API does not tell the founder anything of the kind in advance.
    */
   outcomes?: Record<string, EvaluationOutcome>;
-  /** The NACE codes picked on D-1a, per founder, until the evaluation ends (the API keeps them on the evaluation row). */
-  uploadNace?: Record<string, string[]>;
 }
 
 const DB_KEY = 'dsp.db.v1';
@@ -354,7 +352,10 @@ export class MockApi implements Api {
     await this.wait(400);
     const brand = input.brand.trim().replace(/\s+/g, ' ');
     if (brand.length < 2 || brand.length > 120) throw new ApiError('Şirketinizin veya markanızın adını yazınız.');
-    if (!(input.sector in SECTORS)) throw new ApiError('Faaliyet alanını seçiniz.');
+    // API step 24: at least one code, all from the list the reference offers.
+    const naceCodes = [...new Set(input.naceCodes.map((c) => c.trim()))];
+    if (!naceCodes.length || naceCodes.length > 20) throw new ApiError('Faaliyet alanını seçiniz.');
+    if (naceCodes.some((c) => !(c in NACE))) throw new ApiError('Faaliyet alanını listeden seçiniz.');
     if (!FUNDING_OPTIONS.includes(input.funding)) throw new ApiError('Sermaye kaynağını seçiniz.');
     if (!input.nationality.trim() || input.nationality.length > 60) throw new ApiError('Uyruğunuzu seçiniz.');
     if (!input.country.trim() || input.country.length > 60) throw new ApiError('Yaşadığınız ülkeyi seçiniz.');
@@ -362,7 +363,7 @@ export class MockApi implements Api {
     if (digits < 8 || digits > 15) throw new ApiError('Telefon numaranızı eksiksiz yazınız.');
     return this.mutate(['profile', 'verified'], (app) => {
       const again = !!app.profile;
-      app.profile = { brand, sector: input.sector, funding: input.funding, nationality: input.nationality.trim(), phone: input.phone.trim(), country: input.country.trim(), at: nowIso() };
+      app.profile = { brand, naceCodes, funding: input.funding, nationality: input.nationality.trim(), phone: input.phone.trim(), country: input.country.trim(), at: nowIso() };
       app.stage = 'verified';
       log(app, again ? 'Ön bilgiler güncellendi' : 'Ön bilgiler kaydedildi', 'u');
     });
@@ -375,13 +376,11 @@ export class MockApi implements Api {
    * the deck's pages when it can read them (a PDF it cannot read is not refused here, as the API
    * leaves the page count to the evaluation service).
    */
-  async uploadDeck(files: { deck: File; cv: File }, answers: EvaluationAnswers, consents: DeckConsents, naceCodes: string[] = []) {
+  async uploadDeck(files: { deck: File; cv: File }, answers: EvaluationAnswers, consents: DeckConsents) {
     await this.wait(500);
     if (!consents.noticeAcknowledged || !consents.aiConsent) throw new ApiError(DECK_CONSENT_ERROR);
     const ref = EVALUATION_REFERENCE;
-    const errors: Record<string, string> = { ...evaluationErrors({ ...answers, deck: files.deck, cv: files.cv }, ref.limits, ref) };
-    // The API's step 23 check: only codes from the list the reference offers.
-    if (naceCodes.some((c) => !(c in NACE))) errors['naceCodes'] = 'Faaliyet konusu listeden seçilmelidir.';
+    const errors = evaluationErrors({ ...answers, deck: files.deck, cv: files.cv }, ref.limits, ref);
     if (Object.keys(errors).length) {
       throw new ApiError('Gönderdiğiniz bilgiler eksik veya hatalıdır.', {
         code: 'validation_failed',
@@ -407,7 +406,6 @@ export class MockApi implements Api {
     });
     const db = this.db();
     db.outcomes = { ...db.outcomes, [email]: outcome };
-    db.uploadNace = { ...db.uploadNace, [email]: [...new Set(naceCodes)] };
     this.save(db);
     return app;
   }
@@ -421,7 +419,6 @@ export class MockApi implements Api {
   async completeEvaluation(outcome?: EvaluationOutcome) {
     const email = this.who();
     const end = outcome ?? this.db().outcomes?.[email] ?? 'done';
-    const uploadNace = this.db().uploadNace?.[email] ?? [];
     const app = await this.mutate(['evaluating'], (app, acc) => {
       const e = app.evaluation!;
       e.finishedAt = end === 'questions' ? null : nowIso();
@@ -440,12 +437,11 @@ export class MockApi implements Api {
       e.status = 'done';
       const p = app.profile!;
       // Title and codes are proposed from the profile like the API's defaults: the brand as an
-      // anonim şirket title (none when it would not pass the title check); the NACE codes picked on
-      // D-1a, else the sector's (API step 23).
+      // anonim şirket title (none when it would not pass the title check); the profile's NACE codes (API step 24).
       const title = proposedTitle(p.brand);
       const [root = '', ...activity] = title ? withoutSuffixWords(title).split(' ') : [];
-      const nace = uploadNace.length ? [...uploadNace] : [...SECTORS[p.sector].nace];
-      app.company = { ...app.company, brand: p.brand, root, activity: activity.join(' '), nace, suggestedNace: SECTORS[p.sector].nace };
+      const nace = [...p.naceCodes];
+      app.company = { ...app.company, brand: p.brand, root, activity: activity.join(' '), nace, suggestedNace: [...p.naceCodes] };
       app.founder = { ...app.founder, firstName: acc.firstName, lastName: acc.lastName, nationality: p.nationality };
       app.contact = { email: acc.email, phone: p.phone, address: '', postalCode: '', country: p.country };
       app.funding = p.funding;
@@ -457,7 +453,6 @@ export class MockApi implements Api {
     });
     const db = this.db();
     if (db.outcomes) delete db.outcomes[email];
-    if (db.uploadNace && end === 'done') delete db.uploadNace[email];
     this.save(db);
     return app;
   }
@@ -1169,7 +1164,7 @@ async function fastForward(api: MockApi, email: string, want: Stage) {
   const resident = JSON.parse(localStorage.getItem(DB_KEY)!).apps[email].founderType === 'resident';
   await api.submitProfile({
     brand: 'Acme Cloud',
-    sector: 'software',
+    naceCodes: ['62.01', '62.02', '63.11'],
     funding: 'own-abroad',
     nationality: resident ? 'Türkiye' : 'Birleşik Krallık',
     phone: resident ? '+90 532 410 2699' : '+44 7700 900456',
