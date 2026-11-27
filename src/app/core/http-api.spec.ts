@@ -364,7 +364,7 @@ describe('HttpApi step 1', () => {
     const deck = new File(['%PDF-1.4'], 'Lumora Sunum.pdf', { type: 'application/pdf' });
     const cv = new File(['%PDF-1.4'], 'Ozgecmis.pdf', { type: 'application/pdf' });
     const answers = { summary: 'Özet', activityGroupId: 1, activityId: 3, businessModelIds: [1, 2], revenueModelIds: [7], productTypeIds: [2, 3] };
-    const pending = api.uploadDeck({ deck, cv }, answers, { noticeAcknowledged: true, aiConsent: false });
+    const pending = api.uploadDeck({ deck, cv }, answers, { noticeAcknowledged: true, aiConsent: false }, ['63.11', '62.01']);
     const post = await next('POST', '/api/application/deck');
     const body = post.request.body as FormData;
     expect(body).toBeInstanceOf(FormData);
@@ -376,6 +376,7 @@ describe('HttpApi step 1', () => {
     expect(body.getAll('businessModelIds')).toEqual(['1', '2']);
     expect(body.getAll('revenueModelIds')).toEqual(['7']);
     expect(body.getAll('productTypeIds')).toEqual(['2', '3']);
+    expect(body.getAll('naceCodes')).toEqual(['63.11', '62.01']);
     expect(body.get('noticeAcknowledged')).toBe('true');
     expect(body.get('aiConsent')).toBe('false');
     expect(post.request.headers.has('Content-Type')).toBe(false);

@@ -34,7 +34,8 @@ function reference(linked: boolean): EvaluationReference {
 function fakeStore(ref: EvaluationReference) {
   return {
     app: signal({ id: 'DS-26-00000001', stage: 'verified', marks: {} }), busy: signal(false), error: signal(null), fieldErrors: signal({ activityId: ['Seçilen faaliyet alanı, seçilen faaliyet grubuna ait değildir.'] }),
-    reference: signal(null), evaluationReference: signal(ref), stage: signal('verified'), founderType: signal('foreign'), title: signal(''), fullTitle: signal(''), signedIn: signal(true),
+    reference: signal({ sectors: [], funding: [], naceCodes: [{ code: '62.01', title: 'Bilgisayar programlama faaliyetleri' }, { code: '63.11', title: 'Veri işleme, barındırma ve ilgili faaliyetler' }] }),
+    uploadNaceCodes: signal<string[]>([]), evaluationReference: signal(ref), stage: signal('verified'), founderType: signal('foreign'), title: signal(''), fullTitle: signal(''), signedIn: signal(true),
     clearError: () => undefined, loadReference: async () => undefined, loadEvaluationReference: async () => undefined,
   };
 }
@@ -44,6 +45,8 @@ interface D1aView {
   answers(): EvaluationAnswers;
   activityOptions(): { value: string; label: string }[];
   setChoice(key: 'activityGroupId' | 'activityId', value: string): void;
+  uploadNaceOptions(): { value: string; label: string }[];
+  setNace(codes: string[]): void;
 }
 
 async function screen(linked: boolean, evaluation?: Evaluation) {
@@ -56,7 +59,7 @@ async function screen(linked: boolean, evaluation?: Evaluation) {
   await fixture.whenStable();
   fixture.detectChanges();
   const el = fixture.nativeElement as HTMLElement;
-  return { d: fixture.componentInstance as unknown as D1aView, store, notice: () => el.querySelector('.wz-notice')?.textContent ?? '', profileLink: () => el.querySelector('a[href="/details"]')?.textContent ?? '' };
+  return { d: fixture.componentInstance as unknown as D1aView, store, el, notice: () => el.querySelector('.wz-notice')?.textContent ?? '', profileLink: () => el.querySelector('a[href="/details"]')?.textContent ?? '' };
 }
 
 const ended = (status: Evaluation['status'], reason: Evaluation['reason'] = null): Evaluation =>
@@ -65,24 +68,15 @@ const ended = (status: Evaluation['status'], reason: Evaluation['reason'] = null
 const ids = (d: D1aView) => d.activityOptions().map((o) => o.value);
 
 describe('D-1a activity group and activity', () => {
-  it('a group narrows the activities, an activity brings its group, another group clears it', async () => {
-    const { d, store } = await screen(true);
-    expect(ids(d)).toEqual(['3', '11', '40']);
-
-    // No group yet: all activities; picking one fills in its group.
-    d.setChoice('activityId', '40');
-    expect(d.answers()).toMatchObject({ activityGroupId: 2, activityId: 40 });
-    expect(ids(d)).toEqual(['40']);
-
-    // A group that does not hold it clears the activity and its error, and nothing else.
-    d.setChoice('activityGroupId', '1');
-    expect(d.answers()).toMatchObject({ activityGroupId: 1, activityId: null, summary: '' });
+  it('the group is fixed to Yazılım ve BT, read-only, and narrows the activities to its own', async () => {
+    const { d, el } = await screen(true);
+    expect(d.answers()).toMatchObject({ activityGroupId: 1, activityId: null });
     expect(ids(d)).toEqual(['3', '11']);
-    expect(store.fieldErrors()).toEqual({});
+    const group = el.querySelector<HTMLInputElement>('input[aria-label="Faaliyet grubu"]')!;
+    expect(group.readOnly).toBe(true);
+    expect(group.value).toBe('Yazılım ve BT');
 
-    // A group that holds it keeps it.
     d.setChoice('activityId', '11');
-    d.setChoice('activityGroupId', '1');
     expect(d.answers()).toMatchObject({ activityGroupId: 1, activityId: 11 });
   });
 
@@ -92,6 +86,19 @@ describe('D-1a activity group and activity', () => {
     expect(ids(d)).toEqual(['3', '11', '40']);
     d.setChoice('activityId', '3');
     expect(d.answers()).toMatchObject({ activityGroupId: 2, activityId: 3 });
+  });
+});
+
+describe('D-1a NACE activity (Faaliyet konusu)', () => {
+  it('offers the NACE names without their codes and keeps the choice in the store until the upload', async () => {
+    const { d, store, el } = await screen(true);
+    expect(d.uploadNaceOptions().map((o) => o.label)).toEqual(['Bilgisayar programlama faaliyetleri', 'Veri işleme, barındırma ve ilgili faaliyetler']);
+    expect(el.textContent).not.toContain('62.01');
+
+    d.setNace(['62.01', '63.11']);
+    expect(store.uploadNaceCodes()).toEqual(['62.01', '63.11']);
+    // Not one of STB's answers: it travels beside them (`uploadDeck`'s last argument), not inside.
+    expect(Object.keys(d.answers())).not.toContain('naceCodes');
   });
 });
 

@@ -358,6 +358,15 @@ describe('MockApi flow', () => {
     expect((await api.submitReview()).stage).toBe('titleChecking');
   });
 
+  it('the NACE codes picked on D-1a become the company form\'s default (API step 23); an unknown code is refused', async () => {
+    await verifiedFounder();
+    await expect(api.uploadDeck(FILES(), DEMO_ANSWERS, CONSENTS, ['62.01', '99.99'])).rejects.toThrow('hatalıdır');
+    await api.uploadDeck(FILES(), DEMO_ANSWERS, CONSENTS, ['63.11', '62.01']);
+    const app = await api.completeEvaluation();
+    expect(app.company).toMatchObject({ nace: ['63.11', '62.01'], suggestedNace: ['62.01', '62.02', '63.11'] });
+    expect(app.marks['nace']).toBe('profile');
+  });
+
   it('ends the evaluation as the demo panel says, and rejects a deck outside 3–40 pages', async () => {
     const email = 'ayse@novalab.io';
     await verifiedFounder(email);

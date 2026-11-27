@@ -6,7 +6,6 @@ import { Icon } from '../../shared/icon';
 import { MultiSelect } from '../../shared/multi-select';
 import { FormError } from '../../shared/form-error';
 import { SearchSelect } from '../../shared/search-select';
-import { Select } from '../../shared/select';
 import { StepPage } from '../../shared/step-page';
 import { KarsilamaData } from '../data/karsilama.data';
 
@@ -17,7 +16,7 @@ import { KarsilamaData } from '../data/karsilama.data';
  */
 @Component({
   selector: 'app-screen-d1a',
-  imports: [DeckConsents, DeckFormatDialog, FormError, Icon, MultiSelect, RouterLink, SearchSelect, Select, StepPage],
+  imports: [DeckConsents, DeckFormatDialog, FormError, Icon, MultiSelect, RouterLink, SearchSelect, StepPage],
   templateUrl: './d1a.html',
   host: { style: 'display:block' },
   changeDetection: ChangeDetectionStrategy.OnPush,

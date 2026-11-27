@@ -58,13 +58,18 @@
         </label>
         <div class="wz-field">
           <span>Faaliyet grubu</span>
-          <app-select label="Faaliyet grubu" [options]="groupOptions()" [value]="a.activityGroupId === null ? '' : '' + a.activityGroupId" (valueChange)="setChoice('activityGroupId', $event)" placeholder="Seçiniz" />
+          <input class="wz-input wz-readonly" readonly [value]="fixedGroupLabel()" aria-label="Faaliyet grubu">
           @if (deckFieldError('activityGroupId'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
         </div>
         <div class="wz-field">
           <span>Faaliyet alanı</span>
           <app-search-select label="Faaliyet alanı" [options]="activityOptions()" [value]="a.activityId === null ? '' : '' + a.activityId" (valueChange)="setChoice('activityId', $event)" [placeholder]="activityPlaceholder()" />
           @if (deckFieldError('activityId'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
+        </div>
+        <div class="wz-field wide">
+          <span>Faaliyet konusu <small class="wz-multi-hint">birden fazla</small></span>
+          <app-multi-select label="Faaliyet konusu" [options]="uploadNaceOptions()" [value]="naceCodes()" (valueChange)="setNace($event)" placeholder="Seçiniz" />
+          @if (fieldError('naceCodes'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
         </div>
       </div>
       <div class="grid grid-3">

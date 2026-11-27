@@ -69,6 +69,8 @@ $mono: 'IBM Plex Mono', ui-monospace, monospace;
   background: var(--bg-FFFFFF); color: var(--fg-1F2A44); font: 400 14.5px/1 $sans; outline: 0;
 }
 .wz-input:focus { border-color: var(--bd-061262); }
+/* A fixed value: the field's box, a quiet fill, no caret or hover. */
+.wz-input.wz-readonly, .wz-input.wz-readonly:focus { background: var(--bg-F1F4FA); border-color: var(--bd-C9D2E3); cursor: default; }
 
 /* ----------------------------------------------------------------- camera / video areas */
 .wz-cam { position: relative; width: 100%; height: 292px; box-sizing: border-box; display: grid; place-items: center; border-radius: 20px; background: var(--bg-0B1430); overflow: hidden; color: #fff; }

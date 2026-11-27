@@ -59,6 +59,12 @@ interface EditField {
   kind?: 'country' | 'phone' | 'select';
 }
 
+/**
+ * STB's "Faaliyet grubu" is fixed to 1 "Yazılım ve BT" (owner, 2026-11-27): shown read-only on D-1a and
+ * sent with every upload; "Faaliyet alanı" then lists that group's activities only.
+ */
+const FIXED_ACTIVITY_GROUP_ID = 1;
+
 /** Welcome and step 1 — profile, deck and evaluation questions, the evaluation, the company form, MERSİS title conflict (Ekranlar 1). */
 export class KarsilamaData {
   protected readonly store = inject(ApplicationStore);
@@ -157,6 +163,16 @@ export class KarsilamaData {
   });
 
   protected readonly limits = computed(() => this.store.evaluationReference()?.limits ?? null);
+  /** The fixed activity group's label from STB's dictionary ("Yazılım ve BT"); the field is read-only. */
+  protected readonly fixedGroupLabel = computed(
+    () => this.store.evaluationReference()?.activityGroups.find((o) => o.id === FIXED_ACTIVITY_GROUP_ID)?.label ?? 'Yazılım ve BT',
+  );
+  /** NACE choices on D-1a: the names only, the codes stay out of sight (the API's list, `Api.reference`). */
+  protected readonly uploadNaceOptions = computed(() => (this.store.reference()?.naceCodes ?? []).map((n) => ({ value: n.code, label: n.title })));
+  protected readonly naceCodes = this.store.uploadNaceCodes;
+  protected setNace(codes: string[]) {
+    this.store.uploadNaceCodes.set(codes);
+  }
   protected readonly groupOptions = computed(() => (this.store.evaluationReference()?.activityGroups ?? []).map((o) => ({ value: String(o.id), label: o.label })));
   /**
    * Each activity's group, when the reference links them (`groupId`, our derived mapping, not from
@@ -190,7 +206,7 @@ export class KarsilamaData {
 
   protected readonly deckFile = signal<File | null>(null);
   protected readonly cvFile = signal<File | null>(null);
-  protected readonly answers = signal<EvaluationAnswers>({ summary: '', activityGroupId: null, activityId: null, businessModelIds: [], revenueModelIds: [], productTypeIds: [] });
+  protected readonly answers = signal<EvaluationAnswers>({ summary: '', activityGroupId: FIXED_ACTIVITY_GROUP_ID, activityId: null, businessModelIds: [], revenueModelIds: [], productTypeIds: [] });
   /** The screen's own checks (`evaluationErrors`), shown at the fields like the API's refusals. */
   protected readonly formErrors = signal<Partial<Record<EvaluationField, string>>>({});
   protected readonly consentError = signal<string | null>(null);
@@ -293,7 +309,7 @@ export class KarsilamaData {
     this.formErrors.set(errors);
     this.consentError.set(this.consentsGiven() ? null : DECK_CONSENT_ERROR);
     if (Object.keys(errors).length || !this.consentsGiven()) return;
-    await this.store.uploadDeck({ deck: this.deckFile()!, cv: this.cvFile()! }, this.answers(), { noticeAcknowledged: this.noticeAcknowledged(), aiConsent: this.aiConsent() });
+    await this.store.uploadDeck({ deck: this.deckFile()!, cv: this.cvFile()! }, this.answers(), { noticeAcknowledged: this.noticeAcknowledged(), aiConsent: this.aiConsent() }, this.naceCodes());
   }
 
   // ------------------------------------------------------- D-1b the evaluation runs (waiting)

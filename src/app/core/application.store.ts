@@ -158,6 +158,12 @@ export class ApplicationStore {
   /** What the deck screen may offer and the limits it checks (`Api.evaluationReference`); null until loaded. */
   readonly evaluationReference = signal<EvaluationReference | null>(null);
   /**
+   * The NACE codes the founder is choosing on the deck screen (D-1a), the form's state until the
+   * upload. Sent with the upload (not to STB); the API keeps them and offers them as the company
+   * form's (D-1c) default for its NACE codes.
+   */
+  readonly uploadNaceCodes = signal<string[]>([]);
+  /**
    * HTTP mode: the signed-in founder's application was closed by staff (the API's read answers 404
    * `no_application` while the portal held it, or right after a reload). The stage is then `closed`.
    * Nothing creates a new application in this state; signing out and in again does (an API gap).
@@ -466,8 +472,8 @@ export class ApplicationStore {
   /** D-1e: the founder's statement before the deck; may be saved again until a deck is uploaded. */
   submitProfile = (input: Omit<Profile, 'at'>) => this.update(() => this.api.submitProfile(input));
   /** D-1a: the deck, the CV and the five answers, with the founder's two ticks for this upload. */
-  uploadDeck = (files: { deck: File; cv: File }, answers: EvaluationAnswers, consents: DeckConsents) =>
-    this.update(() => this.api.uploadDeck(files, answers, consents));
+  uploadDeck = (files: { deck: File; cv: File }, answers: EvaluationAnswers, consents: DeckConsents, naceCodes: string[] = []) =>
+    this.update(() => this.api.uploadDeck(files, answers, consents, naceCodes));
   /** D-1g: the evaluation's follow-up questions; a read, so it is not a busy action. */
   evaluationQuestions = () => this.api.evaluationQuestions();
   /** D-1g: one answer per question; the evaluation goes on (`evaluating`). */
@@ -712,6 +718,7 @@ export class ApplicationStore {
     // Read again for the next session (HTTP mode reads it once per session).
     this.reference.set(null);
     this.evaluationReference.set(null);
+    this.uploadNaceCodes.set([]);
     if (session) {
       this.pendingEmail.set(null);
       this.notice = null;
