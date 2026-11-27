@@ -196,8 +196,7 @@ that day). This is the pattern for the other three base classes:
 5. Imports inside a feature are relative; a page's spec uses its own feature's routes.
 
 Result for auth: 267 tests pass (224 + 43), lint unchanged (0 errors, 40 warnings), three builds
-complete, the sign-in screens tried in the browser. Still to do in phase 2: eligibility and payment (`EligibilityData`), company and landing
-(`CompanyData`).
+complete, the sign-in screens tried in the browser. Still to do in phase 2: company and landing (`CompanyData`).
 
 **Phase 2, e-signature and set-up, was done the same day** on `refactor/phase-2-e-signature`
 (auth is commit `5c061f6`). `SignatureData` is deleted; the six pages are 52 to 104 lines each.
@@ -220,6 +219,30 @@ Found while reading the e-signature and set-up code, **not fixed**:
   ("ALM"), not an ISO code, for every country but the UK.
 - D-4b's camera and microphone buttons change nothing, and the lobby's choice is not carried
   into the call.
+
+**Phase 2, eligibility and payment, was done the same day** on `refactor/phase-2-eligibility`
+(e-signature and set-up are commit `24c1a47`). `EligibilityData` is deleted; the seven pages are
+43 to 111 lines each. Shared pure pieces: `eligibility/identity.view.ts` (D-2a and D-2a-m),
+`eligibility/eligibility.view.ts`, `payment/card.rules.ts`, `payment/fees.ts`. Payment no longer
+imports eligibility (lint: 36 warnings). 87 page tests written first, mock and HTTP mode; 442
+tests pass. Three members nothing read were dropped (`manualHint`, `feesOpen`, `capital`).
+
+Found while reading the eligibility and payment code, **not fixed**. The first three concern
+consent and should be decided before a real launch:
+
+- **D-2a, consent can carry over:** after a failed identity check in HTTP mode the page is the
+  same instance, so the "Açık Rıza" box stays ticked and a second start sends `consent: true`
+  without a new tick. (From reading the code; no test exercises it.)
+- **D-2a and D-2a-m: the "Açık Rıza Metni" link opens nothing** (`href="#"`), so the founder
+  consents to a text they cannot read. The same holds for the other consent links.
+- **"Bu bilgisayarla devam et" only forgets the phone link in the browser;** on the server the
+  link stays valid until it expires (up to 10 minutes).
+- D-2d shows a failed submit's error twice (its own message and the store's).
+- D-3a shows "Test kartını doldur" in the plain HTTP build too, not only in demo builds.
+- D-2b builds a passport line that no template shows.
+- D-3b says "6 haneli kodu girin." where the rest of the screen uses "giriniz".
+- Tests do not cover: the second-factor dialog on pay, the refresh after 409 `wrong_stage`,
+  a second identity failure moving to manual review, resident founders on these screens.
 
 Found while reading the auth code, **not fixed** (behaviour kept as it was):
 

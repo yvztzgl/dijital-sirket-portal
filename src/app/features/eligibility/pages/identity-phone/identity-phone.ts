@@ -4,7 +4,7 @@ import { ActivatedRoute } from '@angular/router';
 import { ApplicationStore } from '@core/state/application.store';
 import { FormError } from '@layout/form-error';
 import { Icon } from '@ui/icon';
-import { cameraView, KYC_RULES } from '@features/eligibility/eligibility.data';
+import { cameraView, KYC_RULES } from '../../identity.view';
 
 /**
  * D-2a-m — the identity step on the founder's phone, opened from the QR code on D-2a.
