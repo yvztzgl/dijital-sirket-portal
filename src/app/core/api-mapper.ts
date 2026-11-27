@@ -141,7 +141,9 @@ const EVALUATION_STATUSES: Evaluation['status'][] = ['queued', 'running', 'quest
 function toEvaluation(e: EvaluationWire | null): Application['evaluation'] {
   if (!e) return undefined;
   if (!EVALUATION_STATUSES.includes(e.status)) throw new Error(`Unknown evaluation status from the API: ${e.status}`);
-  return { status: e.status, attempt: e.attempt, maxAttempts: e.maxAttempts, startedAt: e.startedAt, finishedAt: e.finishedAt };
+  // A reason this build does not know is no reason: D-1a then shows its general notice.
+  const reason = e.reason === 'formDeckConflict' ? e.reason : null;
+  return { status: e.status, attempt: e.attempt, maxAttempts: e.maxAttempts, startedAt: e.startedAt, finishedAt: e.finishedAt, reason };
 }
 
 /**

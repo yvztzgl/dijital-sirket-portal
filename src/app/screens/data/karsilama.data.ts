@@ -7,7 +7,7 @@ import { followFlow } from '../../core/follow';
 import { tl0 } from '../../core/format';
 import { dateTime } from '../../core/format';
 import { DECK_CONSENT_ERROR, EvaluationField, evaluationErrors } from '../../core/rules';
-import { CAPITAL, EvaluationAnswers, FUNDING_LABELS, FundingSource, Profile, Sector } from '../../core/models';
+import { CAPITAL, EvaluationAnswers, EvaluationReason, FUNDING_LABELS, FundingSource, Profile, Sector } from '../../core/models';
 import { companyPurpose, naceName as localNaceName } from '../../core/nace';
 
 type CardId = 'founder' | 'contact' | 'funding';
@@ -38,6 +38,15 @@ const EVALUATION_ENDED: Record<'failed' | 'rejected' | 'cancelled', { title: str
   failed: { title: 'Önceki değerlendirme tamamlanamadı', text: 'Değerlendirme hizmeti başvurunuzu sonuçlandıramadı. Lütfen sunumunuzu ve özgeçmişinizi yeniden yükleyiniz.' },
   rejected: { title: 'Sunumunuz değerlendirmeye alınamadı', text: 'Lütfen sunumun 3 ile 40 sayfa arasında bir PDF dosyası olduğunu kontrol ederek yeniden yükleyiniz.' },
   cancelled: { title: 'Önceki değerlendirme iptal edildi', text: 'Devam etmek için sunumunuzu ve özgeçmişinizi yeniden yükleyiniz.' },
+};
+
+/**
+ * A `rejected` evaluation whose reason the API knows gets its own words instead of the general
+ * `rejected` notice. The brand is the profile's ("Ön bilgileri düzenle" below the form); the other
+ * three are answers on this form.
+ */
+const EVALUATION_REJECTED_BECAUSE: Record<EvaluationReason, { title: string; text: string }> = {
+  formDeckConflict: { title: 'Form yanıtlarınız sunumunuzla uyuşmuyor', text: 'Değerlendirme hizmeti, formdaki bilgileri sunumunuzdaki ürün veya faaliyet bilgileriyle uyumlu bulmadı. Marka adınızı (Ön bilgiler), kısa özet, faaliyet alanı ve gelir modeli yanıtlarınızı sunumunuza göre düzelterek yeniden yükleyiniz.' },
 };
 
 interface EditField {
@@ -132,12 +141,18 @@ export class KarsilamaData {
 
   // ------------------------------------------------------- D-1a deck, CV and the five answers
 
-  /** The profile can be changed only until a deck is uploaded (the API refuses it afterwards, also after an evaluation that ended badly). */
-  protected readonly profileEditable = computed(() => !this.store.app()?.deck);
+  /**
+   * The profile can be changed at the upload step: before the first upload and, since API step 21,
+   * again after an evaluation that ended without a result (the brand goes to the service as the
+   * startup name, so a conflict may need it corrected). The API refuses it at every later stage.
+   */
+  protected readonly profileEditable = computed(() => this.store.stage() === 'verified');
 
   /** The last evaluation ended without a result; D-1a says so above the form and takes a new upload. */
   protected readonly evaluationEnded = computed(() => {
-    const status = this.store.stage() === 'verified' ? this.store.app()?.evaluation?.status : undefined;
+    const evaluation = this.store.stage() === 'verified' ? this.store.app()?.evaluation : undefined;
+    const status = evaluation?.status;
+    if (status === 'rejected' && evaluation?.reason) return EVALUATION_REJECTED_BECAUSE[evaluation.reason];
     return status === 'failed' || status === 'rejected' || status === 'cancelled' ? EVALUATION_ENDED[status] : null;
   });
 

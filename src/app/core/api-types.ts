@@ -53,6 +53,11 @@ export interface EvaluationWire {
   maxAttempts: number;
   startedAt: string;
   finishedAt: string | null;
+  /**
+   * Why a `rejected` evaluation was rejected, in the API's own words (`formDeckConflict`), or null.
+   * Absent on answers of an API built before it (API step 21). Never the service's code or message.
+   */
+  reason?: string | null;
 }
 
 /** `GET /api/reference/evaluation`: the outside service's dictionaries and the upload limits. */

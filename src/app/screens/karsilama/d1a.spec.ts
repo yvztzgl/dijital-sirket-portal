@@ -2,7 +2,7 @@ import { Component, input, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { ApplicationStore } from '../../core/application.store';
-import { EvaluationAnswers, EvaluationReference } from '../../core/models';
+import { Evaluation, EvaluationAnswers, EvaluationReference } from '../../core/models';
 import { StepPage } from '../../shared/step-page';
 import { ScreenD1a } from './d1a';
 
@@ -46,14 +46,21 @@ interface D1aView {
   setChoice(key: 'activityGroupId' | 'activityId', value: string): void;
 }
 
-async function screen(linked: boolean) {
+async function screen(linked: boolean, evaluation?: Evaluation) {
   const store = fakeStore(reference(linked));
+  // An ended evaluation means a deck was uploaded before.
+  if (evaluation) store.app.set({ ...store.app(), evaluation, deck: { fileName: 'sunum.pdf', sizeKb: 4 } } as ReturnType<typeof store.app>);
   TestBed.configureTestingModule({ providers: [provideRouter([]), { provide: ApplicationStore, useValue: store }] });
   TestBed.overrideComponent(ScreenD1a, { remove: { imports: [StepPage] }, add: { imports: [FrameStub] } });
   const fixture = TestBed.createComponent(ScreenD1a);
   await fixture.whenStable();
-  return { d: fixture.componentInstance as unknown as D1aView, store };
+  fixture.detectChanges();
+  const el = fixture.nativeElement as HTMLElement;
+  return { d: fixture.componentInstance as unknown as D1aView, store, notice: () => el.querySelector('.wz-notice')?.textContent ?? '', profileLink: () => el.querySelector('a[href="/details"]')?.textContent ?? '' };
 }
+
+const ended = (status: Evaluation['status'], reason: Evaluation['reason'] = null): Evaluation =>
+  ({ status, attempt: 1, maxAttempts: 3, startedAt: '2026-11-26T12:02:00+00:00', finishedAt: '2026-11-26T12:05:00+00:00', reason });
 
 const ids = (d: D1aView) => d.activityOptions().map((o) => o.value);
 
@@ -85,5 +92,32 @@ describe('D-1a activity group and activity', () => {
     expect(ids(d)).toEqual(['3', '11', '40']);
     d.setChoice('activityId', '3');
     expect(d.answers()).toMatchObject({ activityGroupId: 2, activityId: 3 });
+  });
+});
+
+describe('D-1a notice after an ended evaluation', () => {
+  it('rejected because the form does not match the deck: says which answers to correct, not the page rule', async () => {
+    const { notice } = await screen(true, ended('rejected', 'formDeckConflict'));
+    expect(notice()).toContain('Form yanıtlarınız sunumunuzla uyuşmuyor');
+    expect(notice()).toContain('gelir modeli');
+    expect(notice()).not.toContain('40 sayfa');
+  });
+
+  it('the profile can be opened again after an ended evaluation, because the brand may be what conflicts', async () => {
+    const { notice, profileLink } = await screen(true, ended('rejected', 'formDeckConflict'));
+    expect(notice()).toContain('Marka adınızı (Ön bilgiler)');
+    expect(profileLink()).toContain('Ön bilgileri düzenle');
+  });
+
+  it('rejected without a known reason: the general notice', async () => {
+    const { notice } = await screen(true, ended('rejected'));
+    expect(notice()).toContain('Sunumunuz değerlendirmeye alınamadı');
+    expect(notice()).toContain('3 ile 40 sayfa');
+  });
+
+  it('failed: its own notice; no evaluation: none', async () => {
+    expect((await screen(true, ended('failed'))).notice()).toContain('Önceki değerlendirme tamamlanamadı');
+    TestBed.resetTestingModule();
+    expect((await screen(true)).notice()).toBe('');
   });
 });

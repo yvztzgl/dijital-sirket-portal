@@ -390,7 +390,7 @@ export class MockApi implements Api {
       const kb = (f: File) => Math.max(1, Math.round(f.size / 1024));
       app.deck = { fileName: files.deck.name, sizeKb: kb(files.deck) };
       app.cv = { fileName: files.cv.name, sizeKb: kb(files.cv) };
-      app.evaluation = { status: 'running', attempt: 1, maxAttempts: 3, startedAt: nowIso(), finishedAt: null };
+      app.evaluation = { status: 'running', attempt: 1, maxAttempts: 3, startedAt: nowIso(), finishedAt: null, reason: null };
       app.titleCheck = undefined;
       app.stage = 'evaluating';
       log(app, 'Aydınlatma metni okundu (sunum)', 'u');

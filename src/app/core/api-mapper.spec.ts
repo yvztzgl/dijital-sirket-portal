@@ -42,7 +42,7 @@ describe('api-mapper', () => {
     expect(app.profile).toEqual({ brand: 'Lumora', sector: 'software', funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya', at: '2026-11-25T09:45:00+00:00' });
     expect(app.deck).toEqual({ fileName: 'Lumora Sunum.pdf', sizeKb: 57 });
     expect(app.cv).toEqual({ fileName: 'Ozgecmis.pdf', sizeKb: 120 });
-    expect(app.evaluation).toEqual({ status: 'done', attempt: 1, maxAttempts: 3, startedAt: '2026-11-25T09:46:00+00:00', finishedAt: '2026-11-25T09:50:00+00:00' });
+    expect(app.evaluation).toEqual({ status: 'done', attempt: 1, maxAttempts: 3, startedAt: '2026-11-25T09:46:00+00:00', finishedAt: '2026-11-25T09:50:00+00:00', reason: null });
     // The brand is the profile's; the suggested codes are those of the profile's activity area.
     expect(app.company).toMatchObject({ brand: 'Lumora', root: 'Lumora', activity: 'Veri Analitiği', nace: ['62.01', '63.11'], suggestedNace: ['62.01', '62.02', '63.11'] });
     expect(app.founder).toMatchObject({ firstName: 'Ayşe', lastName: 'Kaya-Berg', nationality: 'Almanya' });
@@ -186,6 +186,19 @@ describe('api-mapper on captured API answers', () => {
     expect(toReviewFields({ contact: { phone: '' } }, view)).toEqual({ phone: '' });
     // The name shown from the account before the review has one is sent, to become the founder's own.
     expect(toReviewFields({ founder: { firstName: 'Deneme' } }, CAPTURED.evaluating)).toEqual({ given_name: 'Deneme' });
+  });
+});
+
+describe('api-mapper on the reason of a rejected evaluation (API step 21)', () => {
+  const account = toAccount(ME);
+  const rejected = (reason?: string | null) =>
+    toApplication({ ...REVIEW_APPLICATION, stage: 'verified', evaluation: { ...REVIEW_APPLICATION.evaluation!, status: 'rejected', ...(reason === undefined ? {} : { reason }) } }, account).evaluation;
+
+  it('keeps the reason it knows; an unknown one, null or none is no reason', () => {
+    expect(rejected('formDeckConflict')).toMatchObject({ status: 'rejected', reason: 'formDeckConflict' });
+    expect(rejected('somethingNew')?.reason).toBeNull();
+    expect(rejected(null)?.reason).toBeNull();
+    expect(rejected()?.reason).toBeNull();
   });
 });
 

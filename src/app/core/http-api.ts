@@ -247,7 +247,7 @@ export class HttpApi implements Api {
 
   // step 1 · profile and deck
 
-  /** 204; only before a deck is uploaded (409 `wrong_stage` after). 400 with `errors.<field>`. */
+  /** 204; at the upload step only: before the first upload, or after an evaluation that ended without a result (409 `wrong_stage` otherwise). 400 with `errors.<field>`. */
   async submitProfile(input: Omit<Profile, 'at'>): Promise<Application> {
     const { brand, sector, funding, nationality, phone, country } = input;
     await this.request('PUT', '/api/application/profile', { brand, sector, funding, nationality, phone, country });

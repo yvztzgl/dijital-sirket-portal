@@ -155,7 +155,8 @@ export interface EvaluationReference {
 /**
  * Where the outside evaluation stands (the API's `evaluation`). Only the status and times reach the
  * founder: no findings and no question content. `attempt` counts the service's tries of this
- * evaluation; kept for support, never shown to the founder (owner, 2026-11-26).
+ * evaluation; kept for support, never shown to the founder (owner, 2026-11-26). `reason` says why a
+ * `rejected` evaluation was rejected when the API knows it; D-1a words its notice by it.
  */
 export interface Evaluation {
   status: 'queued' | 'running' | 'questions' | 'done' | 'failed' | 'rejected' | 'cancelled';
@@ -163,7 +164,11 @@ export interface Evaluation {
   maxAttempts: number;
   startedAt: string;
   finishedAt: string | null;
+  reason: EvaluationReason | null;
 }
+
+/** `formDeckConflict`: the answers on the form do not describe the deck (the service's form check). */
+export type EvaluationReason = 'formDeckConflict';
 
 /**
  * Per value on the company form: `profile` (a default taken from the profile or the account, not

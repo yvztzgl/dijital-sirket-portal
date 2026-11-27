@@ -268,7 +268,7 @@ Polling     GET  /api/application/status (then GET /api/application only when it
 | `verified`, `evaluation` null | D-1a `/deck` | no | the upload |
 | `evaluating` (`queued` / `running`) | D-1b `/deck/evaluating` | yes | the service: `review`, `evaluationQuestions`, or `verified` |
 | `evaluationQuestions` (`questions`) | D-1g `/deck/more-information` (new) | yes (slow) | people (unknown) |
-| `verified` + `failed` / `rejected` / `cancelled` | D-1a with a notice above the form | no | a new upload, a new evaluation |
+| `verified` + `failed` / `rejected` / `cancelled` | D-1a with a notice above the form (for `rejected`, worded by `evaluation.reason`) | no | a new upload, a new evaluation |
 | `review` (`done`) | D-1c `/deck/review` (company form) | no | submit |
 
 `/deck/scan` and the old `/sunum/tarama` redirect to `/deck/evaluating`.
@@ -282,7 +282,14 @@ Polling     GET  /api/application/status (then GET /api/application only when it
   (`rules.evaluationErrors`, the same ones the mock refuses with) and the API's `errors` are shown at
   their fields. The page count cannot be checked in the browser; the service ends the evaluation
   `rejected`. A notice above the form after `failed`, `rejected` (with "3 ile 40 sayfa arasında bir PDF")
-  or `cancelled`. "Ön bilgileri düzenle" while no deck was ever uploaded.
+  or `cancelled`. **Since API step 21 (2026-11-26)** `evaluation.reason` says why a `rejected`
+  evaluation was rejected: with `formDeckConflict` (the service found that the form does not describe
+  the deck) the notice is "Form yanıtlarınız sunumunuzla uyuşmuyor" and asks to correct the summary,
+  the activity and the revenue model; with no reason, or one this build does not know, the page-count
+  notice stays. The service's own code and message never reach the portal. The mock never sets a
+  reason. The wording is to confirm. "Ön bilgileri düzenle" whenever the stage is `verified`: before
+  the first upload and, since API step 21, again after an evaluation that ended without a result (the
+  brand is sent to the service as the startup name, so a conflict may need it corrected).
 - **D-1b** (`/deck/evaluating`): a status page like D-1f. Says the evaluation takes a few minutes, that
   the page may be closed, and updates itself; when the evaluation started. The retry count
   (`attempt` / `maxAttempts`) is mapped but never shown to the founder (owner, 2026-11-26). No
@@ -389,8 +396,8 @@ Polling           GET  /api/application/status  → {stage, changedAt}
 | D-1e | Sector and funding choices | from `Api.reference()` | exactly what the API accepts |
 | D-1e | "Demo: örnek bilgileri doldur" | still shown (fills the form only) | not gated before; left as it was |
 | D-1a | Upload (deck, CV, answers) | connected (piece 9; walked against the API's stand-in evaluator) | |
-| D-1a | "Ön bilgileri düzenle" | shown only while no deck exists (both modes) | the API refuses a profile after any deck, also after an evaluation that ended badly |
-| D-1a | notice after an ended evaluation | shown when `evaluation.status` is `failed`, `rejected` or `cancelled` at `verified` | |
+| D-1a | "Ön bilgileri düzenle" | shown at `verified` (both modes), also after an ended evaluation (API step 21) | the API refuses a profile while an evaluation runs or waits on questions, and after a done one (409 `wrong_stage`) |
+| D-1a | notice after an ended evaluation | shown when `evaluation.status` is `failed`, `rejected` or `cancelled` at `verified`; `rejected` + `reason: formDeckConflict` has its own text (API step 21) | not walked against the API: unit tests only (`d1a.spec.ts`, `api-mapper.spec.ts`) |
 | D-1c | Title, NACE, founder, contact, funding editors | connected; only changed fields sent | API refuses empty changes and empty values |
 | D-1c | NACE search and suggestions | only codes from `Api.reference()` (10 today) | |
 | D-1c | Logo replacement | offered only when a logo exists (the mock's); hidden in HTTP mode | the API keeps no logo |
