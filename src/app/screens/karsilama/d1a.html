@@ -70,7 +70,7 @@
       <div class="grid grid-3">
         @for (c of multiChoices(); track c.key) {
           <div class="wz-field">
-            <span>{{ c.title }} <small class="wz-multi-hint">birden fazla</small></span>
+            <span>{{ c.title }} <small class="wz-multi-hint">(birden fazla)</small></span>
             <app-multi-select [label]="c.title" [options]="c.options" [value]="multiValue(c.key)" (valueChange)="setMulti(c.key, $event)" placeholder="Seçiniz" />
             @if (deckFieldError(c.key); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
           </div>

@@ -15,7 +15,7 @@
           <input class="wz-input" [value]="p.brand" (input)="setProfile('brand', $any($event.target).value)" placeholder="Örneğin Acme Cloud" autocomplete="organization">
           @if (fieldError('brand'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}
         </label>
-        <div class="wz-field"><span>Faaliyet alanı <small class="wz-multi-hint">birden fazla</small></span><app-multi-select label="Faaliyet alanı" [options]="profileNaceOptions()" [value]="p.naceCodes" (valueChange)="setProfileNace($event)" placeholder="Seçiniz" />@if (fieldError('naceCodes'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}</div>
+        <div class="wz-field"><span>Faaliyet alanı <small class="wz-multi-hint">(birden fazla)</small></span><app-multi-select label="Faaliyet alanı" [options]="profileNaceOptions()" [value]="p.naceCodes" (valueChange)="setProfileNace($event)" placeholder="Seçiniz" />@if (fieldError('naceCodes'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}</div>
         <div class="wz-field"><span>Sermaye kaynağı</span><app-select label="Sermaye kaynağı" [options]="fundingOptions()" [value]="p.funding" (valueChange)="setProfile('funding', $event)" placeholder="Seçiniz" />@if (fieldError('funding'); as m) {<small class="wz-fielderr" role="alert">{{ m }}</small>}</div>
       </div>
     </section>
