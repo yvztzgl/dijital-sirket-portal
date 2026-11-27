@@ -70,6 +70,34 @@
                 }
               ]
             },
+            "hosted": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.http.ts"
+                },
+                {
+                  "replace": "src/environments/api-origin.ts",
+                  "with": "src/environments/api-origin.hosted.ts"
+                }
+              ]
+            },
+            "hosted-demo": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.http.ts"
+                },
+                {
+                  "replace": "src/environments/demo-flag.ts",
+                  "with": "src/environments/demo-flag.on.ts"
+                },
+                {
+                  "replace": "src/environments/api-origin.ts",
+                  "with": "src/environments/api-origin.hosted.ts"
+                }
+              ]
+            },
             "http-demo": {
               "fileReplacements": [
                 {

@@ -31,6 +31,8 @@ screens ─► ApplicationStore ─► Api (abstract class, used as the injectio
 | `src/environments/environment.ts` | Default (mock) mode: names `MockApi`, no extra providers. |
 | `src/environments/environment.http.ts` | HTTP mode: names `HttpApi`, provides `HttpClient` with the interceptor. |
 | `proxy.conf.json` | Dev server: `/api` → `http://localhost:5149`. |
+| `src/environments/api-origin.ts` / `api-origin.hosted.ts` | `apiOrigin`: empty, and `https://dijital-sirket-api.jestiyon.com` in the `hosted` build (see "Hosted on its own address"). |
+| `src/app/core/api/http/api-origin.ts` | `sendToApiOrigin`: the interceptor that sends `/api/...` to `apiOrigin` with the session cookie. |
 | `src/environments/demo-flag.ts` / `demo-flag.on.ts` | `isDemo`: off, and on in the `http-demo` build (see "Demo mode against the API"). |
 | `src/app/core/api/demo/demo-server-api.ts` | `DemoServerApi`: the API's `/api/demo/*` routes and `available`; not part of `Api`. |
 | `src/app/demo/demo-bar.ts`, `demo-code-hint.ts` | The demo strip on the waiting screens and the on-screen code / link line. |
@@ -75,6 +77,7 @@ http bundle because the demo panel is imported by the screen pill, but nothing c
 | --- | --- | --- |
 | Serve | `npx ng serve` | `npx ng serve --configuration http` (the API must run on `http://localhost:5149`; see below) |
 | Build | `npx ng build` | `npx ng build --configuration production,http` (`--configuration http` alone also builds, without output hashing and budgets) |
+| Build for the deployed address | – | `npx ng build --configuration production,hosted`; with demo controls `production,hosted-demo` (see "Hosted on its own address") |
 | Test | `npx ng test --watch=false` | same; `http-api.spec.ts` tests `HttpApi` with `HttpTestingController` |
 | `.claude/launch.json` | `portal` | `portal-http` (`portal-http-demo` for demo mode) |
 
@@ -96,6 +99,57 @@ production serves the portal and the API is still open (open decision 6 in the p
 The portal never shows, prefills or hints at a code in this mode: codes go only by e-mail (the
 Inbox toasts belong to the mock, and nothing in HTTP mode sends to the Inbox). The one exception is
 the `http-demo` build against an API started with `Demo:Enabled` (next section).
+
+## Hosted on its own address (since 2026-11-27)
+
+Owner's decision of 2026-11-27: the deployed portal is served from its own address and calls the
+API at **`https://dijital-sirket-api.jestiyon.com`** directly, instead of a web server passing
+`/api` on.
+
+**Build:** `npx ng build --configuration production,hosted`. The `hosted` configuration is HTTP
+mode (it replaces `environment.ts` like `http` does) plus `api-origin.hosted.ts` in place of
+`api-origin.ts`. It names both replacements itself because Angular does not add one
+configuration's `fileReplacements` to another's: `production,http,hosted` would work only by
+accident of order, so do not rely on it. **With the demo controls:**
+`npx ng build --configuration production,hosted-demo` (the three replacements of `http-demo` and
+`hosted` together; owner's request of 2026-11-27). The demo calls (`/api/demo`, `/api/demo/*`) go
+through the same `HttpClient`, so they reach the API address too (`api-origin.spec.ts`). The
+controls show only if that API runs with `Demo:Enabled`; on 2026-11-27 the host answered
+`GET /api/demo` with `{"enabled":true,…}`, so they will, and **anyone who can open such a build
+can then move applications forward and read the codes of any e-mail address**: keep the
+`hosted-demo` build off any address meant for real founders. To change the address, edit `api-origin.hosted.ts` and rebuild; the
+address is compiled in, not read at run time.
+
+**What changes in the browser:** `HttpApi` and `DemoServerApi` still ask for `/api/...`. The
+interceptor `sendToApiOrigin` (after `markApiWrites`) turns that into
+`https://dijital-sirket-api.jestiyon.com/api/...` and sets `withCredentials`, so the browser sends
+and accepts the session cookie on a request to another origin. Requests that are not `/api/` paths
+are never changed. With `apiOrigin` empty (every other build) the interceptor does nothing, and
+`api-origin.spec.ts` checks that the default build has it empty.
+
+**What the API side needs, and is not done yet** (hosting settings, API repo
+`docs/steps/26-docker-image.md`):
+
+1. `Cors__Origins__0` = the portal's public address (scheme and host, no path). Without it the
+   browser blocks every call. On 2026-11-27 the host answered `http://localhost:4202` and two
+   guessed `*.jestiyon.com` origins with no `Access-Control-Allow-Origin`.
+2. `Portal__BaseUrl` = the same address (it goes into the password-reset link).
+3. The portal's address must be under `jestiyon.com`. The session cookie is `SameSite=Strict`; a
+   portal on another registrable domain would never have its cookie sent, and sign-in would appear
+   to succeed and then fail on the next call.
+4. **A gap in the API:** its CORS policy allows only the headers `Content-Type` and
+   `X-DSP-Request` (`WebHostSetup.cs`). The phone page sends `X-DSP-Phone-Token`, so from another
+   origin every phone-link call (D-2a-m) fails its preflight until that header is added to the
+   policy. Same-origin setups never met this.
+5. The portal's own web server must answer unknown paths with `index.html` (routes such as
+   `/login` are the app's, not files).
+
+**Checked on 2026-11-27:** the `hosted` build served from `http://localhost:4202` sent
+`GET https://dijital-sirket-api.jestiyon.com/api/me` at page load (browser console), and the
+browser blocked it for CORS, as point 1 predicts. The host itself is up: `GET /api/application/status`
+without a session answers 401 `application/problem+json`. The default, `http` and `http-demo`
+bundles do not contain the host name; the `hosted` bundle does. A full sign-in against the host
+has not been done and cannot be until point 1 is set.
 
 ## Demo mode against the API (since 2026-11-26)
 

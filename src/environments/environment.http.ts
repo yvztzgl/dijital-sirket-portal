@@ -1,17 +1,19 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { EnvironmentProviders, Provider } from '@angular/core';
+import { sendToApiOrigin } from '@core/api/http/api-origin';
 import { HttpApi, markApiWrites } from '@core/api/http/http-api';
 
 /**
  * The `http` build (`ng serve --configuration http`, `ng build --configuration http`): the real
  * API over HTTP, no demo tools. Replaces environment.ts; see that file and docs/api-client.md.
  * Requests go to `/api/...` on the portal's own origin; in development the Angular dev server
- * forwards them to the API (proxy.conf.json).
+ * forwards them to the API (proxy.conf.json). Added to the `hosted` configuration, they go to the
+ * API's own address instead (api-origin.ts).
  */
 export const environment: {
   api: typeof HttpApi;
   providers: (Provider | EnvironmentProviders)[];
 } = {
   api: HttpApi,
-  providers: [provideHttpClient(withInterceptors([markApiWrites]))],
+  providers: [provideHttpClient(withInterceptors([markApiWrites, sendToApiOrigin]))],
 };
