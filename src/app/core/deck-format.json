@@ -164,7 +164,7 @@
             { "label": "Şirket adı", "rule": "Zorunlu", "sample": "Lumora Analytics", "use": "Şirket unvanı; ön bilgilerinizle karşılaştırılır" },
             { "label": "Kurulacak tür", "rule": "Zorunlu", "sample": "Tek pay sahipli anonim şirket", "use": "Esas sözleşme" },
             { "label": "Merkez", "rule": "Zorunlu · il", "sample": "İstanbul (sanal ofis)", "use": "Ticaret sicili müdürlüğü" },
-            { "label": "Faaliyet alanları", "rule": "Zorunlu · NACE kodu ve açıklaması", "sample": "62.01 · 63.11 · 62.02", "use": "Şirketin faaliyet konusu" }
+            { "label": "Faaliyet alanları", "rule": "Zorunlu · NACE kodu ve açıklaması", "sample": "62.10.00 · 63.10.00 · 62.20.00", "use": "Şirketin faaliyet konusu" }
           ]
         },
         {

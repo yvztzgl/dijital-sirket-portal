@@ -351,9 +351,9 @@ describe('HttpApi step 1', () => {
 
   it('saves the profile with exactly its six fields and reads the application again', async () => {
     await signedInAt(CAPTURED.profile);
-    const pending = api.submitProfile({ brand: 'Lumora', naceCodes: ['62.01', '63.11'], funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
+    const pending = api.submitProfile({ brand: 'Lumora', naceCodes: ['62.10.00', '63.10.00'], funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
     const put = await next('PUT', '/api/application/profile');
-    expect(put.request.body).toEqual({ brand: 'Lumora', naceCodes: ['62.01', '63.11'], funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
+    expect(put.request.body).toEqual({ brand: 'Lumora', naceCodes: ['62.10.00', '63.10.00'], funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
     put.flush(...empty(204));
     await read(CAPTURED.verified);
     expect((await pending).stage).toBe('verified');

@@ -84,11 +84,11 @@ export const FUNDING_LABELS: Record<FundingSource, string> = {
 export type Sector = 'software' | 'ecommerce' | 'consulting' | 'design' | 'education' | 'other';
 
 export const SECTORS: Record<Sector, { label: string; nace: string[] }> = {
-  software: { label: 'Yazılım ve bilişim', nace: ['62.01', '62.02', '63.11'] },
-  ecommerce: { label: 'E-ticaret', nace: ['47.91'] },
-  consulting: { label: 'Danışmanlık', nace: ['70.22'] },
-  design: { label: 'Tasarım ve reklam', nace: ['74.10', '73.11'] },
-  education: { label: 'Eğitim', nace: ['85.59'] },
+  software: { label: 'Yazılım ve bilişim', nace: ['62.10.00', '62.20.00', '63.10.00'] },
+  ecommerce: { label: 'E-ticaret', nace: [] },
+  consulting: { label: 'Danışmanlık', nace: [] },
+  design: { label: 'Tasarım ve reklam', nace: [] },
+  education: { label: 'Eğitim', nace: [] },
   other: { label: 'Diğer', nace: [] },
 };
 
@@ -405,7 +405,8 @@ export interface Application {
 export interface WizardReference {
   sectors: { key: string; label: string; naceCodes: string[] }[];
   funding: { key: string; label: string }[];
-  naceCodes: { code: string; title: string }[];
+  /** `translationKey` (API step 25): the key to translate `title` with, e.g. `nace.software_programming`. */
+  naceCodes: { code: string; title: string; translationKey: string }[];
 }
 
 /** Fee breakdown for the one-off payment (sums to the total). */

@@ -100,7 +100,7 @@ const BUILDING_LEVELS = [97.9, 79.9, 66.4, 52.6, 38.2, 23.2, 0];
 /** What the screen pieces show. Sample values match the app's demo account. */
 const MOCK = {
   fields: [
-    ['Şirket unvanı', 'Acme Cloud', 1], ['Faaliyet alanı', '62.01 Yazılım', 7], ['Sermaye', '250.000 TL', 9],
+    ['Şirket unvanı', 'Acme Cloud', 1], ['Faaliyet alanı', '62.10.00 Yazılım', 7], ['Sermaye', '250.000 TL', 9],
     ['Fon kaynağı', 'Yurt dışı banka transferi', 10], ['Kurucu', 'John Doe, Birleşik Krallık', 11],
   ],
   checks: [

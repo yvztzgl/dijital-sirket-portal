@@ -91,10 +91,10 @@ describe('MockApi flow', () => {
     await api.uploadDeck(FILES(), DEMO_ANSWERS, CONSENTS);
     await api.completeEvaluation();
     const [root, ...rest] = title.split(' ');
-    return api.updateReview({ company: { root, activity: rest.join(' '), nace: ['62.01'] } }, ['title', 'nace']);
+    return api.updateReview({ company: { root, activity: rest.join(' '), nace: ['62.10.00'] } }, ['title', 'nace']);
   }
   /** The statement on D-1e that agrees with the generic demo deck for a foreign founder. */
-  const PROFILE = { brand: 'Novalab', naceCodes: ['62.01', '62.02', '63.11'] as string[], funding: 'own-abroad', nationality: 'Birleşik Krallık', phone: '+44 7700 900123', country: 'Birleşik Krallık' } as const;
+  const PROFILE = { brand: 'Novalab', naceCodes: ['62.10.00', '62.20.00', '63.10.00'] as string[], funding: 'own-abroad', nationality: 'Birleşik Krallık', phone: '+44 7700 900123', country: 'Birleşik Krallık' } as const;
 
   /** Registers, verifies the e-mail and fills in the profile, so the founder is at the deck upload (D-1a). */
   async function verifiedFounder(email = 'ayse@novalab.io', brand = 'Novalab') {
@@ -345,7 +345,7 @@ describe('MockApi flow', () => {
     expect(app.stage).toBe('review');
     expect(app.evaluation).toMatchObject({ status: 'done' });
     // Title and codes proposed from the profile (brand + "Anonim Şirketi", the profile's NACE codes), marked like the API's defaults.
-    expect(app.company).toMatchObject({ brand: 'Novalab', root: 'Novalab', activity: '', nace: ['62.01', '62.02', '63.11'], suggestedNace: ['62.01', '62.02', '63.11'] });
+    expect(app.company).toMatchObject({ brand: 'Novalab', root: 'Novalab', activity: '', nace: ['62.10.00', '62.20.00', '63.10.00'], suggestedNace: ['62.10.00', '62.20.00', '63.10.00'] });
     expect(app.founder).toMatchObject({ firstName: 'Ayşe', lastName: 'Kaya', nationality: PROFILE.nationality });
     expect(app.contact).toEqual({ email, phone: PROFILE.phone, address: '', postalCode: '', country: PROFILE.country });
     expect(app.marks).toEqual({ title: 'profile', nace: 'profile', name: 'profile', email: 'profile', phone: 'profile', address: 'profile', funding: 'profile' });
@@ -355,16 +355,16 @@ describe('MockApi flow', () => {
     await expect(api.submitReview()).rejects.toThrow('Şirket unvanını yazınız.');
     await api.updateReview({ company: { root: 'Novalab', activity: 'Yazılım', nace: [] } }, ['title', 'nace']);
     await expect(api.submitReview()).rejects.toThrow('NACE');
-    await api.updateReview({ company: { nace: ['62.01'] } }, ['nace']);
+    await api.updateReview({ company: { nace: ['62.10.00'] } }, ['nace']);
     expect((await api.submitReview()).stage).toBe('titleChecking');
   });
 
   it('the NACE codes stated on the profile become the company form\'s default (API step 24)', async () => {
     await verifiedFounder();
-    await api.submitProfile({ ...PROFILE, naceCodes: ['63.11', '62.01', '63.11'] });
+    await api.submitProfile({ ...PROFILE, naceCodes: ['63.10.00', '62.10.00', '63.10.00'] });
     await api.uploadDeck(FILES(), DEMO_ANSWERS, CONSENTS);
     const app = await api.completeEvaluation();
-    expect(app.company).toMatchObject({ nace: ['63.11', '62.01'], suggestedNace: ['63.11', '62.01'] });
+    expect(app.company).toMatchObject({ nace: ['63.10.00', '62.10.00'], suggestedNace: ['63.10.00', '62.10.00'] });
     expect(app.marks['nace']).toBe('profile');
   });
 

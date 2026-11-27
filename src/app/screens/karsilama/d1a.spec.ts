@@ -34,7 +34,7 @@ function reference(linked: boolean): EvaluationReference {
 function fakeStore(ref: EvaluationReference) {
   return {
     app: signal({ id: 'DS-26-00000001', stage: 'verified', marks: {} }), busy: signal(false), error: signal(null), fieldErrors: signal({ activityId: ['Seçilen faaliyet alanı, seçilen faaliyet grubuna ait değildir.'] }),
-    reference: signal({ sectors: [], funding: [], naceCodes: [{ code: '62.01', title: 'Bilgisayar programlama faaliyetleri' }, { code: '63.11', title: 'Veri işleme, barındırma ve ilgili faaliyetler' }] }), evaluationReference: signal(ref), stage: signal('verified'), founderType: signal('foreign'), title: signal(''), fullTitle: signal(''), signedIn: signal(true),
+    reference: signal({ sectors: [], funding: [], naceCodes: [{ code: '62.10.00', title: 'Yazılım ve bilgisayar programlama', translationKey: 'nace.software_programming' }, { code: '63.10.00', title: 'Bulut bilişim, barındırma ve veri işleme', translationKey: 'nace.cloud_hosting_data_processing' }] }), evaluationReference: signal(ref), stage: signal('verified'), founderType: signal('foreign'), title: signal(''), fullTitle: signal(''), signedIn: signal(true),
     clearError: () => undefined, loadReference: async () => undefined, loadEvaluationReference: async () => undefined,
   };
 }

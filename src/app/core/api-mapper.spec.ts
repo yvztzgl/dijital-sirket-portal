@@ -114,7 +114,8 @@ describe('api-mapper on captured API answers', () => {
   it('verified: the profile as stated', () => {
     const app = map('verified');
     expect(app.stage).toBe('verified');
-    expect(app.profile).toMatchObject({ brand: 'Lumora', naceCodes: ['62.01', '62.02', '63.11'], funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
+    // Captured before API step 24: the profile has sector 'software' and no codes; its codes come from SECTORS (step 25 list).
+    expect(app.profile).toMatchObject({ brand: 'Lumora', naceCodes: ['62.10.00', '62.20.00', '63.10.00'], funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
     expect(app.deck).toBeUndefined();
   });
 

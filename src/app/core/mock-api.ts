@@ -169,14 +169,14 @@ export class MockApi implements Api {
     },
   };
 
-  /** The portal's own constants in the shape of the API's `GET /api/reference/wizard`. */
+  /** The portal's own constants in the shape of the API's `GET /api/reference/wizard` (NACE: a copy of API migration 0010). */
   async reference(): Promise<WizardReference> {
     return {
       sectors: (Object.keys(SECTORS) as Sector[]).map((key) => ({ key, label: SECTORS[key].label, naceCodes: SECTORS[key].nace })),
       funding: FUNDING_OPTIONS.map((key) => ({ key, label: FUNDING_LABELS[key] })),
       naceCodes: Object.keys(NACE)
         .sort()
-        .map((code) => ({ code, title: NACE[code] })),
+        .map((code) => ({ code, title: NACE[code].title, translationKey: NACE[code].translationKey })),
     };
   }
 
@@ -1164,7 +1164,7 @@ async function fastForward(api: MockApi, email: string, want: Stage) {
   const resident = JSON.parse(localStorage.getItem(DB_KEY)!).apps[email].founderType === 'resident';
   await api.submitProfile({
     brand: 'Acme Cloud',
-    naceCodes: ['62.01', '62.02', '63.11'],
+    naceCodes: ['62.10.00', '62.20.00', '63.10.00'],
     funding: 'own-abroad',
     nationality: resident ? 'Türkiye' : 'Birleşik Krallık',
     phone: resident ? '+90 532 410 2699' : '+44 7700 900456',
@@ -1184,7 +1184,7 @@ async function fastForward(api: MockApi, email: string, want: Stage) {
   const conflict = want === 'titleChecking' || want === 'titleConflict';
   await api.updateReview(
     {
-      company: { root: 'Acme', activity: conflict ? 'Bulut Bilişim' : 'Bulut Yazılım', nace: ['62.01', '63.11'] },
+      company: { root: 'Acme', activity: conflict ? 'Bulut Bilişim' : 'Bulut Yazılım', nace: ['62.10.00', '63.10.00'] },
       contact: resident
         ? { address: 'Bağdat Cad. No:212, Kadıköy / İstanbul', postalCode: '34728' }
         : { address: '14 Baker Street, London', postalCode: 'NW1 6XE' },

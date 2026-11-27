@@ -192,7 +192,7 @@ step_one() {
   save review-defaults
 
   write 204 "PATCH review (title, codes, address, postal code, family name)" PATCH \
-    '{"fields":{"trade_name":"Lumora Analitik Yazılım","nace_codes":"62.01, 63.11","residence_address":"Torstraße 45, Berlin","postal_code":"10119","family_name":"Kurucu-Berg"}}' /api/application/review
+    '{"fields":{"trade_name":"Lumora Analitik Yazılım","nace_codes":"62.10.00, 63.10.00","residence_address":"Torstraße 45, Berlin","postal_code":"10119","family_name":"Kurucu-Berg"}}' /api/application/review
   save review-edited
   write 204 "PATCH review (title for the conflict)" PATCH '{"fields":{"trade_name":"Lumora Veri Analitiği"}}' /api/application/review
   call 202 "POST review/submit" -X POST -H 'X-DSP-Request: 1' "$API/api/application/review/submit"

@@ -8,7 +8,7 @@ import { tl0 } from '../../core/format';
 import { dateTime } from '../../core/format';
 import { DECK_CONSENT_ERROR, EvaluationField, evaluationErrors } from '../../core/rules';
 import { CAPITAL, EvaluationAnswers, EvaluationReason, FUNDING_LABELS, FundingSource, Profile } from '../../core/models';
-import { companyPurpose, naceName as localNaceName } from '../../core/nace';
+import { companyPurpose } from '../../core/nace';
 
 type CardId = 'founder' | 'contact' | 'funding';
 /** What the pencil on a row of the confirm screen opens. */
@@ -136,7 +136,7 @@ export class KarsilamaData {
 
   /** Demo: values for the downloadable sample deck (Lumora Analytics). */
   protected useSampleProfile() {
-    this.profileDraft.set({ brand: 'Lumora Analytics', naceCodes: ['62.01', '63.11'], funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
+    this.profileDraft.set({ brand: 'Lumora Analytics', naceCodes: ['62.10.00', '63.10.00'], funding: 'own-abroad', nationality: 'Almanya', phone: '+49 151 2345 6700', country: 'Almanya' });
   }
 
   // ------------------------------------------------------- D-1a deck, CV and the five answers
@@ -352,8 +352,9 @@ export class KarsilamaData {
 
   /** The NACE codes the API accepts (Api.reference), code → title. */
   private readonly naceTitles = computed(() => new Map((this.store.reference()?.naceCodes ?? []).map((n) => [n.code, n.title])));
+  /** A code the reference does not list (e.g. one of the retired four-digit codes) is shown as the code itself. */
   protected naceName(code: string) {
-    return this.naceTitles().get(code) ?? localNaceName(code);
+    return this.naceTitles().get(code) ?? code;
   }
 
   protected readonly naceChips = computed(() => (this.store.app()?.company.nace ?? []).map((code) => ({ code, name: this.naceName(code) })));
@@ -377,7 +378,7 @@ export class KarsilamaData {
       .slice(0, 3);
   });
 
-  protected readonly purpose = computed(() => companyPurpose(this.store.app()?.company.nace ?? []));
+  protected readonly purpose = computed(() => companyPurpose((this.store.app()?.company.nace ?? []).map((code) => ({ code, title: this.naceName(code) }))));
 
   protected addNace(code: string) {
     const c = this.store.app()!.company;
