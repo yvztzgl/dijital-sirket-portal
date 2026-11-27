@@ -215,10 +215,15 @@ export class LandingPage {
 
   constructor() {
     this.store.clearError();
-    // Read for the step 1 screens (signed in, their choices are there at once). Signed out in HTTP
-    // mode the API answers 401 and the store then opens /login: kept as it was (a reported bug, not fixed here).
-    void this.store.loadReference();
-    void this.store.loadEvaluationReference();
+    // Read ahead for the step 1 screens, so their choices are there at once. Only for a signed-in
+    // founder, and only once the session is known: the API answers these reads 401 without a
+    // session, and the store takes any 401 as a lost session and opens /login. Until 2026-11-27
+    // that sent every signed-out visitor of the landing to the login page in HTTP mode.
+    void this.store.restored.then(() => {
+      if (!this.store.signedIn()) return;
+      void this.store.loadReference();
+      void this.store.loadEvaluationReference();
+    });
     afterNextRender(() => this.watch());
   }
 

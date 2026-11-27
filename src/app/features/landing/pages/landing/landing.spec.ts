@@ -111,17 +111,21 @@ describe('LandingPage (D-00), HTTP mode', () => {
   it('signed in: the call to action resumes the application; both references are read', async () => {
     const { api } = setUp({ account, app: toApplication(CAPTURED.reviewEdited, account) });
     const page = await open();
-    expect(api.reference).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(api.reference).toHaveBeenCalledTimes(1));
     expect(api.evaluationReference).toHaveBeenCalledTimes(1);
     page.ctas()[0].click();
     await vi.waitFor(() => expect(TestBed.inject(Router).url).toBe('/deck/review'));
   });
 
-  it('signed out: the page still asks for both references, the API answers 401, and the store opens /login (as the page is today; reported)', async () => {
-    const { api } = setUp(null);
-    await open();
-    expect(api.reference).toHaveBeenCalledTimes(1);
-    expect(api.evaluationReference).toHaveBeenCalledTimes(1);
-    await vi.waitFor(() => expect(TestBed.inject(Router).url).toBe('/login'));
+  it('signed out: asks for no reference (the API would answer 401) and stays on the landing', async () => {
+    const { api, store } = setUp(null);
+    const page = await open();
+    await store.restored;
+    // Long enough for a refused read to have opened /login, as it did before 2026-11-27.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(api.reference).not.toHaveBeenCalled();
+    expect(api.evaluationReference).not.toHaveBeenCalled();
+    expect(TestBed.inject(Router).url).toBe('/');
+    expect(page.ctas().map((a) => a.textContent?.trim())).toEqual(['Başvuruya başla', 'Başvuruya başla']);
   });
 });

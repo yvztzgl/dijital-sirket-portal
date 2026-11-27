@@ -240,9 +240,10 @@ tests written first, 23 for the pure files; 557 tests pass. Members nothing read
 
 Found while reading the company and landing code, **not fixed**:
 
-- **HTTP mode: the landing sends a signed-out visitor to `/login`.** The landing asks for both
-  reference lists; the API answers 401 to a visitor who is not signed in, and the store treats
-  any 401 as a lost session. A test in `landing.spec.ts` records it. Decide before a real launch.
+- ~~HTTP mode: the landing sends a signed-out visitor to `/login`.~~ **Fixed 2026-11-27** on
+  branch `fix/landing-signed-out-redirect`: the landing reads the reference lists only once the
+  session is known and only for a signed-in founder (`landing.ts`; test in `landing.spec.ts`).
+  Not tried against the running API.
 - **`AGENTS.md` describes D-1c as it no longer is:** there is no cross-check choice, no "Başka
   dosya yükle" and no consent boxes on D-1c, and `deckFileError` does not exist (decks are PDF,
   checked by `evaluationErrors`). `docs/api-client.md` already records the removal. `AGENTS.md`
