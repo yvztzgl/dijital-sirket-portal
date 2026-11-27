@@ -1,5 +1,5 @@
 import { EnvironmentProviders, Provider } from '@angular/core';
-import { MockApi } from '../app/core/mock-api';
+import { MockApi } from '@core/api/mock/mock-api';
 
 /**
  * Default build (`ng serve`, `ng build`, `ng test`): the in-browser mock with its demo tools.

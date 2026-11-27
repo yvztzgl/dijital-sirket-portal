@@ -1,7 +1,7 @@
 # Dijital Şirket Platformu — portal
 
 This repository is the **product UI** (Angular 21). By default every screen runs on
-`src/app/core/mock-api.ts`, an in-browser stand-in that keeps its data in `localStorage`.
+`src/app/core/api/mock/mock-api.ts`, an in-browser stand-in that keeps its data in `localStorage`.
 See [README.md](README.md) for how the data works, the demo account and the forced scenarios.
 The `http` build configuration swaps the mock for the HTTP client of the real API (being connected
 piece by piece since 2026-11-25); see [docs/api-client.md](docs/api-client.md).
@@ -28,18 +28,26 @@ conversation history. At the end of every piece of work, add a dated entry to th
 changed in which repository) and keep its **Where we are now** section true. Do not leave
 anything a later reader needs in a temporary directory or only in chat.
 
+## Restructuring in progress
+
+The portal is being reorganised into feature folders, in phases: [docs/restructure-plan.md](docs/restructure-plan.md)
+says what is done and what is next. Before handing work over, run `npm run lint` (0 errors
+expected; the warnings are known and listed in the plan) and `npm test`.
+`src/app/features/routes.spec.ts` opens every routed screen once; a new screen is covered as soon
+as it is in `screenRoutes`.
+
 ## Things to know before editing
 
 - The project is headed for a government contract: **audit logging and security come first** in
   any backend or data work.
-- `Api` (`src/app/core/api.ts`) is the API contract; `MockApi` and `HttpApi` implement it and the
+- `Api` (`src/app/core/api/api.ts`) is the API contract; `MockApi` and `HttpApi` implement it and the
   build picks one (docs/api-client.md). Screens talk only to `ApplicationStore`
-  (`src/app/core/application.store.ts`) and never import an implementation; pure checks they need
-  live in `src/app/core/rules.ts`. Demo tools (seed, reset, speed, `/screens`, the screen pill and
+  (`src/app/core/state/application.store.ts`) and never import an implementation; pure checks they need
+  live in `src/app/core/utils/rules.ts`. Demo tools (seed, reset, speed, `/screens`, the screen pill and
   demo panel) exist only in mock mode, through `Api.demo`. Separately, the `http-demo` build adds
   demo buttons and on-screen codes on top of the real API when it runs with `Demo:Enabled`
   (`DemoServerApi`, `DemoBar`, `DemoCodeHint`; docs/api-client.md, "Demo mode against the API").
-- Templates under `src/app/screens/**.html` and `src/app/shared/*.html` were generated from
+- Templates under `src/app/features/*/pages/**.html` and `src/app/layout/*.html` were generated from
   design files and then wired by hand. Re-running the import with `--force` overwrites that
   wiring; see `tools/design-import/README.md`.
 - The mock stores passwords in plain text in the browser. That is for the prototype only and
@@ -50,7 +58,7 @@ anything a later reader needs in a temporary directory or only in chat.
   `unauthenticated` from any call signs the founder out and opens `/login` (`ApplicationStore`).
   The shared `Account` has no password; the mock keeps it in its own `MockAccount`.
 - All the wizard screens (D-1a to D-5b) were rebuilt by hand on 2026-11-17 in the "Odak"
-  layout: they use `<app-step-page>` (`src/app/shared/step-page.ts`) and the `wz-*` classes in
+  layout: they use `<app-step-page>` (`src/app/layout/step-page.ts`) and the `wz-*` classes in
   `src/wizard.scss`, not inline styles. The owner's rules for this look: **no `box-shadow`
   anywhere**, **formal but short Turkish** on screen (including what Terminal AI answers; its greeting
   "Selam …, sana nasıl yardımcı olabilirim?" is the owner's own wording and stays informal), one
@@ -68,14 +76,14 @@ anything a later reader needs in a temporary directory or only in chat.
   (`crossCheck`, `match: false`) needs the founder's choice before the review can be submitted.
   Old mock data at `verified` without a profile is sent back to the form (`upgrade` in mock-api.ts).
 - The deck upload needs two unticked boxes the founder ticks for that upload: privacy notice
-  acknowledged and consent to AI processing (`app-deck-consents`, `src/app/shared/deck-consents.ts`).
+  acknowledged and consent to AI processing (`app-deck-consents`, `src/app/features/company/components/deck-consents.ts`).
   D-1c's "Başka dosya yükle" asks for them again. The labels are placeholders until the legal
   wording is decided. Decks are PDF or PPTX, at most 25 MB (`deckFileError` in rules.ts, the API's
   rule); Keynote and 50 MB are gone.
-- The deck follows our own format, not a form: `src/app/core/deck-format.json` lists the 16
+- The deck follows our own format, not a form: `src/app/core/reference/deck-format.json` lists the 16
   required pages, their exact titles and what is read from each (it carries the integrator's
   evaluation fields from `1-basvuru.pdf`). The "Sunum formatı" dialog on D-1a
-  (`src/app/shared/deck-format-dialog.ts`) and the sample deck are both built from that file; after
+  (`src/app/features/company/components/deck-format-dialog.ts`) and the sample deck are both built from that file; after
   changing it, rebuild the sample with `tools/sample-deck/build.py`. Consents are never read from
   the deck; they are given on screen.
 - Step 2 is three screens and a result: D-2a camera check (stage `eligibility`), D-2d declaration
@@ -86,8 +94,8 @@ anything a later reader needs in a temporary directory or only in chat.
   handed to a phone by QR code (`/eligibility/phone#<token>`, screen D-2a-m; the token is in the
   fragment so it never reaches a server). In the mock that
   phone page works only in the browser that made the code. The QR generator is our own
-  (`src/app/core/qr.ts`); do not add a package for it. What a real API must do for the link is
+  (`src/app/core/utils/qr.ts`); do not add a package for it. What a real API must do for the link is
   written on `MockApi.createPhoneLink`.
 - Never use the browser's `alert()`, `confirm()` or `prompt()`. Ask with the portal's own dialog:
-  `await inject(Confirm).ask({...})` (`src/app/core/confirm.ts`, rendered by
-  `src/app/shell/confirm-dialog.ts`). Name the confirming button after the action, not "Tamam".
+  `await inject(Confirm).ask({...})` (`src/app/core/services/confirm.ts`, rendered by
+  `src/app/layout/dialogs/confirm-dialog.ts`). Name the confirming button after the action, not "Tamam".

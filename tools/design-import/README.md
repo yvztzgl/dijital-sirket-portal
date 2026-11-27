@@ -1,5 +1,7 @@
 # Design import
 
+> **Out of date:** this tool targets the portal layout before 2026-11-27 (`src/app/screens/<group>/<id>.html`, `src/app/shared/`, the `*Data` base classes in `src/app/screens/data/`). The pages now live in `src/app/features/*/pages/` (docs/restructure-plan.md); adapt `install.py` before using it.
+
 Screen and shared-component templates under `src/app/screens/**.html` and `src/app/shared/*.html`
 were generated from the Claude Design project (`.dc.html` canvases), then wired by hand to the
 application store (`src/app/core/`). **Re-running the import overwrites those bindings**, so

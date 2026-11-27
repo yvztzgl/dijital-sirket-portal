@@ -9,15 +9,15 @@ Templates are generated — see `tools/design-import/README.md`.
 
 The whole flow runs on real application state, with no backend yet:
 
-- `src/app/core/mock-api.ts` is an in-browser stand-in for the platform API (data in `localStorage`,
-  simulated delays). Screens only talk to `ApplicationStore` (`src/app/core/application.store.ts`),
+- `src/app/core/api/mock/mock-api.ts` is an in-browser stand-in for the platform API (data in `localStorage`,
+  simulated delays). Screens only talk to `ApplicationStore` (`src/app/core/state/application.store.ts`),
   which talks to `Api`; `ng serve --configuration http` uses the HTTP client of the real API instead
   (see [docs/api-client.md](docs/api-client.md)). The demo tools below exist only in the default (mock) mode.
 - What the founder enters at registration, on the profile and on the company form flows through every
   later screen. The deck, a CV and five answers go to an outside evaluation (simulated in the mock);
   afterwards the founder fills the company form with defaults from the profile and the account.
 - Long-running steps (the deck evaluation, AML checks, e-signature call, company setup) are time-based
-  and survive reloads; `src/app/core/timeline.ts` defines them.
+  and survive reloads; `src/app/core/reference/timeline.ts` defines them.
 - Verification codes (e-mail, 3-D Secure SMS) appear as on-screen toasts. Test card: `4242 4242 4242 4242`.
   Demo T.C. kimlik no: `10000000146`.
 - Natural variants: a title like "Acme Bulut Bilişim" clashes in MERSİS, funding source

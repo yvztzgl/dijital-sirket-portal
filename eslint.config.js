@@ -5,16 +5,19 @@ const tseslint = require('typescript-eslint');
 const angular = require('angular-eslint');
 
 /**
- * Which folder may import which (docs/restructure-plan.md, "Rules that come with it").
- * These are today's folders; phase 1 replaces them with core / ui / layout / features / demo.
+ * Which folder may import which (docs/restructure-plan.md, "Rules that come with it"):
+ * features → layout → ui → core, and features do not import each other. `demo/` may be imported
+ * from layout and features on purpose (the mock build's tools), so no rule stops that.
  * Warnings for now: the existing breaches are listed, not yet fixed.
  */
-const boundary = (files, banned, message) => ({
+const boundary = (files, patterns) => ({
   files,
   rules: {
-    'no-restricted-imports': ['warn', { patterns: [{ group: banned, message }] }],
+    'no-restricted-imports': ['warn', { patterns }],
   },
 });
+
+const FEATURES = ['auth', 'landing', 'company', 'eligibility', 'payment', 'e-signature', 'setup'];
 
 module.exports = defineConfig([
   { ignores: ['dist/**', '.angular/**', 'out-tsc/**', 'tools/**', 'art/**'] },
@@ -35,15 +38,27 @@ module.exports = defineConfig([
       '@typescript-eslint/consistent-type-definitions': 'warn',
     },
   },
-  boundary(
-    ['src/app/core/**/*.ts'],
-    ['**/shared/**', '**/shell/**', '**/screens/**'],
-    'core/ holds no UI and must not import from shared/, shell/ or screens/.',
-  ),
-  boundary(
-    ['src/app/shared/**/*.ts'],
-    ['**/shell/**', '**/screens/**'],
-    'shared/ is used by the screens and must not import from them or from shell/.',
+  boundary(['src/app/core/**/*.ts'], [
+    {
+      group: ['@ui/**', '@layout/**', '@features/**', '@demo/**'],
+      message: 'core/ holds no UI and must not import from ui/, layout/, features/ or demo/.',
+    },
+  ]),
+  boundary(['src/app/ui/**/*.ts'], [
+    {
+      group: ['@layout/**', '@features/**', '@demo/**'],
+      message: 'ui/ holds reusable controls and must not import from layout/, features/ or demo/.',
+    },
+    { group: ['@core/state/**'], message: 'ui/ components get data through inputs and never inject a store.' },
+  ]),
+  boundary(['src/app/layout/**/*.ts'], [
+    { group: ['@features/**'], message: 'layout/ is the frame pages sit in and must not import from features/.' },
+  ]),
+  ...FEATURES.map((feature) =>
+    boundary(
+      [`src/app/features/${feature}/**/*.ts`],
+      [{ regex: `^@features/(?!${feature}/)`, message: `features/${feature} must not import another feature.` }],
+    ),
   ),
   {
     files: ['**/*.html'],

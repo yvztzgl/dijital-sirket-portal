@@ -1,7 +1,7 @@
 import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideRouter, withInMemoryScrolling } from '@angular/router';
 
-import { environment } from '../environments/environment';
+import { environment } from '@env/environment';
 import { routes } from './app.routes';
 
 export const appConfig: ApplicationConfig = {

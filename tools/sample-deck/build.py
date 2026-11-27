@@ -1,4 +1,4 @@
-"""Builds the sample pitch deck in the Terminal Şirket deck format (src/app/core/deck-format.json).
+"""Builds the sample pitch deck in the Terminal Şirket deck format (src/app/core/reference/deck-format.json).
 
 Outputs, all under public/assets/samples/:
   lumora-analytics-pitch.pptx   the sample deck founders can download from D-1a
@@ -32,7 +32,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Emu, Inches, Pt
 
 ROOT = Path(__file__).resolve().parents[2]
-FORMAT = json.loads((ROOT / 'src/app/core/deck-format.json').read_text(encoding='utf-8'))
+FORMAT = json.loads((ROOT / 'src/app/core/reference/deck-format.json').read_text(encoding='utf-8'))
 OUT = ROOT / 'public/assets/samples'
 PPTX = OUT / 'lumora-analytics-pitch.pptx'
 

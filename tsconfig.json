@@ -15,8 +15,8 @@
     "target": "ES2022",
     "module": "preserve",
     "resolveJsonModule": true,
-    // Short import paths. `@core` exists today; the others are the folders of docs/restructure-plan.md
-    // and start resolving when phase 1 creates them.
+    // Short import paths for the top-level folders of src/app (docs/restructure-plan.md). Imports
+    // that leave a file's own folder use these; imports within one folder stay relative.
     "paths": {
       "@core/*": ["./src/app/core/*"],
       "@ui/*": ["./src/app/ui/*"],

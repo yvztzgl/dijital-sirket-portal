@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Captures the real API's answers for steps 1 to 3 of the wizard into src/app/core/testing/captured/,
+# Captures the real API's answers for steps 1 to 3 of the wizard into src/app/core/api/testing/captured/,
 # where api-mapper.spec.ts reads them. Run it against a running stack (in ../dijital-sirket-api:
 # dev/up.sh, then dev/run.sh with the Worker and the BackOffice).
 #
@@ -59,7 +59,7 @@ cd "$(dirname "$0")/../.."
 PORTAL=$(pwd)
 API_REPO="${DSP_API_REPO:-$PORTAL/../dijital-sirket-api}"
 API="${DSP_API:-http://localhost:5149}"
-OUT="$PORTAL/src/app/core/testing/captured"
+OUT="$PORTAL/src/app/core/api/testing/captured"
 WHAT="${1:-all}"
 WORK=$(mktemp -d -t dsp-capture)
 JAR="$WORK/jar"; BODY="$WORK/body"

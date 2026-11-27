@@ -1,6 +1,6 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { EnvironmentProviders, Provider } from '@angular/core';
-import { HttpApi, markApiWrites } from '../app/core/http-api';
+import { HttpApi, markApiWrites } from '@core/api/http/http-api';
 
 /**
  * The `http` build (`ng serve --configuration http`, `ng build --configuration http`): the real

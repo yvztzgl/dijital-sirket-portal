@@ -183,7 +183,7 @@ $mono: 'IBM Plex Mono', ui-monospace, monospace;
   .wz-rise .band, .wz-rise .confetti { display: none; }
 }
 
-/* "founded": the one animated navigation, D-5a → D-5b (started by followFlow in core/follow.ts). The column gives way to the next
+/* "founded": the one animated navigation, D-5a → D-5b (started by followFlow in core/flow/follow.ts). The column gives way to the next
    one and the company's logo travels from the roof sign to the top of "Şirketiniz kuruldu". The header and Terminal AI
    are not named, so they simply cross-fade in place. */
 .wz-main { view-transition-name: wz-main; }
@@ -536,7 +536,7 @@ span.logo { cursor: default; }
 .wz-title .alts em { font: 400 12px/16px $sans; font-style: normal; color: var(--fg-0C217E); }
 /* The Terminal AI suggestion (D-1d). Navy and blue only: the owner rejected purple (2026-11-26).
    Shown at once (an entrance delay was tried and dropped: it read as slow loading). Thinking intro
-   (rejection.ts): the badge shows from the start; for 0.8 s a shimmering skeleton line stands in
+   (title-rejected.ts): the badge shows from the start; for 0.8 s a shimmering skeleton line stands in
    for the name beside the thinking bot, then the name fades in. The navy-blue
    border turns slowly throughout. No box-shadow. Still under prefers-reduced-motion. */
 @property --wz-ai-turn { syntax: '<angle>'; inherits: false; initial-value: 0deg; }

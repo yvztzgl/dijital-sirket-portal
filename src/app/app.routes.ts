@@ -1,7 +1,7 @@
 import { inject } from '@angular/core';
 import { Routes } from '@angular/router';
-import { Api } from './core/api';
-import { screenRoutes } from './screens/screens';
+import { Api } from '@core/api/api';
+import { screenRoutes } from '@features/routes';
 
 export const routes: Routes = [
   ...screenRoutes,
@@ -10,7 +10,7 @@ export const routes: Routes = [
     title: 'Ekranlar · Terminal Şirket',
     // The screen index is a demo tool: in HTTP mode the path does not match and falls through to '**'.
     canMatch: [() => !!inject(Api).demo],
-    loadComponent: () => import('./shell/screen-index').then((m) => m.ScreenIndex),
+    loadComponent: () => import('@demo/screen-index').then((m) => m.ScreenIndex),
   },
   // Old Turkish URLs (bookmarks, shared links) keep working.
   { path: 'giris', redirectTo: 'login' },

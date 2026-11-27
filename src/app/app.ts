@@ -1,11 +1,11 @@
 import { Component, inject } from '@angular/core';
-import { Preferences } from './core/preferences';
+import { Preferences } from '@core/services/preferences';
 import { RouterOutlet } from '@angular/router';
-import { ConfirmDialog } from './shell/confirm-dialog';
-import { DocPreviewDialog } from './shell/doc-preview-dialog';
-import { InboxToasts } from './shell/inbox-toasts';
-import { ScreenNav } from './shell/screen-nav';
-import { StepUpDialog } from './shell/step-up-dialog';
+import { ConfirmDialog } from '@layout/dialogs/confirm-dialog';
+import { DocPreviewDialog } from '@layout/dialogs/doc-preview-dialog';
+import { InboxToasts } from '@layout/dialogs/inbox-toasts';
+import { ScreenNav } from '@demo/screen-nav';
+import { StepUpDialog } from '@layout/dialogs/step-up-dialog';
 
 @Component({
   selector: 'app-root',

@@ -14,26 +14,26 @@ screens ─► ApplicationStore ─► Api (abstract class, used as the injectio
 
 | File | What it is |
 | --- | --- |
-| `src/app/core/api.ts` | `Api`: every call the store and Terminal AI make, all async. Also `Session`, `ReviewPatch`, `DemoTools`. |
-| `src/app/core/api-error.ts` | `ApiError`: `message` (Turkish, shown as is), optional `code`, `status`, `fields`. |
-| `src/app/core/mock-api.ts` | `MockApi implements Api`: data in `localStorage` (`dsp.db.v1`), simulated delays, demo tools. |
-| `src/app/core/http-api.ts` | `HttpApi implements Api`, the `request()` helper, `toApiError()`, the `markApiWrites` interceptor. |
-| `src/app/core/api-types.ts` | The API's JSON as it arrives (`MeWire`, `ApplicationWire`, …), written from the API's `Models/` records. |
-| `src/app/core/api-mapper.ts` | `toAccount(me)`, `toApplication(view, account)`, `toStage`: wire → portal model. Pure functions. |
-| `src/app/core/testing/api-fixtures.ts` | Literal API answers the specs use: a few built by hand, and `CAPTURED` (below). |
-| `src/app/core/evaluation-reference.json` | The outside evaluation service's dictionary saved on 2026-11-25 (17 activity groups, 216 activities, 4 business models, 8 revenue models, 4 product types) and the upload limits, in the shape of `GET /api/reference/evaluation`. The mock's answer and the specs' fixture; not in the http bundle. |
-| `src/app/core/evaluation-activity-groups.json` | Which activity belongs to which group: a verbatim copy of the API's `stb-activity-groups-derived-2026-11-26.json`. **Derived by us from the labels and the id order, not from STB, to be confirmed** (its `note`; the uncertain cases are in the API repo's `docs/steps/19-activity-groups.md`). The mock adds it as `groupId` to each activity of its reference answer; not in the http bundle. |
-| `src/app/core/testing/captured/*.json` | `GET /api/application` as the running API answered it at each stage of steps 1 to 5 (the deck-reader stages `scanning`, `review-open`, `review-decided` were removed with the reader on 2026-11-25; the later files still carry its `crossCheck` and deck fields, which the mapper ignores), plus the status read, the reference data, the phone routes, the closed application's 404 and the refusals of steps 3 and 4 (2026-11-25). Made-up founders, e-mail addresses and the phone token replaced; the card is only ever a development token; no T.C. kimlik no. |
+| `src/app/core/api/api.ts` | `Api`: every call the store and Terminal AI make, all async. Also `Session`, `ReviewPatch`, `DemoTools`. |
+| `src/app/core/api/api-error.ts` | `ApiError`: `message` (Turkish, shown as is), optional `code`, `status`, `fields`. |
+| `src/app/core/api/mock/mock-api.ts` | `MockApi implements Api`: data in `localStorage` (`dsp.db.v1`), simulated delays, demo tools. |
+| `src/app/core/api/http/http-api.ts` | `HttpApi implements Api`, the `request()` helper, `toApiError()`, the `markApiWrites` interceptor. |
+| `src/app/core/api/http/api-types.ts` | The API's JSON as it arrives (`MeWire`, `ApplicationWire`, …), written from the API's `Models/` records. |
+| `src/app/core/api/http/api-mapper.ts` | `toAccount(me)`, `toApplication(view, account)`, `toStage`: wire → portal model. Pure functions. |
+| `src/app/core/api/testing/api-fixtures.ts` | Literal API answers the specs use: a few built by hand, and `CAPTURED` (below). |
+| `src/app/core/api/mock/evaluation-reference.json` | The outside evaluation service's dictionary saved on 2026-11-25 (17 activity groups, 216 activities, 4 business models, 8 revenue models, 4 product types) and the upload limits, in the shape of `GET /api/reference/evaluation`. The mock's answer and the specs' fixture; not in the http bundle. |
+| `src/app/core/api/mock/evaluation-activity-groups.json` | Which activity belongs to which group: a verbatim copy of the API's `stb-activity-groups-derived-2026-11-26.json`. **Derived by us from the labels and the id order, not from STB, to be confirmed** (its `note`; the uncertain cases are in the API repo's `docs/steps/19-activity-groups.md`). The mock adds it as `groupId` to each activity of its reference answer; not in the http bundle. |
+| `src/app/core/api/testing/captured/*.json` | `GET /api/application` as the running API answered it at each stage of steps 1 to 5 (the deck-reader stages `scanning`, `review-open`, `review-decided` were removed with the reader on 2026-11-25; the later files still carry its `crossCheck` and deck fields, which the mapper ignores), plus the status read, the reference data, the phone routes, the closed application's 404 and the refusals of steps 3 and 4 (2026-11-25). Made-up founders, e-mail addresses and the phone token replaced; the card is only ever a development token; no T.C. kimlik no. |
 | `tools/api-capture/capture.sh` | Re-captures those files against a running stack (`capture.sh [step1\|step2\|step3\|step45\|all]`; needs `../dijital-sirket-api/dev/staff.sh` for the title, review and set-up steps and `dev/last-code.sh` for the second factor). |
-| `src/app/shell/step-up-dialog.ts` | `StepUpDialog`: the second-factor dialog, rendered once by the app shell; its state and logic are in `ApplicationStore` (below). |
-| `src/app/core/status-poller.ts` | `StatusPoller` and `pollDelay`: the pacing of the status poll in HTTP mode. |
-| `src/app/core/rules.ts` | Pure checks the screens use (card, T.C. kimlik no, password strength, address document size, the deck upload's checks `evaluationErrors`, funding options, title suffix and title suggestions). Not part of either implementation. |
+| `src/app/layout/dialogs/step-up-dialog.ts` | `StepUpDialog`: the second-factor dialog, rendered once by the app shell; its state and logic are in `ApplicationStore` (below). |
+| `src/app/core/api/http/status-poller.ts` | `StatusPoller` and `pollDelay`: the pacing of the status poll in HTTP mode. |
+| `src/app/core/utils/rules.ts` | Pure checks the screens use (card, T.C. kimlik no, password strength, address document size, the deck upload's checks `evaluationErrors`, funding options, title suffix and title suggestions). Not part of either implementation. |
 | `src/environments/environment.ts` | Default (mock) mode: names `MockApi`, no extra providers. |
 | `src/environments/environment.http.ts` | HTTP mode: names `HttpApi`, provides `HttpClient` with the interceptor. |
 | `proxy.conf.json` | Dev server: `/api` → `http://localhost:5149`. |
 | `src/environments/demo-flag.ts` / `demo-flag.on.ts` | `isDemo`: off, and on in the `http-demo` build (see "Demo mode against the API"). |
-| `src/app/core/demo-server-api.ts` | `DemoServerApi`: the API's `/api/demo/*` routes and `available`; not part of `Api`. |
-| `src/app/shell/demo-bar.ts`, `demo-code-hint.ts` | The demo strip on the waiting screens and the on-screen code / link line. |
+| `src/app/core/api/demo/demo-server-api.ts` | `DemoServerApi`: the API's `/api/demo/*` routes and `available`; not part of `Api`. |
+| `src/app/demo/demo-bar.ts`, `demo-code-hint.ts` | The demo strip on the waiting screens and the on-screen code / link line. |
 
 Screens never import an implementation. `mock-api.ts` still re-exports `ApiError`, `ReviewPatch`
 and the rules so older imports and `mock-api.spec.ts` keep working; new code imports from
@@ -126,7 +126,7 @@ never asks: there is no flag, and it has demo tools.
 none), so its writes carry `X-DSP-Request` (`markApiWrites`), and errors are `ApiError`s (`toApiError`):
 a 409 `demo_wrong_stage` shows the API's own sentence.
 
-### The buttons (`DemoBar`, `src/app/shell/demo-bar.ts`)
+### The buttons (`DemoBar`, `src/app/demo/demo-bar.ts`)
 
 A dashed strip labelled "Demo" on the waiting screens. It picks its buttons from the current stage and
 renders nothing at other stages. While a request is in flight the buttons are disabled; an error shows
@@ -145,7 +145,7 @@ Worker sets a moment later arrives by itself. No new polling loop.
 D-5a: 409 `demo_nothing_open` (the Worker has not opened a task yet) is shown as "Kurum görevleri henüz
 açılmadı, birkaç saniye sonra tekrar deneyin."
 
-### The codes (`DemoCodeHint`, `src/app/shell/demo-code-hint.ts`)
+### The codes (`DemoCodeHint`, `src/app/demo/demo-code-hint.ts`)
 
 A line "Demo: kod 123456" with "Doldur" (fills the code boxes; the founder still presses the button),
 read from `GET /api/demo/codes?email=` (the newest development e-mail to that address; no sign-in), with
@@ -277,7 +277,7 @@ Polling     GET  /api/application/status (then GET /api/application only when it
 
 - **D-1a** (`/deck`): deck (PDF, 3–40 pages, 25 MB) and CV (PDF, 5 MB) pickers; the summary with a live
   length hint; the activity group (`Select`) and the activity (`SearchSelect`, new in
-  `shared/search-select.ts`: a text box that filters the 216 options); business model, revenue model
+  `ui/search-select.ts`: a text box that filters the 216 options); business model, revenue model
   and product type as tick boxes; the two consents, unticked. The screen's own checks
   (`rules.evaluationErrors`, the same ones the mock refuses with) and the API's `errors` are shown at
   their fields. The page count cannot be checked in the browser; the service ends the evaluation
@@ -317,7 +317,7 @@ codes itself. Saved mock data from before is upgraded: an application at `scanni
 
 ### Wording to be confirmed by the owner
 
-- The two consent labels (`shared/deck-consents.ts`): **placeholders**; the notice text does not exist
+- The two consent labels (`features/company/components/deck-consents.ts`): **placeholders**; the notice text does not exist
   and the evaluation service is not named.
 - D-1a's lead and the three notices after `failed`, `rejected`, `cancelled`; D-1b's and D-1g's texts;
   D-1c's lead and the "Ön bilgilerinizden" hint.
@@ -482,14 +482,14 @@ plays that return trip; it goes when the real integration exists.
 | 401 on restore → "nobody signed in" | `HttpApi.restore()` | Only the HTTP client knows a 401 means "no cookie". |
 | 429 → "Çok fazla deneme yapıldı. Lütfen bir dakika sonra yeniden deneyiniz." | `toApiError()` | The API's 429 title ("İstek karşılanamadı.") says nothing useful; code stays `http_429`. |
 | 401 `unauthenticated` from any later call → forget the founder, go to `/login` | `ApplicationStore.sessionLost()` (from `run()` and the time-based completions) | The store holds the session state and the router; both implementations answer `unauthenticated` the same way, so there is no mode branch. |
-| `email_not_verified` → D-0c with the server's sentence | `ApplicationStore.login()` sets `pendingEmail` and a one-time notice; `GirisData.login()` navigates | The notice survives the screen change (`takeNotice()`), the error banner would not. |
+| `email_not_verified` → D-0c with the server's sentence | `ApplicationStore.login()` sets `pendingEmail` and a one-time notice; `AuthData.login()` navigates | The notice survives the screen change (`takeNotice()`), the error banner would not. |
 | A `validation_failed` refusal shows its field's sentence (a wrong code: "Kod hatalı veya süresi dolmuş. Yeni kod isteyiniz.") | `shownMessage()` in the store | The API's title for it is general ("Gönderdiğiniz bilgiler eksik veya hatalıdır."). |
 | Remembering the last typed e-mail | `DemoTools.rememberEmail` (mock only) | HTTP mode keeps no e-mail in the browser. |
-| One code check at a time | `GirisData.verify()` returns while the store is busy | Found in the E2E walk: the code boxes can report "complete" again while a check runs, and parallel checks of one code got 409 from the API. |
+| One code check at a time | `AuthData.verify()` returns while the store is busy | Found in the E2E walk: the code boxes can report "complete" again while a check runs, and parallel checks of one code got 409 from the API. |
 
 ### The set-new-password screen (D-0e, `/sifre-sifirla`)
 
-`src/app/screens/giris/d0e.ts`. Reads `token` from the query string once, then replaces the
+`src/app/features/auth/pages/new-password/new-password.ts`. Reads `token` from the query string once, then replaces the
 history entry with `/sifre-sifirla` (`Location.replaceState`), so the token stays neither in the
 address bar nor in history. Asks for the password twice (same strength rule as registration),
 calls `confirmPasswordReset`, and on success goes to `/login` with a short confirmation. Refusals
