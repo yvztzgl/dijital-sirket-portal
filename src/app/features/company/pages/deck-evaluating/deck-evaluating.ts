@@ -1,8 +1,10 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { followFlow } from '@core/flow/follow';
+import { ApplicationStore } from '@core/state/application.store';
 import { Icon } from '@ui/icon';
 import { DemoBar } from '@demo/demo-bar';
 import { StepPage } from '@layout/step-page';
-import { CompanyData } from '@features/company/company.data';
+import { since, uploadedFiles } from '../../waiting.view';
 
 /**
  * D-1b — Sunum değerlendiriliyor (stage `evaluating`). Nothing is asked: the outside evaluation
@@ -17,4 +19,19 @@ import { CompanyData } from '@features/company/company.data';
   host: { style: 'display:block' },
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class DeckEvaluatingPage extends CompanyData {}
+export class DeckEvaluatingPage {
+  private readonly store = inject(ApplicationStore);
+
+  constructor() {
+    this.store.clearError();
+    followFlow();
+    // Not shown here: read while waiting so D-1c's (and, after a failed evaluation, D-1a's) choices are there at once.
+    void this.store.loadReference();
+    void this.store.loadEvaluationReference();
+  }
+
+  // The service's retry count (`evaluation.attempt` / `maxAttempts`) is not shown to the founder
+  // (owner's decision of 2026-11-26): only when the evaluation started.
+  protected readonly evaluationSince = computed(() => since(this.store.app()?.evaluation?.startedAt));
+  protected readonly uploadedFiles = computed(() => uploadedFiles(this.store.app()));
+}

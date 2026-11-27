@@ -1,8 +1,10 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { followFlow } from '@core/flow/follow';
+import { ApplicationStore } from '@core/state/application.store';
 import { Icon } from '@ui/icon';
 import { DemoBar } from '@demo/demo-bar';
 import { StepPage } from '@layout/step-page';
-import { CompanyData } from '@features/company/company.data';
+import { since } from '../../waiting.view';
 
 /**
  * D-1f — Unvan kontrol ediliyor (stage `titleChecking`). Nothing is asked: the trade name waits for
@@ -17,4 +19,19 @@ import { CompanyData } from '@features/company/company.data';
   host: { style: 'display:block' },
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class TitleCheckPage extends CompanyData {}
+export class TitleCheckPage {
+  private readonly store = inject(ApplicationStore);
+
+  constructor() {
+    this.store.clearError();
+    followFlow();
+    // Not shown here: read while waiting so D-1d and D-1c (after a refusal) have their choices at once.
+    void this.store.loadReference();
+    void this.store.loadEvaluationReference();
+  }
+
+  /** "Lumora Analitik Yazılım", the title waiting for its answer. */
+  protected readonly checkingTitle = computed(() => this.store.app()?.titleCheck?.candidate ?? this.store.title());
+  /** When it was asked, if known (the mock knows; the API does not send it). */
+  protected readonly checkingSince = computed(() => since(this.store.app()?.titleCheck?.requestedAt));
+}

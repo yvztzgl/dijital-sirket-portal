@@ -196,7 +196,7 @@ that day). This is the pattern for the other three base classes:
 5. Imports inside a feature are relative; a page's spec uses its own feature's routes.
 
 Result for auth: 267 tests pass (224 + 43), lint unchanged (0 errors, 40 warnings), three builds
-complete, the sign-in screens tried in the browser. Still to do in phase 2: company and landing (`CompanyData`).
+complete, the sign-in screens tried in the browser. The other three base classes followed the same day (below).
 
 **Phase 2, e-signature and set-up, was done the same day** on `refactor/phase-2-e-signature`
 (auth is commit `5c061f6`). `SignatureData` is deleted; the six pages are 52 to 104 lines each.
@@ -226,6 +226,33 @@ Found while reading the e-signature and set-up code, **not fixed**:
 `eligibility/eligibility.view.ts`, `payment/card.rules.ts`, `payment/fees.ts`. Payment no longer
 imports eligibility (lint: 36 warnings). 87 page tests written first, mock and HTTP mode; 442
 tests pass. Three members nothing read were dropped (`manualHint`, `feesOpen`, `capital`).
+
+**Phase 2, company and landing, was done the same day** on `refactor/phase-2-company`
+(eligibility and payment are commit `21b92eb`). `CompanyData` is deleted, so **phase 2 is
+complete: no class in `features/` extends another.** The seven step 1 pages are 37 to 177 lines;
+D-1c is the longest because its pencil/focus code is its own. Pure pieces in `features/company/`,
+each with a spec: `profile.rules.ts`, `funding-options.ts`, `deck-form.view.ts`, `review.view.ts`,
+`waiting.view.ts`, `title.view.ts`. The landing lost only its inheritance (its own 549 lines wait
+for phase 3) and no longer imports company (lint: 35 warnings, no folder breach left). 92 page
+tests written first, 23 for the pure files; 557 tests pass. Members nothing read were dropped
+(`samples`, `companyOpen`, `fixedOpen`, `openCard`, `toggleCard`, `founderLabel`, `groupOptions`,
+`collapsedOk`, `fixed`).
+
+Found while reading the company and landing code, **not fixed**:
+
+- **HTTP mode: the landing sends a signed-out visitor to `/login`.** The landing asks for both
+  reference lists; the API answers 401 to a visitor who is not signed in, and the store treats
+  any 401 as a lost session. A test in `landing.spec.ts` records it. Decide before a real launch.
+- **`AGENTS.md` describes D-1c as it no longer is:** there is no cross-check choice, no "Başka
+  dosya yükle" and no consent boxes on D-1c, and `deckFileError` does not exist (decks are PDF,
+  checked by `evaluationErrors`). `docs/api-client.md` already records the removal. `AGENTS.md`
+  was left for the owner to correct.
+- D-1e shows "Demo: örnek bilgileri doldur" in the plain HTTP build too.
+- A refusal that names one field shows its sentence twice, at the field and under the form
+  (D-1d, D-1e, D-1a).
+- The captured API reference links no activity to a group; against such an API D-1a offers all
+  216 activities instead of the fixed group's.
+- D-1c: a title typed with "AŞ" (no dots) keeps the suffix; an empty title is sent as empty.
 
 Found while reading the eligibility and payment code, **not fixed**. The first three concern
 consent and should be decided before a real launch:

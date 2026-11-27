@@ -1,9 +1,12 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
+import { followFlow } from '@core/flow/follow';
+import { ApplicationStore } from '@core/state/application.store';
 import { Icon } from '@ui/icon';
 import { Bot } from '@layout/bot';
 import { FormError } from '@layout/form-error';
 import { StepPage } from '@layout/step-page';
-import { CompanyData } from '@features/company/company.data';
+import { titleSuggestions } from '../../title.view';
 
 /** How long the Terminal AI suggestion shows its skeleton before the real row. */
 const LOADING_MS = 800;
@@ -16,7 +19,15 @@ const LOADING_MS = 800;
   host: { style: 'display:block' },
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class TitleRejectedPage extends CompanyData {
+export class TitleRejectedPage {
+  protected readonly store = inject(ApplicationStore);
+  private readonly router = inject(Router);
+
+  protected readonly titleCheck = computed(() => this.store.app()?.titleCheck);
+  protected readonly alternatives = computed(() => titleSuggestions(this.titleCheck()));
+  protected readonly customOpen = signal(false);
+  protected readonly customTitle = signal('');
+
   /**
    * Terminal AI's "thinking" intro: for LOADING_MS the suggestion shows a skeleton (a shimmering
    * badge and name line) beside the thinking bot, then the real badge and name. "Seç" works
@@ -27,7 +38,11 @@ export class TitleRejectedPage extends CompanyData {
   protected readonly aiLoading = signal(true);
 
   constructor() {
-    super();
+    this.store.clearError();
+    followFlow();
+    // Not shown here: read now so D-1c ("Diğer bilgilere dön") has its choices at once.
+    void this.store.loadReference();
+    void this.store.loadEvaluationReference();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const stop = () => { if (timer) clearTimeout(timer); timer = undefined; };
     inject(DestroyRef).onDestroy(stop);
@@ -40,5 +55,24 @@ export class TitleRejectedPage extends CompanyData {
       this.aiLoading.set(true);
       timer = setTimeout(() => this.aiLoading.set(false), LOADING_MS);
     });
+  }
+
+  /** A refusal's message for one field, under the API's field name (only HTTP mode names fields). */
+  protected fieldError(key: string): string | null {
+    return this.store.fieldErrors()[key]?.[0] ?? null;
+  }
+
+  protected chooseTitle(t: string) {
+    if (!t.trim()) return;
+    void this.store.chooseTitle(t);
+  }
+
+  /**
+   * "Diğer bilgilere dön": after a refused title the API still takes changes to the review and a new
+   * "Onayla ve devam et" (which asks for the review's trade name again), with no call that changes
+   * the stage. So this only opens D-1c, which accepts `titleConflict` too.
+   */
+  protected editAgain() {
+    void this.router.navigateByUrl('/deck/review');
   }
 }

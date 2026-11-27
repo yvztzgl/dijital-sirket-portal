@@ -1,12 +1,12 @@
 import { afterNextRender, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, inject, signal, viewChild, viewChildren } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
+import { ApplicationStore } from '@core/state/application.store';
 import { flagUrl } from '@core/reference/countries';
 import { FEE_TOTAL, FEES } from '@core/models/models';
 import { GLOBE_FOUNDERS } from '@features/landing/founders.data';
 import { GLOBE_LAND, GLOBE_N, GLOBE_TURKEY } from '@features/landing/globe-data';
 import { HeaderTools } from '@layout/header-tools';
 import { Icon, IText } from '@ui/icon';
-import { CompanyData } from '@features/company/company.data';
 
 /** Turkish lira with two decimals, as on the payment screen. */
 const tl = (n: number) => n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' TL';
@@ -180,7 +180,9 @@ function flatten(encoded: string): Float32Array {
   host: { style: 'display:block' },
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class LandingPage extends CompanyData {
+export class LandingPage {
+  protected readonly store = inject(ApplicationStore);
+  private readonly router = inject(Router);
   protected readonly steps = STEPS;
   protected readonly mock = MOCK;
   /** Founders shown on the map with a card (demo people; see founders.data.ts). */
@@ -212,8 +214,17 @@ export class LandingPage extends CompanyData {
   private rest?: { key: string; image: HTMLCanvasElement };
 
   constructor() {
-    super();
+    this.store.clearError();
+    // Read for the step 1 screens (signed in, their choices are there at once). Signed out in HTTP
+    // mode the API answers 401 and the store then opens /login: kept as it was (a reported bug, not fixed here).
+    void this.store.loadReference();
+    void this.store.loadEvaluationReference();
     afterNextRender(() => this.watch());
+  }
+
+  /** Primary CTA: continue an application, or start one. */
+  protected start() {
+    void this.router.navigateByUrl(this.store.signedIn() ? this.store.resumeRoute() : '/register');
   }
 
   /** Scrolls to the point in the story where step i is on screen and its small animations have run. */

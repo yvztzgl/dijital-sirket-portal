@@ -1,10 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { followFlow } from '@core/flow/follow';
 import { ANSWER_MAX, EvaluationQuestions, QuestionCard } from '@core/models/models';
+import { ApplicationStore } from '@core/state/application.store';
 import { FormError } from '@layout/form-error';
 import { Icon } from '@ui/icon';
 import { StepPage } from '@layout/step-page';
 import { DemoBar } from '@demo/demo-bar';
-import { CompanyData } from '@features/company/company.data';
+import { uploadedFiles } from '../../waiting.view';
 
 /** One card's draft: the chosen option and the explanation typed for it. */
 interface Draft {
@@ -28,7 +30,8 @@ interface Draft {
   host: { style: 'display:block' },
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class EvaluationQuestionsPage extends CompanyData {
+export class EvaluationQuestionsPage {
+  protected readonly store = inject(ApplicationStore);
   protected readonly answerMax = ANSWER_MAX;
   /** null while loading; `answerable: false` also stands for a failed read. */
   protected readonly questions = signal<EvaluationQuestions | null>(null);
@@ -36,12 +39,24 @@ export class EvaluationQuestionsPage extends CompanyData {
   /** Cards the founder tried to send without a complete answer (checked here before the API checks again). */
   protected readonly missing = signal<Record<string, string>>({});
 
+  /** The stop state lists what was received. */
+  protected readonly uploadedFiles = computed(() => uploadedFiles(this.store.app()));
+
   constructor() {
-    super();
+    this.store.clearError();
+    followFlow();
+    // Not shown here: read while waiting so the screens after the evaluation have their choices at once.
+    void this.store.loadReference();
+    void this.store.loadEvaluationReference();
     this.store.evaluationQuestions().then(
       (q) => this.questions.set(q),
       () => this.questions.set({ answerable: false, receivedAt: '', cards: [] }),
     );
+  }
+
+  /** A refusal's message for one field, under the API's field name (`answers`, `answers.<card id>`). */
+  protected fieldError(key: string): string | null {
+    return this.store.fieldErrors()[key]?.[0] ?? null;
   }
 
   protected answerDraft(card: QuestionCard): Draft {
