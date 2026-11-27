@@ -482,10 +482,10 @@ plays that return trip; it goes when the real integration exists.
 | 401 on restore → "nobody signed in" | `HttpApi.restore()` | Only the HTTP client knows a 401 means "no cookie". |
 | 429 → "Çok fazla deneme yapıldı. Lütfen bir dakika sonra yeniden deneyiniz." | `toApiError()` | The API's 429 title ("İstek karşılanamadı.") says nothing useful; code stays `http_429`. |
 | 401 `unauthenticated` from any later call → forget the founder, go to `/login` | `ApplicationStore.sessionLost()` (from `run()` and the time-based completions) | The store holds the session state and the router; both implementations answer `unauthenticated` the same way, so there is no mode branch. |
-| `email_not_verified` → D-0c with the server's sentence | `ApplicationStore.login()` sets `pendingEmail` and a one-time notice; `AuthData.login()` navigates | The notice survives the screen change (`takeNotice()`), the error banner would not. |
+| `email_not_verified` → D-0c with the server's sentence | `ApplicationStore.login()` sets `pendingEmail` and a one-time notice; `LoginPage.login()` (D-0a) navigates | The notice survives the screen change (`takeNotice()`), the error banner would not. |
 | A `validation_failed` refusal shows its field's sentence (a wrong code: "Kod hatalı veya süresi dolmuş. Yeni kod isteyiniz.") | `shownMessage()` in the store | The API's title for it is general ("Gönderdiğiniz bilgiler eksik veya hatalıdır."). |
 | Remembering the last typed e-mail | `DemoTools.rememberEmail` (mock only) | HTTP mode keeps no e-mail in the browser. |
-| One code check at a time | `AuthData.verify()` returns while the store is busy | Found in the E2E walk: the code boxes can report "complete" again while a check runs, and parallel checks of one code got 409 from the API. |
+| One code check at a time | `VerifyEmailPage.verify()` (D-0c) returns while the store is busy | Found in the E2E walk: the code boxes can report "complete" again while a check runs, and parallel checks of one code got 409 from the API. |
 
 ### The set-new-password screen (D-0e, `/sifre-sifirla`)
 

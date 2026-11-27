@@ -179,6 +179,34 @@ at the new folders. Templates, styles and JSON are byte-for-byte the same.
 - Imports inside one feature currently use `@features/<x>/…` too; relative paths would be more
   usual there. Tidy as phase 2 touches each file.
 
+**Phases 0 and 1 were committed on 2026-11-27** on `chore/restructure-phase-0` (`6535366`,
+`1fbfbc4`; local, not pushed).
+
+**Phase 2, auth, was done the same day** on branch `refactor/phase-2-auth` (staged, not committed
+that day). This is the pattern for the other three base classes:
+
+1. Tests first: a spec per page, driven through the DOM against the real store over the mock,
+   passing against the old code before anything else changes (37 tests for the five pages).
+2. The base class is deleted. Each page declares only what its own template reads; templates do
+   not change in this phase (`git diff --stat -- '*.html'` is empty).
+3. Code two pages need becomes a small named piece in the feature folder, not a parent class:
+   `features/auth/auth.rules.ts` (pure, with its own spec) and `features/auth/resend-timer.ts`.
+4. Calls the base class made on every page (`clearError()`, `takeNotice()`) stay on every page,
+   with a comment where the result is not shown.
+5. Imports inside a feature are relative; a page's spec uses its own feature's routes.
+
+Result for auth: 267 tests pass (224 + 43), lint unchanged (0 errors, 40 warnings), three builds
+complete, the sign-in screens tried in the browser. Still to do in phase 2: e-signature and set-up
+(`SignatureData`), eligibility and payment (`EligibilityData`), company and landing (`CompanyData`).
+
+Found while reading the auth code, **not fixed** (behaviour kept as it was):
+
+- Login: the "30 gün oturumu açık tut" tick is never sent anywhere.
+- Login: the mock remembers the e-mail even after a failed sign-in.
+- Register: after a failed attempt as a foreign founder, switching to "T.C. vatandaşı" can show
+  "Geçerli bir e-posta adresi girin." although that path has no e-mail field.
+- Verify e-mail: "resend" empties the code boxes before the request, even if it then fails.
+
 Phases 0 and 1 give the readable folder tree. Phases 2 and 3 give the readable components and are
 the bulk of the work. Phases 4 to 6 can each be postponed without blocking the others.
 
